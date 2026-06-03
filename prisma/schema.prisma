@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContentType {
+  MOVIE
+  SERIES
+  CARTOON
+  ANIME
+}
+
+enum ProviderName {
+  ALLOHA
+  TRAILER
+  MANUAL
+}
+
+model Movie {
+  id             String        @id @default(cuid())
+  slug           String        @unique
+  titleRu        String
+  titleOriginal  String?
+  description    String       @db.Text
+  year           Int
+  type           ContentType   @default(MOVIE)
+  posterUrl      String?
+  backdropUrl    String?
+  trailerUrl     String?
+  country        String?
+  director       String?
+  ageRating      String?
+  quality        String        @default("WEB-DL")
+  duration       Int?
+  kinopoiskId    String?
+  imdbId         String?
+  tmdbId         String?
+  allohaId       String?
+  kpRating       Float?
+  imdbRating     Float?
+  tmdbRating     Float?
+  isPublished    Boolean       @default(true)
+  views          Int           @default(0)
+  likes          Int           @default(0)
+  dislikes       Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  genres         MovieGenre[]
+  cast           MovieCast[]
+  providerLinks  ProviderLink[]
+
+  @@index([type, year])
+  @@index([isPublished])
+}
+
+model Genre {
+  id        String       @id @default(cuid())
+  slug      String       @unique
+  name      String       @unique
+  movies    MovieGenre[]
+}
+
+model MovieGenre {
+  movieId String
+  genreId String
+  movie   Movie  @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([movieId, genreId])
+}
+
+model Person {
+  id           String      @id @default(cuid())
+  nameRu       String
+  nameOriginal String?
+  photoUrl     String?
+  tmdbId       String?
+  kinopoiskId  String?
+  cast         MovieCast[]
+}
+
+model MovieCast {
+  movieId   String
+  personId  String
+  role      String?
+  sortOrder Int      @default(0)
+  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([movieId, personId])
+}
+
+model ProviderLink {
+  id          String       @id @default(cuid())
+  provider    ProviderName
+  movieId     String
+  externalId  String?
+  embedUrl    String?
+  isAvailable Boolean      @default(false)
+  lastCheckedAt DateTime?
+  movie       Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@index([provider, isAvailable])
+}
