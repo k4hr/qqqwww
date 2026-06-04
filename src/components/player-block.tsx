@@ -50,7 +50,7 @@ export function PlayerBlock({ movie }: Props) {
             <button className="relative z-10 w-16 h-16 rounded-full bg-[#e50914] flex items-center justify-center hover:scale-105 transition-transform" type="button">
               <Play fill="white" color="white" size={30} />
             </button>
-            <p className="relative z-10 mt-5 text-white/80 text-center px-5">Плеер будет подключён после одобрения партнёрского доступа.</p>
+            <p className="relative z-10 mt-5 text-white/80 text-center px-5">Плеер в разработке.</p>
           </div>
         )}
 
