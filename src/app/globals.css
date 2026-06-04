@@ -3,24 +3,34 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
-  --page: #f2f2f2;
-  --card: #ffffff;
-  --text: #2b2b2b;
-  --muted: #777777;
-  --accent: #6fbe44;
+  color-scheme: dark;
+  --page: #070b14;
+  --page-2: #0b1020;
+  --card: rgba(17, 24, 39, 0.68);
+  --card-strong: rgba(12, 17, 29, 0.92);
+  --text: #f8fafc;
+  --muted: #93a1b7;
+  --line: rgba(255,255,255,0.10);
+  --line-soft: rgba(255,255,255,0.06);
+  --accent: #c9a86a;
+  --accent-2: #5ed18c;
 }
 
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
-  background: var(--page);
   color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(94,209,140,.10), transparent 30%),
+    radial-gradient(circle at 85% 0%, rgba(201,168,106,.16), transparent 35%),
+    linear-gradient(180deg, #0a0f1b 0%, #070b14 45%, #05070d 100%);
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  min-height: 100vh;
 }
 a { color: inherit; text-decoration: none; }
 
-.container { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+.container { width: min(1240px, calc(100% - 32px)); margin: 0 auto; }
 .line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 
@@ -28,5 +38,90 @@ a { color: inherit; text-decoration: none; }
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,.05), rgba(0,0,0,.12) 45%, rgba(0,0,0,.88));
+  background: linear-gradient(to bottom, rgba(7,11,20,.05), rgba(7,11,20,.2) 40%, rgba(7,11,20,.96));
 }
+
+.vip-panel {
+  background: linear-gradient(180deg, rgba(20, 28, 45, 0.78), rgba(10, 15, 26, 0.88));
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+  backdrop-filter: blur(16px);
+  border-radius: 24px;
+}
+
+.vip-soft-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  backdrop-filter: blur(10px);
+}
+
+.vip-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(201,168,106,.25);
+  color: #f9e3b0;
+  background: rgba(201,168,106,.08);
+}
+
+.gold-text {
+  background: linear-gradient(180deg, #fbe6b0 0%, #d2ae6d 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-backdrop {
+  position: relative;
+  overflow: hidden;
+}
+.hero-backdrop::before {
+  content: "MARIOFILM";
+  position: absolute;
+  right: -22px;
+  top: 12px;
+  font-size: clamp(54px, 15vw, 160px);
+  font-weight: 900;
+  letter-spacing: .08em;
+  color: rgba(255,255,255,.03);
+  pointer-events: none;
+}
+.hero-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: auto -10% -25% auto;
+  width: 360px;
+  height: 360px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(201,168,106,.26), rgba(201,168,106,.05) 45%, transparent 70%);
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+.card-shine::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.18), transparent 32%, transparent 65%, rgba(255,255,255,.08));
+  opacity: .75;
+  pointer-events: none;
+}
+
+.grid-fade {
+  position: relative;
+}
+.grid-fade::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+  background-size: 38px 38px;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,.65), transparent 80%);
+  opacity: .20;
+  pointer-events: none;
+}
+
+.text-muted { color: var(--muted); }
