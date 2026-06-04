@@ -10,9 +10,10 @@ type Props = {
   year?: number;
   genreSlug?: string;
   sort?: string;
+  description?: string;
 };
 
-export async function ListPage({ title, type, year, genreSlug, sort }: Props) {
+export async function ListPage({ title, type, year, genreSlug, sort, description }: Props) {
   const movies = await prisma.movie.findMany({
     where: {
       isPublished: true,
@@ -26,7 +27,8 @@ export async function ListPage({ title, type, year, genreSlug, sort }: Props) {
 
   return (
     <div className="container py-5">
-      <h1 className="text-3xl font-medium mb-5 text-[#333]">{title}</h1>
+      <h1 className="text-3xl font-medium mb-3 text-[#333]">{title}</h1>
+      {description ? <p className="text-neutral-600 max-w-4xl leading-relaxed mb-5">{description}</p> : null}
 
       <div className="flex flex-wrap gap-2 mb-5">
         <FilterLink href="?sort=latest" label="Последние" active={!sort || sort === "latest"} />
@@ -43,7 +45,7 @@ export async function ListPage({ title, type, year, genreSlug, sort }: Props) {
         </div>
       ) : (
         <div className="bg-white border border-[#ddd] p-8 text-neutral-600">
-          Пока нет карточек в этом разделе.
+          Пока нет карточек в этом разделе. Запусти массовый импорт в админке, и страница начнёт наполняться автоматически.
         </div>
       )}
     </div>

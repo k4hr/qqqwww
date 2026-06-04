@@ -7,6 +7,13 @@ export const contentTypeLabels: Record<ContentType, string> = {
   ANIME: "Аниме",
 };
 
+export const contentTypePluralLabels: Record<ContentType, string> = {
+  MOVIE: "Фильмы",
+  SERIES: "Сериалы",
+  CARTOON: "Мультфильмы",
+  ANIME: "Аниме",
+};
+
 export const contentTypePaths: Record<ContentType, string> = {
   MOVIE: "/movies",
   SERIES: "/series",
@@ -22,6 +29,10 @@ export function getContentTypeLabel(type: ContentType) {
   return contentTypeLabels[type] ?? "Фильм";
 }
 
+export function getContentTypePluralLabel(type: ContentType) {
+  return contentTypePluralLabels[type] ?? "Фильмы";
+}
+
 export function parseContentType(value: string | null | undefined): ContentType {
   if (value === "SERIES") return ContentType.SERIES;
   if (value === "CARTOON") return ContentType.CARTOON;
@@ -30,8 +41,12 @@ export function parseContentType(value: string | null | undefined): ContentType 
 }
 
 export function parseSort(value: string | null | undefined) {
-  if (value === "rating") return [{ kpRating: "desc" as const }, { imdbRating: "desc" as const }];
-  if (value === "popular") return [{ views: "desc" as const }, { likes: "desc" as const }];
+  if (value === "rating") return [{ kpRating: "desc" as const }, { imdbRating: "desc" as const }, { createdAt: "desc" as const }];
+  if (value === "popular") return [{ views: "desc" as const }, { likes: "desc" as const }, { createdAt: "desc" as const }];
   if (value === "year") return [{ year: "desc" as const }, { createdAt: "desc" as const }];
   return [{ createdAt: "desc" as const }];
+}
+
+export function isValidYear(year: number) {
+  return Number.isFinite(year) && year >= 1900 && year <= 2100;
 }

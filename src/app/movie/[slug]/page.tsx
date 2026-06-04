@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props) {
   const movie = await prisma.movie.findUnique({ where: { slug } });
   if (!movie) return {};
   return {
-    title: `${movie.titleRu} (${movie.year}) смотреть онлайн — REDFILM`,
+    title: `${movie.titleRu} (${movie.year}) смотреть онлайн бесплатно в хорошем качестве — REDFILM`,
     description: movie.description,
   };
 }
@@ -87,6 +87,21 @@ export default async function MoviePage({ params }: Props) {
       </section>
 
       <PlayerBlock movie={movie} />
+
+
+      <section className="mt-6 bg-white border border-[#ddd] p-5">
+        <h2 className="text-xl font-bold text-[#333] mb-3">Похожие запросы</h2>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/year/${movie.year}`} className="mf-btn">{movie.year} год</Link>
+          <Link href={`${getContentTypePath(movie.type)}/${movie.year}`} className="mf-btn">{getContentTypeLabel(movie.type)} {movie.year}</Link>
+          {movie.genres.slice(0, 6).map((item) => (
+            <Link key={item.genre.slug} href={`/genre/${item.genre.slug}/${movie.year}`} className="mf-btn">
+              {item.genre.name} {movie.year}
+            </Link>
+          ))}
+        </div>
+      </section>
+
 
       <section className="mt-8 bg-[#111] text-white p-5">
         <h2 className="text-xl font-bold mb-5">Смотрите также:</h2>
