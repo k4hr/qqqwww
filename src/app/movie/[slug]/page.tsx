@@ -62,7 +62,6 @@ export default async function MoviePage({ params }: Props) {
           </div>
 
           <div>
-            <div className="text-xs uppercase tracking-[0.3em] text-[#f0d79f]/85 mb-2">VIP карточка</div>
             <h1 className="text-3xl md:text-5xl font-black tracking-tight">{movie.titleRu} <span className="text-white/45">({movie.year})</span></h1>
             {movie.titleOriginal ? <div className="text-white/45 mt-2 text-lg">{movie.titleOriginal}</div> : null}
             <p className="text-white/72 leading-relaxed mt-5 max-w-4xl">{movie.description}</p>
@@ -99,11 +98,8 @@ export default async function MoviePage({ params }: Props) {
       <PlayerBlock movie={movie} />
 
       <section className="mt-10">
-        <div className="flex items-center justify-between gap-4 mb-5">
-          <div>
-            <div className="text-xs uppercase tracking-[0.28em] text-[#f0d79f]/85 mb-2">Ещё посмотреть</div>
-            <h2 className="text-2xl md:text-3xl font-black">Похожие тайтлы</h2>
-          </div>
+        <div className="mb-5">
+          <h2 className="text-2xl md:text-3xl font-black">Смотрите также</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
           {related.map((item) => <MovieCard key={item.slug} movie={item} />)}

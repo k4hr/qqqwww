@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Crown, Play, ShieldCheck } from "lucide-react";
+import { Play, ShieldCheck } from "lucide-react";
 
 export function Footer() {
   return (
@@ -11,10 +11,7 @@ export function Footer() {
               <span className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-[#f7e2a9] via-[#c9a86a] to-[#8a6d3a] text-[#0b1020]">
                 <Play size={24} fill="currentColor" />
               </span>
-              <div>
-                <div className="text-xs uppercase tracking-[0.35em] text-[#f0d79f] flex items-center gap-2"><Crown size={12} /> VIP CINEMA CLUB</div>
-                <div className="text-3xl font-black gold-text">MARIOFILM</div>
-              </div>
+              <div className="text-3xl font-black gold-text">MARIOFILM</div>
             </div>
 
             <div className="flex flex-wrap gap-3 text-sm text-white/70">
@@ -26,7 +23,7 @@ export function Footer() {
           </div>
 
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pt-6 text-sm text-white/55">
-            <p className="max-w-2xl flex items-start gap-2"><ShieldCheck size={16} className="mt-0.5 text-[#5ed18c]" /> MARIOFILM — премиальный каталог фильмов, сериалов, мультфильмов и аниме с карточками, рейтингами, трейлерами и удобной навигацией.</p>
+            <p className="max-w-2xl flex items-start gap-2"><ShieldCheck size={16} className="mt-0.5 text-[#5ed18c]" /> MARIOFILM — каталог фильмов, сериалов, мультфильмов и аниме.</p>
             <p>© {new Date().getFullYear()} MARIOFILM</p>
           </div>
         </div>

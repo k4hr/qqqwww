@@ -13,14 +13,11 @@ export function SectionGrid({ title, href, movies }: Props) {
   return (
     <section className="mt-10">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
-        <div>
-          <div className="text-xs uppercase tracking-[0.28em] text-[#f0d79f]/85 mb-2">Премиальная подборка</div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white">{title}</h2>
-            <Link href={href} className="inline-flex items-center gap-1 text-[#f0d79f] hover:text-[#ffe5b7] transition-colors">
-              Смотреть всё <ChevronRight size={18} />
-            </Link>
-          </div>
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white">{title}</h2>
+          <Link href={href} className="inline-flex items-center gap-1 text-[#f0d79f] hover:text-[#ffe5b7] transition-colors">
+            Смотреть всё <ChevronRight size={18} />
+          </Link>
         </div>
 
         <div className="flex flex-wrap gap-2 text-sm">

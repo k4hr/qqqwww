@@ -27,9 +27,7 @@ export async function ListPage({ title, type, year, genreSlug, sort }: Props) {
   return (
     <div className="container py-8">
       <section className="vip-panel hero-backdrop p-6 md:p-8 mb-8 overflow-hidden">
-        <div className="vip-chip mb-4">VIP каталог</div>
         <h1 className="text-3xl md:text-5xl font-black tracking-tight max-w-4xl">{title}</h1>
-        <p className="text-white/65 mt-4 max-w-3xl">Премиальная коллекция фильмов и сериалов с быстрым доступом к карточкам, рейтингам, трейлерам и удобной навигации.</p>
 
         <div className="flex flex-wrap gap-2 mt-6">
           <FilterLink href="?sort=latest" label="Последние" active={!sort || sort === "latest"} />
