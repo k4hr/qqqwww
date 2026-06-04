@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { getTmdbDetails } from "@/lib/tmdb";
-import { getKinopoiskDetails } from "@/lib/kinopoisk";
+import { getKinopoiskCollectionIds, getKinopoiskDetails } from "@/lib/kinopoisk";
 import { parseContentType } from "@/lib/content";
 
 type MovieInput = {
@@ -53,6 +53,10 @@ function splitList(value: string) {
     .filter(Boolean);
 }
 
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
 async function uniqueSlug(baseSlug: string) {
   const normalizedBase = baseSlug || "movie";
   let slug = normalizedBase;
@@ -66,8 +70,24 @@ async function uniqueSlug(baseSlug: string) {
   return slug;
 }
 
+async function findExistingMovie(input: MovieInput) {
+  const OR = [
+    input.kinopoiskId ? { kinopoiskId: input.kinopoiskId } : null,
+    input.tmdbId ? { tmdbId: input.tmdbId } : null,
+    input.imdbId ? { imdbId: input.imdbId } : null,
+  ].filter(Boolean) as Array<{ kinopoiskId?: string; tmdbId?: string; imdbId?: string }>;
+
+  if (!OR.length) return null;
+  return prisma.movie.findFirst({ where: { OR } });
+}
+
 async function createMovie(input: MovieInput) {
+  const existing = await findExistingMovie(input);
+  if (existing) return existing;
+
   const slug = await uniqueSlug(input.slug || `${slugify(input.titleRu)}-${input.year}`);
+  const genres = uniqueStrings(input.genres);
+  const cast = uniqueStrings(input.cast).slice(0, 12);
 
   return prisma.movie.create({
     data: {
@@ -93,7 +113,7 @@ async function createMovie(input: MovieInput) {
       imdbRating: input.imdbRating || null,
       tmdbRating: input.tmdbRating || null,
       genres: {
-        create: input.genres.map((name) => ({
+        create: genres.map((name) => ({
           genre: {
             connectOrCreate: {
               where: { slug: slugify(name) },
@@ -104,9 +124,9 @@ async function createMovie(input: MovieInput) {
       },
       cast: {
         create: await Promise.all(
-          input.cast.map(async (name, index) => {
-            const existing = await prisma.person.findFirst({ where: { nameRu: name } });
-            const person = existing ?? (await prisma.person.create({ data: { nameRu: name } }));
+          cast.map(async (name, index) => {
+            const existingPerson = await prisma.person.findFirst({ where: { nameRu: name } });
+            const person = existingPerson ?? (await prisma.person.create({ data: { nameRu: name } }));
             return { person: { connect: { id: person.id } }, sortOrder: index };
           }),
         ),
@@ -189,6 +209,41 @@ export async function importMovieFromTmdb(formData: FormData) {
 
   revalidatePath("/");
   redirect(`/movie/${movie.slug}`);
+}
+
+export async function bulkImportFromKinopoisk(formData: FormData) {
+  const collection = text(formData, "collection") || "TOP_POPULAR_MOVIES";
+  const pages = Math.max(1, Math.min(Number(text(formData, "pages")) || 1, 5));
+  const limit = Math.max(1, Math.min(Number(text(formData, "limit")) || 20, 100));
+  const quality = text(formData, "quality") || "WEB-DL";
+
+  const ids = (await getKinopoiskCollectionIds(collection, pages)).slice(0, limit);
+  let created = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const id of ids) {
+    try {
+      const normalized = await getKinopoiskDetails(id);
+      const before = await findExistingMovie({ ...normalized, kinopoiskId: id, genres: normalized.genres, cast: normalized.cast });
+      if (before) {
+        skipped += 1;
+        continue;
+      }
+      await createMovie({
+        ...normalized,
+        tmdbId: normalized.tmdbId || undefined,
+        quality,
+      });
+      created += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/admin");
+  redirect(`/admin/bulk?created=${created}&skipped=${skipped}&failed=${failed}`);
 }
 
 export async function toggleMoviePublished(formData: FormData) {

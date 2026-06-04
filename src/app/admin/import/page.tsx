@@ -90,7 +90,7 @@ export default async function ImportPage({ searchParams }: Props) {
             {results.map((item) => (
               <div key={`${item.source}-${item.id}`} className="vip-soft-panel p-4 flex gap-4">
                 <div className="relative w-20 h-28 rounded-xl overflow-hidden bg-black/30 shrink-0">
-                  {item.posterUrl ? <Image src={item.posterUrl} alt={item.title} fill className="object-cover" sizes="80px" /> : null}
+                  {item.posterUrl ? <Image src={item.posterUrl} alt={item.title} fill className="object-cover" sizes="80px" unoptimized /> : null}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-bold leading-tight line-clamp-2">{item.title}</div>

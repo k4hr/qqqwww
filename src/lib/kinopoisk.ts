@@ -228,3 +228,34 @@ export async function getKinopoiskDetails(
     slug: `${slugify(titleRu)}-${year}`,
   };
 }
+
+type KpCollectionItem = {
+  kinopoiskId?: number;
+  filmId?: number;
+  nameRu?: string | null;
+  nameEn?: string | null;
+  nameOriginal?: string | null;
+};
+
+type KpCollectionResponse = {
+  items?: KpCollectionItem[];
+  films?: KpCollectionItem[];
+};
+
+export async function getKinopoiskCollectionIds(collectionType: string, pages = 1) {
+  const safePages = Math.max(1, Math.min(Number(pages) || 1, 5));
+  const ids: string[] = [];
+
+  for (let page = 1; page <= safePages; page += 1) {
+    const data = await kinopoiskFetch<KpCollectionResponse>(
+      `/v2.2/films/collections?type=${encodeURIComponent(collectionType)}&page=${page}`,
+    );
+    const items = data.items ?? data.films ?? [];
+    for (const item of items) {
+      const id = item.kinopoiskId ?? item.filmId;
+      if (id) ids.push(String(id));
+    }
+  }
+
+  return Array.from(new Set(ids));
+}

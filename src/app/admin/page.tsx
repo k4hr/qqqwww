@@ -18,11 +18,12 @@ export default async function AdminPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-5">
         <div>
           <h1 className="text-3xl font-bold">Админка MARIOFILM</h1>
-          <p className="text-neutral-600 mt-1">Управление карточками, импортом и будущим подключением плеера.</p>
+          <p className="text-white/60 mt-1">Управление карточками, импортом и будущим подключением плеера.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/new" className="bg-mario-green text-white font-bold px-5 py-3 rounded-sm">Добавить вручную</Link>
-          <Link href="/admin/import" className="bg-mario-dark text-white font-bold px-5 py-3 rounded-sm">Импорт TMDB</Link>
+          <Link href="/admin/import" className="bg-mario-dark text-white font-bold px-5 py-3 rounded-sm">Импорт</Link>
+          <Link href="/admin/bulk" className="bg-[#c9a86a] text-[#0b1020] font-bold px-5 py-3 rounded-sm">Массовый импорт</Link>
         </div>
       </div>
 
@@ -33,11 +34,11 @@ export default async function AdminPage() {
         <Stat title="Без плеера" value={total - withAlloha} />
       </div>
 
-      <div className="bg-white border border-mario-line p-5">
+      <div className="vip-panel p-5">
         <h2 className="text-xl font-bold mb-4">Последние карточки</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-neutral-500 border-b">
+            <thead className="text-left text-white/50 border-b border-white/10">
               <tr>
                 <th className="py-3 pr-4">Название</th>
                 <th className="py-3 pr-4">Тип</th>
@@ -47,19 +48,19 @@ export default async function AdminPage() {
                 <th className="py-3 pr-4">Действия</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-white/10">
               {latest.map((movie) => (
                 <tr key={movie.id}>
-                  <td className="py-3 pr-4 font-medium"><Link className="hover:text-mario-green" href={`/movie/${movie.slug}`}>{movie.titleRu}</Link></td>
+                  <td className="py-3 pr-4 font-medium"><Link className="hover:text-[#f0d79f]" href={`/movie/${movie.slug}`}>{movie.titleRu}</Link></td>
                   <td className="py-3 pr-4">{getContentTypeLabel(movie.type)}</td>
                   <td className="py-3 pr-4">{movie.year}</td>
-                  <td className="py-3 pr-4 text-neutral-500">{movie.allohaId ? `Alloha: ${movie.allohaId}` : "нет"}</td>
+                  <td className="py-3 pr-4 text-white/50">{movie.allohaId ? `Alloha: ${movie.allohaId}` : "нет"}</td>
                   <td className="py-3 pr-4">{movie.isPublished ? "Опубликовано" : "Скрыто"}</td>
                   <td className="py-3 pr-4">
                     <form action={toggleMoviePublished}>
                       <input type="hidden" name="id" value={movie.id} />
                       <input type="hidden" name="isPublished" value={String(movie.isPublished)} />
-                      <button className="border border-mario-line px-3 py-1 hover:bg-neutral-100" type="submit">
+                      <button className="border border-white/10 rounded-xl px-3 py-1 hover:bg-white/10" type="submit">
                         {movie.isPublished ? "Скрыть" : "Опубликовать"}
                       </button>
                     </form>
@@ -75,5 +76,5 @@ export default async function AdminPage() {
 }
 
 function Stat({ title, value }: { title: string; value: number }) {
-  return <div className="bg-white border border-mario-line p-5"><div className="text-sm text-neutral-500">{title}</div><div className="text-4xl font-bold mt-2">{value}</div></div>;
+  return <div className="vip-panel p-5"><div className="text-white/50 text-sm">{title}</div><div className="text-4xl font-bold mt-2 gold-text">{value}</div></div>;
 }
