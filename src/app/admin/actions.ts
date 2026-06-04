@@ -53,11 +53,12 @@ function splitList(value: string) {
 }
 
 async function uniqueSlug(baseSlug: string) {
-  let slug = baseSlug || "movie";
+  const normalizedBase = baseSlug || "movie";
+  let slug = normalizedBase;
   let counter = 2;
 
   while (await prisma.movie.findUnique({ where: { slug } })) {
-    slug = `${baseSlug}-${counter}`;
+    slug = `${normalizedBase}-${counter}`;
     counter += 1;
   }
 
