@@ -5,8 +5,21 @@ type Props = {
   movie: Pick<Movie, "titleRu" | "year" | "allohaId" | "trailerUrl">;
 };
 
+function youtubeEmbedUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const videoId = parsed.hostname.includes("youtu.be")
+      ? parsed.pathname.replace("/", "")
+      : parsed.searchParams.get("v");
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export function PlayerBlock({ movie }: Props) {
   const allohaEnabled = process.env.ALLOHA_ENABLED === "true";
+  const trailerEmbed = movie.trailerUrl ? youtubeEmbedUrl(movie.trailerUrl) : null;
 
   return (
     <section className="mt-8 border-t border-mario-line pt-5">
@@ -24,10 +37,17 @@ export function PlayerBlock({ movie }: Props) {
             allowFullScreen
             title={movie.titleRu}
           />
+        ) : trailerEmbed ? (
+          <iframe
+            src={trailerEmbed}
+            className="w-full aspect-video border-0"
+            allowFullScreen
+            title={`Трейлер ${movie.titleRu}`}
+          />
         ) : (
           <div className="aspect-video flex flex-col items-center justify-center bg-black relative overflow-hidden">
             <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_center,#555,transparent_55%)]" />
-            <button className="relative z-10 w-16 h-16 rounded-full bg-sky-500 flex items-center justify-center hover:scale-105 transition-transform">
+            <button className="relative z-10 w-16 h-16 rounded-full bg-sky-500 flex items-center justify-center hover:scale-105 transition-transform" type="button">
               <Play fill="white" color="white" size={30} />
             </button>
             <p className="relative z-10 mt-5 text-white/80 text-center px-5">Плеер будет подключен после одобрения партнёрского доступа.</p>

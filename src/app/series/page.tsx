@@ -1,4 +1,8 @@
 import { ContentType } from "@prisma/client";
 import { ListPage } from "@/lib/list-page";
 export const dynamic = "force-dynamic";
-export default function Page() { return <ListPage title="Сериалы" type={ContentType.SERIES} />; }
+type Props = { searchParams: Promise<{ sort?: string; year?: string }> };
+export default async function Page({ searchParams }: Props) {
+  const { sort, year } = await searchParams;
+  return <ListPage title={year ? `Сериалы ${year}` : "Сериалы"} type={ContentType.SERIES} sort={sort} year={year ? Number(year) : undefined} />;
+}

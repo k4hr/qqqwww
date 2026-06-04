@@ -1,9 +1,11 @@
+import type React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PlayerBlock } from "@/components/player-block";
 import { MovieCard } from "@/components/movie-card";
+import { getContentTypeLabel, getContentTypePath } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
 
@@ -30,14 +32,14 @@ export default async function MoviePage({ params }: Props) {
 
   const related = await prisma.movie.findMany({
     where: { id: { not: movie.id }, type: movie.type, isPublished: true },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }],
     take: 6
   });
 
   return (
     <div className="container py-4">
       <div className="text-sm text-neutral-500 mb-6">
-        <Link href="/">МариоФильм</Link> » <Link href="/movies">Фильмы</Link> » {movie.titleRu} {movie.year} смотреть онлайн
+        <Link href="/">MARIOFILM</Link> » <Link href={getContentTypePath(movie.type)}>{getContentTypeLabel(movie.type)}</Link> » {movie.titleRu} {movie.year} смотреть онлайн
       </div>
 
       <section className="grid md:grid-cols-[220px_1fr] gap-6 bg-white border border-mario-line p-4 md:p-5">
@@ -47,7 +49,7 @@ export default async function MoviePage({ params }: Props) {
             <span className="absolute top-3 left-3 bg-mario-green text-white text-xs font-bold px-3 py-1 rounded-sm">{movie.quality}</span>
           </div>
           <div className="flex items-center justify-center -mt-6 relative z-10">
-            <div className="w-16 h-16 rounded-full bg-white shadow-card flex items-center justify-center text-lg font-medium">{movie.kpRating?.toFixed(1) ?? "—"}</div>
+            <div className="w-16 h-16 rounded-full bg-white shadow-card flex items-center justify-center text-lg font-medium">{movie.kpRating?.toFixed(1) ?? movie.tmdbRating?.toFixed(1) ?? "—"}</div>
           </div>
           <div className="flex justify-between mt-3 text-sm">
             <span className="text-mario-green font-bold">👍 {movie.likes}</span>
@@ -57,13 +59,22 @@ export default async function MoviePage({ params }: Props) {
 
         <div>
           <h1 className="text-2xl font-medium mb-3">{movie.titleRu} ({movie.year})</h1>
+          {movie.titleOriginal ? <div className="text-neutral-500 mb-3">{movie.titleOriginal}</div> : null}
           <p className="text-neutral-600 leading-relaxed mb-5">{movie.description}</p>
 
           <div className="grid md:grid-cols-3 gap-x-8 gap-y-4 text-sm">
             <Info label="Страна" value={movie.country ?? "—"} />
             <Info label="Режиссёр" value={movie.director ?? "—"} />
-            <Info label="Жанр" value={movie.genres.map((item) => item.genre.name).join(" / ") || "—"} />
-            <Info label="Год выхода" value={String(movie.year)} />
+            <Info label="Жанр" value={
+              movie.genres.length ? (
+                <span>{movie.genres.map((item, index) => (
+                  <span key={item.genre.slug}>
+                    {index ? " / " : ""}<Link className="text-blue-600 hover:underline" href={`/genre/${item.genre.slug}`}>{item.genre.name}</Link>
+                  </span>
+                ))}</span>
+              ) : "—"
+            } />
+            <Info label="Год выхода" value={<Link className="text-blue-600 hover:underline" href={`/year/${movie.year}`}>{movie.year}</Link>} />
             <Info label="Возраст" value={movie.ageRating ?? "—"} />
             <Info label="Качество" value={movie.quality} />
             <Info label="КП" value={movie.kpRating?.toFixed(1) ?? "—"} />
@@ -87,6 +98,6 @@ export default async function MoviePage({ params }: Props) {
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return <div><span className="font-bold">{label}:</span> <span className="text-neutral-700">{value}</span></div>;
 }
