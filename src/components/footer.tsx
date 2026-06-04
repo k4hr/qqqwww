@@ -10,11 +10,11 @@ export function Footer() {
             <span className="w-9 h-9 rounded-md bg-[#e50914] text-white flex items-center justify-center">
               <Play size={22} fill="currentColor" />
             </span>
-            MARIOFILM
+            REDFILM
           </Link>
           <p className="text-sm text-white/70 md:ml-5">В случае нарушения авторских прав — обращайтесь на почту правообладателя сайта.</p>
         </div>
-        <p className="text-sm text-white/60 pt-6">© MARIOFILM — смотреть фильмы онлайн.</p>
+        <p className="text-sm text-white/60 pt-6">© REDFILM — смотреть фильмы онлайн.</p>
       </div>
     </footer>
   );

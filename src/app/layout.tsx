@@ -4,8 +4,8 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = {
-  title: "MARIOFILM — фильмы и сериалы онлайн",
-  description: "Каталог фильмов, сериалов, мультфильмов и аниме MARIOFILM.",
+  title: "REDFILM — фильмы и сериалы онлайн",
+  description: "Каталог фильмов, сериалов, мультфильмов и аниме REDFILM.",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

@@ -11,8 +11,8 @@ export async function generateMetadata({ params }: Props) {
   const genre = await prisma.genre.findUnique({ where: { slug } });
   if (!genre) return {};
   return {
-    title: `${genre.name} смотреть онлайн — MARIOFILM`,
-    description: `Фильмы и сериалы в жанре ${genre.name} в каталоге MARIOFILM.`,
+    title: `${genre.name} смотреть онлайн — REDFILM`,
+    description: `Фильмы и сериалы в жанре ${genre.name} в каталоге REDFILM.`,
   };
 }
 

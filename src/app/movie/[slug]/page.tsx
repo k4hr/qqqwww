@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props) {
   const movie = await prisma.movie.findUnique({ where: { slug } });
   if (!movie) return {};
   return {
-    title: `${movie.titleRu} (${movie.year}) смотреть онлайн — MARIOFILM`,
+    title: `${movie.titleRu} (${movie.year}) смотреть онлайн — REDFILM`,
     description: movie.description,
   };
 }
@@ -39,7 +39,7 @@ export default async function MoviePage({ params }: Props) {
   return (
     <div className="container py-4">
       <div className="text-sm text-neutral-500 mb-5">
-        <Link href="/">MARIOFILM</Link> » <Link href={getContentTypePath(movie.type)}>{getContentTypeLabel(movie.type)}</Link> » {movie.titleRu} {movie.year} смотреть онлайн
+        <Link href="/">REDFILM</Link> » <Link href={getContentTypePath(movie.type)}>{getContentTypeLabel(movie.type)}</Link> » {movie.titleRu} {movie.year} смотреть онлайн
       </div>
 
       <section className="grid md:grid-cols-[220px_1fr] gap-6 bg-white border border-[#ddd] p-4 md:p-5">

@@ -23,7 +23,7 @@ export default async function HomePage() {
           <Link href="/latest" className="mf-btn">Последние обновления</Link>
         </div>
 
-        <h1 className="text-2xl md:text-3xl font-medium mb-4 text-[#333]">MARIOFILM — фильмы смотреть онлайн</h1>
+        <h1 className="text-2xl md:text-3xl font-medium mb-4 text-[#333]">REDFILM — фильмы смотреть онлайн</h1>
         <p className="text-neutral-600 max-w-4xl leading-relaxed">
           Каталог фильмов, сериалов, мультфильмов и аниме. Здесь можно найти карточки с описаниями, рейтингами, трейлерами и подборками.
         </p>

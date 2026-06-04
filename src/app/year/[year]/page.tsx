@@ -8,7 +8,7 @@ type Props = { params: Promise<{ year: string }>; searchParams: Promise<{ sort?:
 export async function generateMetadata({ params }: Props) {
   const { year } = await params;
   return {
-    title: `Фильмы и сериалы ${year} года — MARIOFILM`,
+    title: `Фильмы и сериалы ${year} года — REDFILM`,
     description: `Каталог фильмов, сериалов, мультфильмов и аниме ${year} года.`,
   };
 }

@@ -32,7 +32,7 @@ function unauthorized() {
   return new NextResponse("Authentication required", {
     status: 401,
     headers: {
-      "WWW-Authenticate": 'Basic realm="MARIOFILM Admin"',
+      "WWW-Authenticate": 'Basic realm="REDFILM Admin"',
     },
   });
 }

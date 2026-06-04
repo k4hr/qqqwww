@@ -16,10 +16,10 @@ const movies = [
     duration: 87,
     kpRating: 6.5,
     imdbRating: null,
-    posterUrl: "https://placehold.co/420x630/6fbe44/ffffff?text=MARIOFILM",
-    backdropUrl: "https://placehold.co/1280x720/1f1f1f/ffffff?text=MARIOFILM",
+    posterUrl: "https://placehold.co/420x630/6fbe44/ffffff?text=REDFILM",
+    backdropUrl: "https://placehold.co/1280x720/1f1f1f/ffffff?text=REDFILM",
     description:
-      "Добрый семейный фильм о приключениях, дружбе и необычном путешествии. Карточка создана как пример для стартовой базы MARIOFILM.",
+      "Добрый семейный фильм о приключениях, дружбе и необычном путешествии. Карточка создана как пример для стартовой базы REDFILM.",
     genres: ["Фильм", "Комедия", "Приключения", "Семейный", "Фэнтези"],
     cast: ["Павел Прилучный", "Олег Комаров", "Людмила Артемьева"]
   },

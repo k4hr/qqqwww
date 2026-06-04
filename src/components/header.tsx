@@ -18,13 +18,13 @@ export function Header() {
         <Link href="/" className="flex items-center gap-3 font-black text-2xl tracking-tight shrink-0">
           <Image
             src="/logo-icon.png"
-            alt="MARIOFILM"
+            alt="REDFILM"
             width={44}
             height={44}
             className="rounded-md"
             priority
           />
-          <span className="text-[#161616]">MARIOFILM</span>
+          <span className="text-[#161616]">REDFILM</span>
         </Link>
 
         <nav className="flex items-center gap-6 overflow-x-auto text-sm font-bold uppercase text-neutral-500 shrink-0">

@@ -17,7 +17,7 @@ export default async function AdminPage() {
     <div className="container py-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-5">
         <div>
-          <h1 className="text-3xl font-bold">Админка MARIOFILM</h1>
+          <h1 className="text-3xl font-bold">Админка REDFILM</h1>
           <p className="text-white/60 mt-1">Управление карточками, импортом и будущим подключением плеера.</p>
         </div>
         <div className="flex flex-wrap gap-2">

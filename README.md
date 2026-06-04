@@ -1,4 +1,4 @@
-# MARIOFILM
+# REDFILM
 
 Каталог фильмов/сериалов на Next.js + Prisma + PostgreSQL под GitHub + Railway.
 
@@ -47,7 +47,7 @@ http://localhost:3000
 
 ```env
 DATABASE_URL=postgresql://...
-NEXT_PUBLIC_SITE_NAME=MARIOFILM
+NEXT_PUBLIC_SITE_NAME=REDFILM
 NEXT_PUBLIC_SITE_URL=https://твой-домен
 ALLOHA_ENABLED=false
 ALLOHA_DOMAIN=
