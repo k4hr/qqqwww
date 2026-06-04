@@ -13,7 +13,7 @@ export function MovieCard({ movie }: Props) {
       <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.04] shadow-[0_16px_40px_rgba(0,0,0,.25)] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-[#c9a86a]/35 group-hover:shadow-[0_26px_60px_rgba(0,0,0,.45)]">
         <div className="relative aspect-[2/3] bg-neutral-900 poster-gradient overflow-hidden card-shine">
           {movie.posterUrl ? (
-            <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover group-hover:scale-105 transition-transform duration-500" sizes="220px" />
+            <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover group-hover:scale-105 transition-transform duration-500" sizes="220px" unoptimized />
           ) : null}
 
           <div className="absolute inset-x-0 top-0 z-10 p-3 flex items-center justify-between gap-2">

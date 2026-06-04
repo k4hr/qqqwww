@@ -47,7 +47,7 @@ export default async function MoviePage({ params }: Props) {
         <div className="grid lg:grid-cols-[290px_1fr] gap-8 p-6 md:p-8">
           <div>
             <div className="relative aspect-[2/3] overflow-hidden rounded-[28px] border border-white/10 bg-neutral-900 shadow-[0_18px_50px_rgba(0,0,0,.35)]">
-              {movie.posterUrl ? <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="290px" /> : null}
+              {movie.posterUrl ? <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="290px" unoptimized /> : null}
               <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
                 <span className="rounded-full border border-[#5ed18c]/30 bg-[#5ed18c]/15 px-3 py-1 text-xs font-bold text-[#baf1ce]">{movie.quality}</span>
                 <span className="rounded-full border border-[#c9a86a]/25 bg-[#c9a86a]/12 px-3 py-1 text-xs font-bold text-[#f6dfaa] inline-flex items-center gap-1"><Star size={12} fill="currentColor" /> {movie.kpRating?.toFixed(1) ?? movie.tmdbRating?.toFixed(1) ?? "—"}</span>

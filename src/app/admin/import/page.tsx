@@ -59,7 +59,7 @@ export default async function ImportPage({ searchParams }: Props) {
       <Link href="/admin" className="text-sm text-white/50 hover:text-white">← Назад в админку</Link>
       <h1 className="text-3xl font-bold mt-3 mb-2">Импорт карточек</h1>
       <p className="text-white/60 mb-6">
-        Основной вариант — Kinopoisk API: он подтягивает русские названия, постеры, описания, рейтинги КП/IMDb, жанры, актёров и ID. TMDB оставлен как запасной источник.
+        Основной вариант — Kinopoisk API Unofficial: он подтягивает русские названия, постеры, описания, рейтинги КП/IMDb, жанры, актёров и ID. TMDB оставлен как запасной источник.
       </p>
 
       {error ? <div className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-200 px-4 py-3">Проверь ID и API-ключ в Railway variables.</div> : null}
@@ -70,7 +70,7 @@ export default async function ImportPage({ searchParams }: Props) {
         <form className="grid md:grid-cols-[1fr_180px_180px_150px] gap-3" action="/admin/import">
           <input name="q" defaultValue={q} className="rounded-2xl border border-white/10 bg-white/[0.05] h-12 px-4 outline-none" placeholder="Например: Аватар, Интерстеллар, Шрек" />
           <select name="source" defaultValue={source} className="rounded-2xl border border-white/10 bg-[#0b1020] h-12 px-4 outline-none">
-            <option value="kinopoisk">Kinopoisk</option>
+            <option value="kinopoisk">Kinopoisk Unofficial</option>
             <option value="tmdb">TMDB</option>
           </select>
           <select name="type" defaultValue={type} className="rounded-2xl border border-white/10 bg-[#0b1020] h-12 px-4 outline-none">
