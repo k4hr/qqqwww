@@ -6,6 +6,11 @@ import { Footer } from "@/components/footer";
 export const metadata: Metadata = {
   title: "MARIOFILM — фильмы и сериалы онлайн",
   description: "Каталог фильмов, сериалов, мультфильмов и аниме MARIOFILM.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

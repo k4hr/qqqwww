@@ -1,5 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Search, Play } from "lucide-react";
+import { Search } from "lucide-react";
 
 const nav = [
   ["Фильмы", "/movies"],
@@ -15,9 +16,14 @@ export function Header() {
     <header className="bg-white border-b border-[#dcdcdc] sticky top-0 z-50 shadow-sm">
       <div className="container min-h-[70px] py-3 flex items-center gap-6">
         <Link href="/" className="flex items-center gap-3 font-black text-2xl tracking-tight shrink-0">
-          <span className="w-10 h-10 rounded-md bg-[#e50914] text-white flex items-center justify-center">
-            <Play size={22} fill="currentColor" />
-          </span>
+          <Image
+            src="/logo-icon.png"
+            alt="MARIOFILM"
+            width={44}
+            height={44}
+            className="rounded-md"
+            priority
+          />
           <span className="text-[#161616]">MARIOFILM</span>
         </Link>
 
