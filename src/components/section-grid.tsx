@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Movie } from "@prisma/client";
-import { ChevronRight } from "lucide-react";
 import { MovieCard } from "./movie-card";
 
 type Props = {
@@ -11,23 +10,15 @@ type Props = {
 
 export function SectionGrid({ title, href, movies }: Props) {
   return (
-    <section className="mt-10">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white">{title}</h2>
-          <Link href={href} className="inline-flex items-center gap-1 text-[#f0d79f] hover:text-[#ffe5b7] transition-colors">
-            Смотреть всё <ChevronRight size={18} />
-          </Link>
-        </div>
-
-        <div className="flex flex-wrap gap-2 text-sm">
-          <span className="vip-soft-panel px-4 py-2 text-white/85">Последние</span>
-          <span className="vip-soft-panel px-4 py-2 text-white/55">Популярные</span>
-          <span className="vip-soft-panel px-4 py-2 text-white/55">По рейтингу</span>
-        </div>
+    <section className="mt-7">
+      <div className="flex items-center gap-3 mb-3 overflow-x-auto pb-1">
+        <Link href={href} className="mf-section-title whitespace-nowrap">{title} ›</Link>
+        <Link href={`${href}?sort=latest`} className="bg-white border border-[#e4e4e4] px-8 py-3 text-sm text-[#333] rounded-sm whitespace-nowrap hover:border-[#e50914]">Последние</Link>
+        <Link href={`${href}?sort=popular`} className="bg-white border border-[#e4e4e4] px-8 py-3 text-sm text-neutral-500 rounded-sm whitespace-nowrap hover:border-[#e50914]">Популярные</Link>
+        <Link href={`${href}?sort=rating`} className="bg-white border border-[#e4e4e4] px-8 py-3 text-sm text-neutral-500 rounded-sm whitespace-nowrap hover:border-[#e50914]">По рейтингу</Link>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
         {movies.map((movie) => <MovieCard key={movie.slug} movie={movie} />)}
       </div>
     </section>

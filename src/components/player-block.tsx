@@ -1,4 +1,4 @@
-import { Bookmark, MessageCircleWarning, Play, Share2 } from "lucide-react";
+import { Play } from "lucide-react";
 import type { Movie } from "@prisma/client";
 
 type Props = {
@@ -22,47 +22,41 @@ export function PlayerBlock({ movie }: Props) {
   const trailerEmbed = movie.trailerUrl ? youtubeEmbedUrl(movie.trailerUrl) : null;
 
   return (
-    <section className="mt-10">
-      <div className="vip-panel overflow-hidden">
-        <div className="px-6 py-5 border-b border-white/10 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <h2 className="text-xl md:text-2xl font-black">Смотреть онлайн {movie.titleRu} ({movie.year})</h2>
-          <div className="flex flex-wrap gap-2 text-sm text-white/70">
-            <span className="vip-soft-panel px-4 py-2">Несколько плееров</span>
-            <span className="vip-soft-panel px-4 py-2 text-[#baf1ce]">Приятного просмотра</span>
-          </div>
+    <section className="mt-6 border-t border-[#ddd] pt-5">
+      <h2 className="text-center text-xl font-medium mb-4 text-[#333]">Смотреть онлайн {movie.titleRu} ({movie.year}) бесплатно</h2>
+      <div className="bg-[#101010] text-white">
+        <div className="h-12 flex items-center justify-between px-5 bg-[#1b1b1b] text-sm">
+          <span><b>На выбор несколько плееров</b> <span className="text-[#e50914] ml-2">Приятного просмотра!</span></span>
+          <span className="text-red-400">Есть жалоба?</span>
         </div>
 
         {allohaEnabled && movie.allohaId ? (
           <iframe
             src={`https://example-player-domain.test/${movie.allohaId}`}
-            className="w-full aspect-video border-0 bg-black"
+            className="w-full aspect-video border-0"
             allowFullScreen
             title={movie.titleRu}
           />
         ) : trailerEmbed ? (
           <iframe
             src={trailerEmbed}
-            className="w-full aspect-video border-0 bg-black"
+            className="w-full aspect-video border-0"
             allowFullScreen
             title={`Трейлер ${movie.titleRu}`}
           />
         ) : (
-          <div className="aspect-video flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,rgba(201,168,106,.15),transparent_30%),linear-gradient(180deg,#05070d,#0b1020)] relative overflow-hidden px-6">
-            <button className="relative z-10 w-20 h-20 rounded-full bg-gradient-to-br from-[#f7e2a9] via-[#c9a86a] to-[#8a6d3a] text-[#0b1020] flex items-center justify-center hover:scale-105 transition-transform shadow-[0_18px_40px_rgba(201,168,106,.25)]" type="button">
-              <Play fill="currentColor" size={34} />
+          <div className="aspect-video flex flex-col items-center justify-center bg-black relative overflow-hidden">
+            <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_center,#555,transparent_55%)]" />
+            <button className="relative z-10 w-16 h-16 rounded-full bg-[#e50914] flex items-center justify-center hover:scale-105 transition-transform" type="button">
+              <Play fill="white" color="white" size={30} />
             </button>
-            <p className="relative z-10 mt-5 text-white/80 text-center max-w-xl">Плеер будет подключён после одобрения партнёрского доступа.</p>
+            <p className="relative z-10 mt-5 text-white/80 text-center px-5">Плеер будет подключён после одобрения партнёрского доступа.</p>
           </div>
         )}
 
-        <div className="px-6 py-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-sm text-white/65">
-          <div className="flex flex-wrap gap-2">
-            <span className="vip-soft-panel px-4 py-2 inline-flex items-center gap-2"><MessageCircleWarning size={15} className="text-rose-300" /> Есть жалоба?</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="vip-soft-panel px-4 py-2 inline-flex items-center gap-2"><Share2 size={15} /> Поделиться</span>
-            <span className="vip-soft-panel px-4 py-2 inline-flex items-center gap-2"><Bookmark size={15} /> В закладки</span>
-          </div>
+        <div className="h-11 bg-[#222] flex items-center justify-between px-5 text-sm text-white/70">
+          <span>VK OK TG</span>
+          <span>♡ Добавить в закладки</span>
         </div>
       </div>
     </section>

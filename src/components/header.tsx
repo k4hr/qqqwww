@@ -6,36 +6,30 @@ const nav = [
   ["Сериалы", "/series"],
   ["Мультфильмы", "/cartoons"],
   ["Аниме", "/anime"],
-  ["Последние", "/latest"],
+  ["Последнее", "/latest"],
   ["ТОП", "/top"],
 ] as const;
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#09101b]/80 backdrop-blur-xl">
-      <div className="container py-4 flex flex-col gap-4 xl:flex-row xl:items-center">
-        <Link href="/" className="flex items-center gap-3 min-w-0 shrink-0">
-          <span className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-[#f7e2a9] via-[#c9a86a] to-[#8a6d3a] text-[#0b1020] shadow-[0_10px_30px_rgba(201,168,106,.25)]">
+    <header className="bg-white border-b border-[#dcdcdc] sticky top-0 z-50 shadow-sm">
+      <div className="container min-h-[70px] py-3 flex flex-wrap items-center gap-4 lg:gap-8">
+        <Link href="/" className="flex items-center gap-3 font-black text-2xl tracking-tight shrink-0">
+          <span className="w-10 h-10 rounded-md bg-[#e50914] text-white flex items-center justify-center">
             <Play size={22} fill="currentColor" />
           </span>
-          <div className="text-3xl font-black tracking-tight gold-text leading-none">MARIOFILM</div>
+          <span className="text-[#161616]">MARIOFILM</span>
         </Link>
 
-        <nav className="flex-1 xl:justify-center flex items-center gap-3 xl:gap-5 overflow-x-auto whitespace-nowrap text-sm font-semibold text-white/80">
+        <nav className="order-3 w-full lg:order-none lg:w-auto flex items-center gap-4 md:gap-7 overflow-x-auto text-sm font-bold uppercase text-neutral-500">
           {nav.map(([label, href]) => (
-            <Link key={href} href={href} className="px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] hover:border-[#c9a86a]/30 hover:text-white transition-colors">
-              {label}
-            </Link>
+            <Link key={href} className="hover:text-[#e50914] whitespace-nowrap" href={href}>{label}</Link>
           ))}
         </nav>
 
-        <form action="/search" className="flex h-12 items-center rounded-full border border-white/10 bg-white/[0.05] px-4 w-full md:w-[320px] text-white/80">
-          <Search size={18} className="text-[#f0d79f] mr-3 shrink-0" />
-          <input
-            name="q"
-            placeholder="Поиск по сайту..."
-            className="bg-transparent flex-1 outline-none text-sm placeholder:text-white/40"
-          />
+        <form action="/search" className="ml-auto flex w-full md:w-[360px] border border-[#d8d8d8] bg-[#f8f8f8] h-10 items-center px-3">
+          <input name="q" placeholder="Поиск по сайту..." className="bg-transparent flex-1 outline-none text-sm text-[#333] placeholder:text-[#9a9a9a]" />
+          <Search size={18} className="text-[#e50914]" />
         </form>
       </div>
     </header>
