@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { getTmdbDetails } from "@/lib/tmdb";
+import { getKinopoiskDetails } from "@/lib/kinopoisk";
 import { parseContentType } from "@/lib/content";
 
 type MovieInput = {
@@ -147,6 +148,23 @@ export async function createMovieManually(formData: FormData) {
     genres: splitList(text(formData, "genres")),
     cast: splitList(text(formData, "cast")),
     slug: text(formData, "slug"),
+  });
+
+  revalidatePath("/");
+  redirect(`/movie/${movie.slug}`);
+}
+
+export async function importMovieFromKinopoisk(formData: FormData) {
+  const kinopoiskId = text(formData, "kinopoiskId");
+
+  if (!kinopoiskId) redirect("/admin/import?error=kinopoiskId");
+
+  const normalized = await getKinopoiskDetails(kinopoiskId);
+  const movie = await createMovie({
+    ...normalized,
+    tmdbId: normalized.tmdbId || undefined,
+    quality: text(formData, "quality") || "WEB-DL",
+    allohaId: text(formData, "allohaId"),
   });
 
   revalidatePath("/");
