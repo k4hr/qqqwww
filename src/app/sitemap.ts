@@ -50,6 +50,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...yearPaths,
     ...Array.from(genreYearSet).slice(0, 3000),
     ...movies.map((movie) => `/movie/${movie.slug}`),
+    ...movies.map((movie) => `/similar/${movie.slug}`),
   ];
 
   const uniquePaths = Array.from(new Set(paths));

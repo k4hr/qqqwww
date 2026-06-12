@@ -94,6 +94,7 @@ export default async function MoviePage({ params }: Props) {
         <div className="flex flex-wrap gap-2">
           <Link href={`/year/${movie.year}`} className="mf-btn">{movie.year} год</Link>
           <Link href={`${getContentTypePath(movie.type)}/${movie.year}`} className="mf-btn">{getContentTypeLabel(movie.type)} {movie.year}</Link>
+          <Link href={`/similar/${movie.slug}`} className="mf-btn">Похожие фильмы</Link>
           {movie.genres.slice(0, 6).map((item) => (
             <Link key={item.genre.slug} href={`/genre/${item.genre.slug}/${movie.year}`} className="mf-btn">
               {item.genre.name} {movie.year}
