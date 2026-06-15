@@ -11,40 +11,43 @@ const nav = [
   ["ТОП", "/top"],
 ] as const;
 
+function SearchForm({ mobile = false }: { mobile?: boolean }) {
+  return (
+    <form
+      action="/search"
+      className={mobile
+        ? "flex h-11 w-full items-center rounded-xl border border-[#27272f] bg-[#111117] px-4"
+        : "ml-auto flex h-11 w-[290px] shrink-0 items-center rounded-xl border border-[#27272f] bg-[#111117] px-4 transition-colors focus-within:border-[#e50914] max-lg:w-[240px] max-md:hidden"}
+    >
+      <input
+        name="q"
+        aria-label="Поиск по сайту"
+        placeholder="Фильм или сериал"
+        className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#71717a]"
+      />
+      <Search size={18} className="shrink-0 text-[#e50914]" />
+    </form>
+  );
+}
+
 export function Header() {
   return (
-    <header className="bg-white border-b border-[#dcdcdc] sticky top-0 z-50 shadow-sm">
-      <div className="container min-h-[70px] py-3 flex items-center gap-6">
-        <Link href="/" className="flex items-center gap-3 font-black text-2xl tracking-tight shrink-0">
-          <Image
-            src="/logo-icon.png"
-            alt="REDFILM"
-            width={44}
-            height={44}
-            className="rounded-md"
-            priority
-          />
-          <span className="text-[#161616]">REDFILM</span>
+    <header className="sticky top-0 z-50 border-b border-[#202027] bg-[#09090d]/95 shadow-[0_10px_30px_rgba(0,0,0,.24)] backdrop-blur-xl">
+      <div className="container flex min-h-[72px] items-center gap-5 py-3">
+        <Link href="/" className="flex shrink-0 items-center gap-3 text-xl font-black tracking-[-0.04em] text-white">
+          <Image src="/logo-icon.png" alt="REDFILM" width={40} height={40} className="rounded-xl" priority />
+          <span><span className="text-[#e50914]">RED</span>FILM</span>
         </Link>
 
-        <nav className="flex items-center gap-6 overflow-x-auto text-sm font-bold uppercase text-neutral-500 shrink-0">
+        <nav className="flex min-w-0 items-center gap-5 overflow-x-auto py-2 text-[13px] font-bold text-[#a1a1aa] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-xl:gap-4">
           {nav.map(([label, href]) => (
-            <Link key={href} className="hover:text-[#e50914] whitespace-nowrap" href={href}>{label}</Link>
+            <Link key={href} className="whitespace-nowrap transition-colors hover:text-white" href={href}>{label}</Link>
           ))}
         </nav>
 
-        <form action="/search" className="ml-auto flex w-[360px] shrink-0 border border-[#d8d8d8] bg-[#f8f8f8] h-10 items-center px-3 max-lg:w-[280px] max-md:hidden">
-          <input name="q" placeholder="Поиск по сайту..." className="bg-transparent flex-1 outline-none text-sm text-[#333] placeholder:text-[#9a9a9a]" />
-          <Search size={18} className="text-[#e50914]" />
-        </form>
+        <SearchForm />
       </div>
-
-      <div className="container pb-3 md:hidden">
-        <form action="/search" className="flex w-full border border-[#d8d8d8] bg-[#f8f8f8] h-10 items-center px-3">
-          <input name="q" placeholder="Поиск по сайту..." className="bg-transparent flex-1 outline-none text-sm text-[#333] placeholder:text-[#9a9a9a]" />
-          <Search size={18} className="text-[#e50914]" />
-        </form>
-      </div>
+      <div className="container pb-3 md:hidden"><SearchForm mobile /></div>
     </header>
   );
 }

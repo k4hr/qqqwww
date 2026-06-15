@@ -9,7 +9,7 @@ export default async function NewMoviePage({ searchParams }: Props) {
   const { error } = await searchParams;
 
   return (
-    <div className="container py-6">
+    <div className="container admin-shell py-6">
       <Link href="/admin" className="text-sm text-neutral-500 hover:text-mario-green">← Назад в админку</Link>
       <h1 className="text-3xl font-bold mt-3 mb-2">Добавить карточку вручную</h1>
       <p className="text-neutral-600 mb-6">Минимум нужны название, год и описание. Остальное можно заполнить позже.</p>

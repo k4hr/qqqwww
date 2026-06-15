@@ -55,7 +55,7 @@ export default async function ImportPage({ searchParams }: Props) {
   }
 
   return (
-    <div className="container py-6">
+    <div className="container admin-shell py-6">
       <Link href="/admin" className="text-sm text-neutral-500 hover:text-[#e50914]">← Назад в админку</Link>
       <h1 className="text-3xl font-bold mt-3 mb-2 text-[#222]">Импорт карточек</h1>
       <p className="text-neutral-600 mb-6">

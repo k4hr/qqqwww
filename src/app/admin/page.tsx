@@ -14,7 +14,7 @@ export default async function AdminPage() {
   ]);
 
   return (
-    <div className="container py-6">
+    <div className="container admin-shell py-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-5">
         <div>
           <h1 className="text-3xl font-bold text-[#222]">Админка REDFILM</h1>

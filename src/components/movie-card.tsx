@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Film, Play } from "lucide-react";
 import type { Movie } from "@prisma/client";
 
 type Props = {
@@ -8,19 +9,40 @@ type Props = {
 
 export function MovieCard({ movie }: Props) {
   return (
-    <Link href={`/movie/${movie.slug}`} className="group block bg-white border border-[#d9d9d9] overflow-hidden hover:shadow-lg transition-shadow">
-      <div className="relative aspect-[2/3] bg-neutral-200 poster-gradient overflow-hidden">
+    <Link href={`/movie/${movie.slug}`} className="mf-card group block">
+      <div className="poster-fallback relative aspect-[2/3] overflow-hidden">
         {movie.posterUrl ? (
-          <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover group-hover:scale-105 transition-transform duration-300" sizes="220px" unoptimized />
-        ) : null}
-        <span className="absolute top-3 left-3 z-10 bg-[#e50914] text-white text-xs font-bold px-3 py-1 rounded-sm">{movie.quality}</span>
-        <div className="absolute z-10 bottom-0 left-0 right-0 p-3 text-white">
-          <h3 className="font-bold text-[15px] leading-tight line-clamp-2 text-center drop-shadow">{movie.titleRu}</h3>
-          <p className="text-xs text-white/85 mt-1 text-center">({movie.year})</p>
-          <div className="flex items-center justify-between mt-3 text-sm font-bold">
+          <Image
+            src={movie.posterUrl}
+            alt={movie.titleRu}
+            fill
+            className="object-cover transition duration-500 group-hover:scale-[1.04] group-hover:brightness-50"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 210px"
+            unoptimized
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[#52525b]">
+            <Film size={42} strokeWidth={1.4} />
+            <span className="text-xs font-bold uppercase tracking-[0.18em]">REDFILM</span>
+          </div>
+        )}
+
+        <span className="mf-badge absolute left-3 top-3 z-10">{movie.quality || "HD"}</span>
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <span className="flex items-center gap-2 rounded-full bg-[#e50914] px-4 py-2 text-xs font-bold text-white shadow-lg">
+            <Play size={14} fill="currentColor" /> Смотреть
+          </span>
+        </div>
+      </div>
+
+      <div className="p-3.5">
+        <h3 className="line-clamp-2 min-h-[40px] text-[15px] font-bold leading-5 text-white">{movie.titleRu}</h3>
+        <div className="mt-2 flex items-center justify-between text-xs text-[#8b8b95]">
+          <span>{movie.year}</span>
+          <span className="flex items-center gap-2.5">
             <span><b className="rating-kp">КП</b> {movie.kpRating?.toFixed(1) ?? "—"}</span>
             <span><b className="rating-imdb">IMDb</b> {movie.imdbRating?.toFixed(1) ?? "—"}</span>
-          </div>
+          </span>
         </div>
       </div>
     </Link>
