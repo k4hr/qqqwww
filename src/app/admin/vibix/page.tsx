@@ -14,6 +14,9 @@ type Props = {
     totalFromVibix?: string;
     rateLimited?: string;
     message?: string;
+    httpStatus?: string;
+    httpStatusText?: string;
+    httpBodyPreview?: string;
     enrichedByKp?: string;
     enrichedByImdb?: string;
     enrichmentFailed?: string;
@@ -69,7 +72,13 @@ export default async function VibixAdminPage({ searchParams }: Props) {
 
       {errorMessage ? <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 font-bold text-red-700">{errorMessage}</div> : null}
       {rateLimited ? <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 font-bold text-amber-800">Vibix временно ограничил запросы. Попробуйте позже или уменьшите количество страниц.</div> : null}
-      {!rateLimited && result.message ? <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 font-bold text-red-700">{result.message}</div> : null}
+      {!rateLimited && result.message && !result.httpStatus ? <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 font-bold text-red-700">{result.message}</div> : null}
+      {result.httpStatus ? (
+        <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
+          <div className="font-bold">{httpErrorTitle(result.httpStatus, result.httpStatusText, result.httpBodyPreview)}</div>
+          {result.httpBodyPreview ? <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-white/70 p-3 text-xs">{result.httpBodyPreview}</pre> : null}
+        </div>
+      ) : null}
 
       <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         Если Vibix вернул 429, подождите и запустите позже. Для полной базы лучше синхронизировать частями.
@@ -189,4 +198,18 @@ function parseSkippedSamples(value?: string) {
   } catch {
     return [];
   }
+}
+
+function httpErrorTitle(status: string, statusText?: string, bodyPreview?: string) {
+  let message: string | null = null;
+  if (bodyPreview) {
+    try {
+      const body = JSON.parse(bodyPreview) as Record<string, unknown>;
+      const candidate = body.message ?? body.error;
+      if (typeof candidate === "string" && candidate.trim()) message = candidate.trim();
+    } catch {
+      if (bodyPreview.length <= 120 && !bodyPreview.includes("<")) message = bodyPreview;
+    }
+  }
+  return `HTTP ${status} ${message || statusText || "Request failed"}`;
 }

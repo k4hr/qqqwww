@@ -46,6 +46,13 @@ export type VibixVideoPage = {
   retryAfterMs: number | null;
   requestFailed: boolean;
   invalidItems: number;
+  error: VibixHttpError | null;
+};
+
+export type VibixHttpError = {
+  status: number;
+  statusText: string;
+  bodyPreview: string | null;
 };
 
 export type VibixVideoLookupResult = {
@@ -53,6 +60,7 @@ export type VibixVideoLookupResult = {
   rateLimited: boolean;
   retryAfterMs: number | null;
   requestFailed: boolean;
+  error: VibixHttpError | null;
 };
 
 type VibixLinksParams = {
@@ -78,12 +86,8 @@ const VIBIX_LINK_FIELDS = [
   "kinopoisk_id",
   "imdb_id",
   "kp_rating",
-  "kp_votes",
   "imdb_rating",
-  "imdb_votes",
   "iframe_url",
-  "embed_code",
-  "persons",
   "voiceovers",
   "tags",
   "poster_url",
@@ -105,6 +109,7 @@ type VibixFetchResult = {
   rateLimited: boolean;
   retryAfterMs: number | null;
   requestFailed: boolean;
+  error: VibixHttpError | null;
 };
 
 export function sleep(ms: number) {
@@ -240,9 +245,20 @@ function retryAfterMilliseconds(response: Response, attempt: number) {
   return 30_000 * (attempt + 1);
 }
 
+async function httpError(response: Response, apiKey: string): Promise<VibixHttpError> {
+  let bodyPreview: string | null = null;
+  try {
+    const body = (await response.text()).trim();
+    if (body) bodyPreview = body.replaceAll(apiKey, "[redacted]").slice(0, 1_500);
+  } catch {
+    // The status information is still useful when the response body cannot be read.
+  }
+  return { status: response.status, statusText: response.statusText || "Request failed", bodyPreview };
+}
+
 async function fetchVibixJson(url: URL): Promise<VibixFetchResult> {
   const apiKey = getApiKey();
-  if (!apiKey) return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+  if (!apiKey) return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error: null };
 
   const maxAttempts = 3;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -257,14 +273,14 @@ async function fetchVibixJson(url: URL): Promise<VibixFetchResult> {
       });
 
       if (response.status === 404) {
-        return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: false };
+        return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: false, error: null };
       }
 
       if (response.status === 429) {
         const retryAfterMs = retryAfterMilliseconds(response, attempt);
         if (attempt === maxAttempts - 1) {
           console.warn(`[Vibix] Rate limit reached after ${maxAttempts} attempts.`);
-          return { data: null, rateLimited: true, retryAfterMs, requestFailed: false };
+          return { data: null, rateLimited: true, retryAfterMs, requestFailed: false, error: await httpError(response, apiKey) };
         }
         console.warn(`[Vibix] HTTP 429. Retrying in ${Math.ceil(retryAfterMs / 1000)} seconds.`);
         await sleep(retryAfterMs);
@@ -279,15 +295,18 @@ async function fetchVibixJson(url: URL): Promise<VibixFetchResult> {
           continue;
         }
         console.warn(`[Vibix] Request failed with HTTP ${response.status} after ${maxAttempts} attempts.`);
-        return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+        const error = await httpError(response, apiKey);
+        console.warn("[Vibix] Request failed:", error);
+        return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error };
       }
 
       if (!response.ok) {
-        console.warn(`[Vibix] Request failed with HTTP ${response.status}.`);
-        return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+        const error = await httpError(response, apiKey);
+        console.warn("[Vibix] Request failed:", error);
+        return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error };
       }
 
-      return { data: await response.json() as unknown, rateLimited: false, retryAfterMs: null, requestFailed: false };
+      return { data: await response.json() as unknown, rateLimited: false, retryAfterMs: null, requestFailed: false, error: null };
     } catch (error) {
       if (attempt < maxAttempts - 1) {
         const delayMs = 2_000 * 2 ** attempt;
@@ -296,11 +315,11 @@ async function fetchVibixJson(url: URL): Promise<VibixFetchResult> {
         continue;
       }
       console.warn("[Vibix] Request failed:", error instanceof Error ? error.message : error);
-      return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+      return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error: null };
     }
   }
 
-  return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+  return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error: null };
 }
 
 async function vibixRequest(path: string, searchParams?: URLSearchParams) {
@@ -329,6 +348,7 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
     retryAfterMs: response.retryAfterMs,
     requestFailed: response.requestFailed,
     invalidItems: rawItems.length - data.length,
+    error: response.error,
   } satisfies VibixVideoPage;
 }
 
@@ -339,6 +359,7 @@ export async function getVibixVideoByKpIdResult(kpId: string | number): Promise<
     rateLimited: response.rateLimited,
     retryAfterMs: response.retryAfterMs,
     requestFailed: response.requestFailed,
+    error: response.error,
   };
 }
 
@@ -349,6 +370,7 @@ export async function getVibixVideoByImdbIdResult(imdbId: string | number): Prom
     rateLimited: response.rateLimited,
     retryAfterMs: response.retryAfterMs,
     requestFailed: response.requestFailed,
+    error: response.error,
   };
 }
 

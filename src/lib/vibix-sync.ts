@@ -43,6 +43,9 @@ export type VibixSyncResult = {
   finishedAt: string;
   rateLimited: boolean;
   message: string | null;
+  httpStatus: number | null;
+  httpStatusText: string | null;
+  httpBodyPreview: string | null;
   enrichedByKp: number;
   enrichedByImdb: number;
   enrichmentFailed: number;
@@ -396,6 +399,9 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
     finishedAt: startedAt,
     rateLimited: false,
     message: null,
+    httpStatus: null,
+    httpStatusText: null,
+    httpBodyPreview: null,
     enrichedByKp: 0,
     enrichedByImdb: 0,
     enrichmentFailed: 0,
@@ -445,7 +451,12 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
         }
         if (response.requestFailed) {
           result.errors += 1;
-          result.message = "Vibix API request failed";
+          result.httpStatus = response.error?.status ?? null;
+          result.httpStatusText = response.error?.statusText ?? null;
+          result.httpBodyPreview = response.error?.bodyPreview ?? null;
+          result.message = response.error
+            ? `HTTP ${response.error.status} ${response.error.statusText}`
+            : "Vibix API request failed";
           stopSync = true;
           break;
         }
