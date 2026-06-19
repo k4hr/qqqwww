@@ -116,6 +116,12 @@ export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function normalizeVibixLimit(value: unknown) {
+  const parsed = Number.parseInt(String(value ?? "20"), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 20;
+  return Math.min(parsed, 20);
+}
+
 function getApiKey() {
   const key = process.env.VIBIX_API_KEY?.trim();
   if (!key && !warnedAboutMissingKey) {
@@ -332,7 +338,7 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
   const query = new URLSearchParams({
     type: params.type ?? "movie",
     page: String(Math.max(1, params.page ?? 1)),
-    limit: String(Math.max(1, Math.min(params.limit ?? 50, 200))),
+    limit: String(normalizeVibixLimit(params.limit)),
     fields: VIBIX_LINK_FIELDS.join(","),
   });
   if (params.existKpId !== null) query.set("exist_kp_id", String(params.existKpId ?? true));

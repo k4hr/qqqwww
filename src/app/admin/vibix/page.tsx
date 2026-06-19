@@ -151,7 +151,8 @@ export default async function VibixAdminPage({ searchParams }: Props) {
           </label>
           <label className="text-sm font-bold text-[#333]">
             Видео на страницу
-            <input name="limit" type="number" min="1" max="100" defaultValue="10" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
+            <input name="limit" type="number" min="1" max="20" defaultValue="20" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
+            <span className="mt-1.5 block text-xs font-normal text-neutral-500">Vibix принимает максимум 20 записей на страницу</span>
           </label>
           <div className="flex flex-wrap gap-5 text-sm text-[#333] sm:col-span-2">
             <label className="flex items-center gap-2"><input name="noAds" type="checkbox" /> Отправить no_ads=true</label>
@@ -167,7 +168,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
         <form action={syncVibixAllAction} className="admin-panel flex flex-col p-5">
           <h2 className="text-xl font-bold text-[#222]">Полная база Vibix</h2>
           <p className="mt-1 text-sm leading-relaxed text-neutral-500">Автоматически пройдёт все страницы из meta.last_page. Если meta отсутствует, остановится на первой пустой странице.</p>
-          <div className="mt-4 rounded-xl bg-[#f5f5f5] p-4 text-sm text-neutral-600">Фильмы + сериалы · Limit: 50 · Задержка страниц: 2 000 мс · Задержка detail-запросов: 750 мс · До 20 страниц за запуск</div>
+          <div className="mt-4 rounded-xl bg-[#f5f5f5] p-4 text-sm text-neutral-600">Фильмы + сериалы · Limit: 20 · Задержка страниц: 2 000 мс · Задержка detail-запросов: 750 мс · До 20 страниц за запуск</div>
           <div className="mt-4 flex flex-wrap gap-5 text-sm text-[#333]">
             <label className="flex items-center gap-2"><input name="noAds" type="checkbox" /> Отправить no_ads=true</label>
             <label className="flex items-center gap-2"><input name="lgbt" type="checkbox" /> Отправить lgbt=true</label>
@@ -201,6 +202,9 @@ function parseSkippedSamples(value?: string) {
 }
 
 function httpErrorTitle(status: string, statusText?: string, bodyPreview?: string) {
+  if (status === "422" && bodyPreview && /limit/i.test(bodyPreview)) {
+    return "Vibix отклонил параметр limit. Используйте максимум 20 видео на страницу.";
+  }
   let message: string | null = null;
   if (bodyPreview) {
     try {

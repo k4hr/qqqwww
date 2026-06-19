@@ -7,6 +7,7 @@ import {
   getVibixVideoByKpId,
   getVibixVideoByKpIdResult,
   getVibixVideoLinks,
+  normalizeVibixLimit,
   sleep,
   type VibixCatalogType,
   type VibixVideo,
@@ -381,7 +382,7 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
   const startedAt = new Date().toISOString();
   const mode = options.mode ?? "quick";
   const quickPages = Math.max(1, Math.min(options.pages ?? 5, 1000));
-  const limit = Math.max(1, Math.min(options.limit ?? 50, 200));
+  const limit = normalizeVibixLimit(options.limit);
   const pageDelayMs = Math.max(250, Math.min(options.pageDelayMs ?? 2_000, 60_000));
   const detailDelayMs = Math.max(500, Math.min(options.detailDelayMs ?? 750, 10_000));
   const maxPagesPerRun = Math.max(1, Math.min(options.maxPagesPerRun ?? (mode === "quick" ? quickPages : 20), 10_000));

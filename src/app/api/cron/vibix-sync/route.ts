@@ -20,7 +20,7 @@ async function handleSync(request: Request) {
   try {
     const result = await syncVibixVideos({
       mode: "all",
-      limit: 50,
+      limit: 20,
       pageDelayMs: 2_000,
       detailDelayMs: 750,
       maxPagesPerRun: 20,

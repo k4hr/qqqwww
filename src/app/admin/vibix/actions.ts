@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { syncVibixVideos, VibixSyncAlreadyRunningError, type VibixSyncResult } from "@/lib/vibix-sync";
+import { normalizeVibixLimit } from "@/lib/vibix";
 
 function numberField(formData: FormData, name: string, fallback: number, max: number) {
   const value = Number(formData.get(name));
@@ -60,7 +61,7 @@ export async function syncVibixQuickAction(formData: FormData) {
   await runSync({
     mode: "quick",
     pages: numberField(formData, "pages", 1, 20),
-    limit: numberField(formData, "limit", 10, 100),
+    limit: normalizeVibixLimit(formData.get("limit")),
     pageDelayMs: numberField(formData, "pageDelayMs", 2_000, 60_000),
     detailDelayMs: 750,
     maxPagesPerRun: 20,
@@ -74,7 +75,7 @@ export async function syncVibixQuickAction(formData: FormData) {
 export async function syncVibixAllAction(formData: FormData) {
   await runSync({
     mode: "all",
-    limit: 50,
+    limit: 20,
     pageDelayMs: 2_000,
     detailDelayMs: 750,
     maxPagesPerRun: 20,
