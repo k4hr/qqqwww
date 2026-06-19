@@ -41,13 +41,8 @@ export function parseEmbedCode(embedCode?: string | null) {
   return attributes;
 }
 
-export function buildVibixAttrs({ kinopoiskId, imdbId, embedCode }: Pick<VibixPlayerProps, "kinopoiskId" | "imdbId" | "embedCode">): VibixAttributes | null {
-  const kpId = String(kinopoiskId ?? "").trim();
-  if (kpId) return { "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "kp", "data-id": kpId };
-
-  const normalizedImdbId = imdbId?.trim();
-  if (normalizedImdbId) return { "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "imdb", "data-id": normalizedImdbId };
-
+function buildEmbedAttrs(embedCode?: string | null): VibixAttributes | null {
+  if (!embedCode?.trim()) return null;
   const parsed = parseEmbedCode(embedCode);
   const type = parsed["data-type"]?.toLowerCase() as VibixDataType | undefined;
   const id = parsed["data-id"]?.trim();
@@ -58,6 +53,19 @@ export function buildVibixAttrs({ kinopoiskId, imdbId, embedCode }: Pick<VibixPl
     "data-type": type,
     "data-id": id,
   };
+}
+
+export function buildVibixAttrs({ kinopoiskId, imdbId, embedCode }: Pick<VibixPlayerProps, "kinopoiskId" | "imdbId" | "embedCode">): VibixAttributes | null {
+  const embedAttrs = buildEmbedAttrs(embedCode);
+  if (embedAttrs) return embedAttrs;
+
+  const kpId = String(kinopoiskId ?? "").trim();
+  if (kpId) return { "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "kp", "data-id": kpId };
+
+  const normalizedImdbId = imdbId?.trim();
+  if (normalizedImdbId) return { "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "imdb", "data-id": normalizedImdbId };
+
+  return null;
 }
 
 function normalizeIframeUrl(iframeUrl?: string | null) {
@@ -76,6 +84,13 @@ export function VibixPlayer({ title, kinopoiskId, imdbId, embedCode, iframeUrl, 
   const normalizedIframeUrl = useMemo(() => normalizeIframeUrl(iframeUrl), [iframeUrl]);
   const [iframeFailed, setIframeFailed] = useState(false);
   const iframeTimeoutRef = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (embedCode?.trim() && !buildEmbedAttrs(embedCode)) {
+      console.warn("[VibixPlayer] Could not parse embedCode data-type/data-id");
+    }
+  }, [embedCode]);
 
   useEffect(() => {
     if (!attrs || !attrsKey) return;
@@ -93,20 +108,31 @@ export function VibixPlayer({ title, kinopoiskId, imdbId, embedCode, iframeUrl, 
         console.warn("[VibixPlayer] init failed", error);
       }
     };
+    const logIframeSource = () => {
+      const iframe = containerRef.current?.querySelector("iframe");
+      console.log("[VibixPlayer] iframe src", iframe?.src);
+    };
     const initializeWithRetries = () => {
       load();
-      for (const delay of [500, 1_500, 3_000]) timeouts.push(window.setTimeout(load, delay));
+      for (const delay of [500, 1_500, 3_000]) {
+        timeouts.push(window.setTimeout(() => {
+          load();
+          if (delay >= 1_500) logIframeSource();
+        }, delay));
+      }
     };
 
     const existing = document.querySelector<HTMLScriptElement>('script[data-redfilm-vibix-sdk="true"]');
     let sdkScript = existing;
     const handleLoad = () => initializeWithRetries();
+    const handleError = () => console.error("[VibixPlayer] Failed to load SDK", VIBIX_SDK_URL);
     if (!existing) {
       const script = document.createElement("script");
       script.src = VIBIX_SDK_URL;
       script.async = true;
       script.dataset.redfilmVibixSdk = "true";
       script.addEventListener("load", handleLoad, { once: true });
+      script.addEventListener("error", handleError, { once: true });
       document.head.appendChild(script);
       sdkScript = script;
     } else {
@@ -116,6 +142,7 @@ export function VibixPlayer({ title, kinopoiskId, imdbId, embedCode, iframeUrl, 
 
     return () => {
       sdkScript?.removeEventListener("load", handleLoad);
+      sdkScript?.removeEventListener("error", handleError);
       for (const timeout of timeouts) window.clearTimeout(timeout);
     };
   }, [attrs, attrsKey]);
@@ -133,7 +160,7 @@ export function VibixPlayer({ title, kinopoiskId, imdbId, embedCode, iframeUrl, 
 
   if (attrs && attrsKey) {
     return (
-      <div className="vibix-player-shell">
+      <div ref={containerRef} className="vibix-player-shell">
         <ins key={attrsKey} {...attrs} />
       </div>
     );
