@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Play } from "lucide-react";
 
 type VibixPlayerProps = {
@@ -26,13 +26,26 @@ export function parseEmbedCode(embedCode?: string | null) {
   return attributes;
 }
 
+function normalizeIframeUrl(iframeUrl?: string | null) {
+  if (!iframeUrl?.trim()) return null;
+  try {
+    const url = new URL(iframeUrl.trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function VibixPlayer({ iframeUrl, embedCode, title }: VibixPlayerProps) {
-  const normalizedIframeUrl = iframeUrl?.trim() || null;
+  const normalizedIframeUrl = useMemo(() => normalizeIframeUrl(iframeUrl), [iframeUrl]);
   const attributes = useMemo(() => parseEmbedCode(embedCode), [embedCode]);
   const hasEmbedSource = Boolean(attributes["data-type"] && attributes["data-id"]);
+  const [iframeFailed, setIframeFailed] = useState(false);
+  const iframeTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (normalizedIframeUrl || !hasEmbedSource) return;
+    console.log("[VibixPlayer] sources", { iframeUrl, embedCode, attrs: attributes });
+    if (!hasEmbedSource) return;
 
     const initialize = () => {
       try {
@@ -46,22 +59,20 @@ export function VibixPlayer({ iframeUrl, embedCode, title }: VibixPlayerProps) {
     };
 
     initialize();
-    const retry = window.setTimeout(initialize, 1_000);
-    return () => window.clearTimeout(retry);
-  }, [normalizedIframeUrl, embedCode, hasEmbedSource]);
+    const retries = [500, 1_500, 3_000].map((delay) => window.setTimeout(initialize, delay));
+    return () => retries.forEach((retry) => window.clearTimeout(retry));
+  }, [iframeUrl, embedCode, attributes, hasEmbedSource]);
 
-  if (normalizedIframeUrl) {
-    return (
-      <iframe
-        src={normalizedIframeUrl}
-        className="aspect-video w-full border-0"
-        allowFullScreen
-        allow="autoplay; fullscreen; picture-in-picture"
-        referrerPolicy="no-referrer-when-downgrade"
-        title={title || "Vibix player"}
-      />
-    );
-  }
+  useEffect(() => {
+    setIframeFailed(false);
+    if (iframeTimeoutRef.current !== null) window.clearTimeout(iframeTimeoutRef.current);
+    if (hasEmbedSource || !normalizedIframeUrl) return;
+
+    iframeTimeoutRef.current = window.setTimeout(() => setIframeFailed(true), 10_000);
+    return () => {
+      if (iframeTimeoutRef.current !== null) window.clearTimeout(iframeTimeoutRef.current);
+    };
+  }, [hasEmbedSource, normalizedIframeUrl]);
 
   if (hasEmbedSource) {
     return (
@@ -84,13 +95,30 @@ export function VibixPlayer({ iframeUrl, embedCode, title }: VibixPlayerProps) {
     );
   }
 
+  if (normalizedIframeUrl && !iframeFailed) {
+    return (
+      <iframe
+        src={normalizedIframeUrl}
+        className="aspect-video w-full border-0"
+        allowFullScreen
+        allow="autoplay; fullscreen; picture-in-picture"
+        referrerPolicy="no-referrer-when-downgrade"
+        title={title || "REDFILM player"}
+        onLoad={() => {
+          if (iframeTimeoutRef.current !== null) window.clearTimeout(iframeTimeoutRef.current);
+        }}
+        onError={() => setIframeFailed(true)}
+      />
+    );
+  }
+
   return (
     <div className="poster-fallback relative flex aspect-video flex-col items-center justify-center overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(229,9,20,.24),transparent_45%),linear-gradient(180deg,rgba(255,255,255,.04),transparent)]" />
       <div className="relative z-10 flex h-[72px] w-[72px] items-center justify-center rounded-full border border-white/10 bg-[#e50914] shadow-[0_0_52px_rgba(229,9,20,.42)]">
         <Play fill="white" color="white" size={28} />
       </div>
-      <p className="relative z-10 mt-5 px-5 text-center text-white/70">Плеер Vibix пока не найден</p>
+      <p className="relative z-10 mt-5 px-5 text-center text-white/70">Источник плеера временно недоступен</p>
     </div>
   );
 }

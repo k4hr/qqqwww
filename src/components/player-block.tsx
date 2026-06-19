@@ -10,7 +10,7 @@ export function PlayerBlock({ movie }: Props) {
     <section className="cinema-glow mf-panel mt-6 overflow-hidden">
       <div className="relative flex flex-col gap-2 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-bold text-white">Смотреть онлайн {movie.titleRu} ({movie.year})</h2>
-        <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#e50914]">Плеер Vibix</span>
+        <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#e50914]">REDFILM</span>
       </div>
 
       <div className="relative bg-black text-white">

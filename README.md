@@ -127,7 +127,7 @@ TMDB_API_KEY=твой_tmdb_ключ
 ```env
 VIBIX_API_KEY=твой_ключ
 VIBIX_PUBLISHER_ID=678353780
-NEXT_PUBLIC_VIBIX_AD_TYPES=brand,sticker,pcsticker,banners,flyroll
+NEXT_PUBLIC_VIBIX_AD_TYPES=sticker,pcsticker,banners,flyroll
 CRON_SECRET=случайная_длинная_строка
 ```
 
@@ -140,4 +140,4 @@ Authorization: Bearer <CRON_SECRET>
 
 Публичные страницы читают фильмы только из PostgreSQL. Cron и админка являются единственными точками запуска массовой синхронизации.
 
-Форматы Vibix Union управляются через `NEXT_PUBLIC_VIBIX_AD_TYPES`. Чтобы отключить brand без изменения кода, оставь `sticker,pcsticker,banners,flyroll`.
+Форматы Vibix Union управляются через `NEXT_PUBLIC_VIBIX_AD_TYPES`. Формат `brand` принудительно отключён; доступны `sticker,pcsticker,banners,flyroll`.

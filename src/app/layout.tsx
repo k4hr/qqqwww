@@ -60,7 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Footer />
         <VibixUnion
           publisherId={process.env.VIBIX_PUBLISHER_ID?.trim() || "678353780"}
-          adTypes={process.env.NEXT_PUBLIC_VIBIX_AD_TYPES?.trim() || "brand,sticker,pcsticker,banners,flyroll"}
+          adTypes={process.env.NEXT_PUBLIC_VIBIX_AD_TYPES?.trim() || "sticker,pcsticker,banners,flyroll"}
         />
       </body>
     </html>
