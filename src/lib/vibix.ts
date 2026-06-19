@@ -12,8 +12,12 @@ export type VibixVideo = {
   kinopoisk_id: number | string | null;
   imdb_id: number | string | null;
   kp_rating: number | string | null;
+  kp_votes: number | string | null;
   imdb_rating: number | string | null;
+  imdb_votes: number | string | null;
   iframe_url: string | null;
+  embed_code: string | null;
+  persons: unknown;
   voiceovers: unknown;
   tags: unknown;
   poster_url: string | null;
@@ -74,8 +78,12 @@ const VIBIX_LINK_FIELDS = [
   "kinopoisk_id",
   "imdb_id",
   "kp_rating",
+  "kp_votes",
   "imdb_rating",
+  "imdb_votes",
   "iframe_url",
+  "embed_code",
+  "persons",
   "voiceovers",
   "tags",
   "poster_url",
@@ -144,8 +152,12 @@ function normalizeVideo(value: unknown): VibixVideo | null {
     kinopoisk_id: firstValue(record, "kinopoisk_id", "kinopoiskId") as number | string | null,
     imdb_id: firstValue(record, "imdb_id", "imdbId") as number | string | null,
     kp_rating: firstValue(record, "kp_rating", "kpRating") as number | string | null,
+    kp_votes: firstValue(record, "kp_votes", "kpVotes") as number | string | null,
     imdb_rating: firstValue(record, "imdb_rating", "imdbRating") as number | string | null,
+    imdb_votes: firstValue(record, "imdb_votes", "imdbVotes") as number | string | null,
     iframe_url: firstValue(record, "iframe_url", "iframeUrl") as string | null,
+    embed_code: firstValue(record, "embed_code", "embedCode") as string | null,
+    persons: firstValue(record, "persons"),
     voiceovers: firstValue(record, "voiceovers"),
     tags: firstValue(record, "tags"),
     poster_url: firstValue(record, "poster_url", "posterUrl") as string | null,
@@ -159,7 +171,7 @@ function normalizeVideo(value: unknown): VibixVideo | null {
     updated_at: firstValue(record, "updated_at", "updatedAt") as string | null,
     uploaded_at: firstValue(record, "uploaded_at", "uploadedAt") as string | null,
   };
-  return video.id !== null || video.name !== null || video.name_rus !== null || video.kp_id !== null || video.imdb_id !== null || video.iframe_url !== null
+  return video.id !== null || video.name !== null || video.name_rus !== null || video.kp_id !== null || video.imdb_id !== null || video.iframe_url !== null || video.embed_code !== null
     ? video
     : null;
 }

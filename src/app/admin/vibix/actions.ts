@@ -26,7 +26,8 @@ function resultUrl(result: VibixSyncResult) {
     enrichedByKp: String(result.enrichedByKp),
     enrichedByImdb: String(result.enrichedByImdb),
     enrichmentFailed: String(result.enrichmentFailed),
-    missingIframeAfterEnrichment: String(result.missingIframeAfterEnrichment),
+    playerSourceByIframeUrl: String(result.playerSourceByIframeUrl),
+    playerSourceByEmbedCode: String(result.playerSourceByEmbedCode),
     skippedReasons: JSON.stringify(result.skippedReasons),
     skippedSamples: JSON.stringify(result.skippedSamples),
   });

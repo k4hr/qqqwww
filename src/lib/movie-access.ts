@@ -4,12 +4,11 @@ export const vibixPublicMovieWhere = {
   isPublished: true,
   vibixAvailable: true,
   AND: [
-    { vibixIframeUrl: { not: null } },
-    { vibixIframeUrl: { not: "" } },
-  ],
-  OR: [
-    { kinopoiskId: { not: "" } },
-    { imdbId: { not: "" } },
-    { vibixId: { not: null } },
+    {
+      OR: [
+        { AND: [{ vibixIframeUrl: { not: null } }, { vibixIframeUrl: { not: "" } }] },
+        { AND: [{ vibixEmbedCode: { not: null } }, { vibixEmbedCode: { not: "" } }] },
+      ],
+    },
   ],
 } satisfies Prisma.MovieWhereInput;

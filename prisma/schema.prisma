@@ -42,6 +42,7 @@ model Movie {
   allohaId       String?
   vibixId        Int?
   vibixIframeUrl String?
+  vibixEmbedCode String?
   vibixAvailable Boolean       @default(false)
   vibixType      String?
   vibixUploadedAt DateTime?

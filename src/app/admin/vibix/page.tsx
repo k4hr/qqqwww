@@ -17,7 +17,8 @@ type Props = {
     enrichedByKp?: string;
     enrichedByImdb?: string;
     enrichmentFailed?: string;
-    missingIframeAfterEnrichment?: string;
+    playerSourceByIframeUrl?: string;
+    playerSourceByEmbedCode?: string;
     skippedReasons?: string;
     skippedSamples?: string;
     error?: string;
@@ -31,7 +32,7 @@ const errorMessages: Record<string, string> = {
 };
 
 const skippedReasonLabels: Record<VibixSkippedReason, string> = {
-  missing_iframe_url: "Нет iframe_url",
+  missing_player_source: "Нет iframe_url и embed_code",
   missing_title: "Нет названия",
   missing_identifier: "Нет KP / IMDb / Vibix ID",
   unknown_type: "Неизвестный тип",
@@ -85,7 +86,8 @@ export default async function VibixAdminPage({ searchParams }: Props) {
           <Result label="Дополнено через KP" value={result.enrichedByKp} />
           <Result label="Дополнено через IMDb" value={result.enrichedByImdb} />
           <Result label="Enrichment не удался" value={result.enrichmentFailed} />
-          <Result label="Нет iframe после enrichment" value={result.missingIframeAfterEnrichment} />
+          <Result label="Плеер через iframe_url" value={result.playerSourceByIframeUrl} />
+          <Result label="Плеер через embed_code" value={result.playerSourceByEmbedCode} />
         </div>
       ) : null}
 
@@ -102,7 +104,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
           {skippedSamples.length ? (
             <div className="mt-5 overflow-x-auto">
               <table className="w-full min-w-[1100px] text-left text-xs text-[#333]">
-                <thead className="border-b border-[#ddd] text-neutral-500"><tr><th className="p-2">Причина</th><th className="p-2">ID</th><th className="p-2">Название</th><th className="p-2">kp_id</th><th className="p-2">kinopoisk_id</th><th className="p-2">imdb_id</th><th className="p-2">iframe из links</th><th className="p-2">iframe после enrichment</th></tr></thead>
+                <thead className="border-b border-[#ddd] text-neutral-500"><tr><th className="p-2">Причина</th><th className="p-2">ID</th><th className="p-2">Название</th><th className="p-2">kp_id</th><th className="p-2">kinopoisk_id</th><th className="p-2">imdb_id</th><th className="p-2">iframe_url</th><th className="p-2">embed_code</th></tr></thead>
                 <tbody>{skippedSamples.map((sample, index) => (
                   <tr key={`${sample.id ?? "unknown"}-${index}`} className="border-b border-[#eee] align-top">
                     <td className="p-2 font-bold">{sample.reason}</td>
@@ -111,8 +113,8 @@ export default async function VibixAdminPage({ searchParams }: Props) {
                     <td className="p-2">{String(sample.kp_id ?? "—")}</td>
                     <td className="p-2">{String(sample.kinopoisk_id ?? "—")}</td>
                     <td className="p-2">{String(sample.imdb_id ?? "—")}</td>
-                    <td className="max-w-[260px] break-all p-2 text-neutral-500">{sample.iframeUrlFromLinks || "—"}</td>
-                    <td className="max-w-[260px] break-all p-2 text-neutral-500">{sample.iframeUrlAfterEnrichment || "—"}</td>
+                    <td className="max-w-[260px] break-all p-2 text-neutral-500">{sample.iframe_url || "—"}</td>
+                    <td className="max-w-[320px] break-all p-2 text-neutral-500">{sample.embed_code || "—"}</td>
                   </tr>
                 ))}</tbody>
               </table>

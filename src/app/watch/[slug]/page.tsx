@@ -4,8 +4,8 @@ import { Film } from "lucide-react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PlayerBlock } from "@/components/player-block";
-import { ensureVibixPlayback } from "@/lib/vibix-sync";
 import { VibixBanner } from "@/components/vibix-banner";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +23,10 @@ export default async function WatchPage({ params }: Props) {
   const movie = await prisma.movie.findFirst({
     where: {
       slug,
-      isPublished: true,
-      OR: [{ kinopoiskId: { not: null } }, { imdbId: { not: null } }, { vibixId: { not: null } }],
+      ...vibixPublicMovieWhere,
     },
   });
   if (!movie) notFound();
-  const playableMovie = movie.vibixIframeUrl ? movie : await ensureVibixPlayback(movie);
 
   return (
     <div className="container py-5 sm:py-7">
@@ -54,7 +52,7 @@ export default async function WatchPage({ params }: Props) {
         </div>
       </section>
 
-      <PlayerBlock movie={playableMovie} />
+      <PlayerBlock movie={movie} />
       <VibixBanner size="680x200" />
     </div>
   );

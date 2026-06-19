@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { toggleMoviePublished } from "./actions";
 import { getContentTypeLabel } from "@/lib/content";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export default async function AdminPage() {
   const [total, published, withVibix, latest] = await Promise.all([
     prisma.movie.count(),
     prisma.movie.count({ where: { isPublished: true } }),
-    prisma.movie.count({ where: { vibixAvailable: true, vibixIframeUrl: { not: null } } }),
+    prisma.movie.count({ where: vibixPublicMovieWhere }),
     prisma.movie.findMany({ orderBy: { createdAt: "desc" }, take: 40 }),
   ]);
 
@@ -55,7 +56,7 @@ export default async function AdminPage() {
                   <td className="py-3 pr-4 font-medium"><Link className="hover:text-[#e50914]" href={`/movie/${movie.slug}`}>{movie.titleRu}</Link></td>
                   <td className="py-3 pr-4">{getContentTypeLabel(movie.type)}</td>
                   <td className="py-3 pr-4">{movie.year}</td>
-                  <td className="py-3 pr-4 text-neutral-500">{movie.vibixIframeUrl ? "Vibix" : "нет"}</td>
+                  <td className="py-3 pr-4 text-neutral-500">{movie.vibixIframeUrl || movie.vibixEmbedCode ? "Vibix" : "нет"}</td>
                   <td className="py-3 pr-4">{movie.isPublished ? "Опубликовано" : "Скрыто"}</td>
                   <td className="py-3 pr-4">
                     <form action={toggleMoviePublished}>

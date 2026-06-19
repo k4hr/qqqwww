@@ -13,7 +13,7 @@ import {
 } from "@/lib/vibix";
 
 export type VibixSkippedReason =
-  | "missing_iframe_url"
+  | "missing_player_source"
   | "missing_title"
   | "missing_identifier"
   | "unknown_type"
@@ -27,8 +27,8 @@ export type VibixSkippedSample = {
   kp_id: number | string | null;
   kinopoisk_id: number | string | null;
   imdb_id: number | string | null;
-  iframeUrlFromLinks: string | null;
-  iframeUrlAfterEnrichment: string | null;
+  iframe_url: string | null;
+  embed_code: string | null;
   reason: VibixSkippedReason;
 };
 
@@ -46,7 +46,8 @@ export type VibixSyncResult = {
   enrichedByKp: number;
   enrichedByImdb: number;
   enrichmentFailed: number;
-  missingIframeAfterEnrichment: number;
+  playerSourceByIframeUrl: number;
+  playerSourceByEmbedCode: number;
   skippedReasons: Record<VibixSkippedReason, number>;
   skippedSamples: VibixSkippedSample[];
 };
@@ -71,7 +72,8 @@ type NormalizedVideo = {
   year: number;
   kinopoiskId: string | null;
   imdbId: string | null;
-  iframeUrl: string;
+  iframeUrl: string | null;
+  embedCode: string | null;
   posterUrl: string | null;
   backdropUrl: string | null;
   quality: string;
@@ -141,7 +143,8 @@ function contentType(value: unknown) {
 
 function normalizeVideoData(video: VibixVideo): { data: NormalizedVideo } | { reason: VibixSkippedReason } {
   const iframeUrl = stringValue(video.iframe_url);
-  if (!iframeUrl) return { reason: "missing_iframe_url" };
+  const embedCode = stringValue(video.embed_code);
+  if (!iframeUrl && !embedCode) return { reason: "missing_player_source" };
 
   const title = stringValue(video.name_rus) || stringValue(video.name) || stringValue(video.name_eng) || stringValue(video.name_original);
   if (!title) return { reason: "missing_title" };
@@ -166,6 +169,7 @@ function normalizeVideoData(video: VibixVideo): { data: NormalizedVideo } | { re
       kinopoiskId,
       imdbId,
       iframeUrl,
+      embedCode,
       posterUrl: stringValue(video.poster_url),
       backdropUrl: stringValue(video.backdrop_url),
       quality: stringValue(video.quality) || "HD",
@@ -202,8 +206,8 @@ function skippedSample(base: VibixVideo, enriched: VibixVideo, reason: VibixSkip
     kp_id: enriched.kp_id ?? base.kp_id,
     kinopoisk_id: enriched.kinopoisk_id ?? base.kinopoisk_id,
     imdb_id: enriched.imdb_id ?? base.imdb_id,
-    iframeUrlFromLinks: stringValue(base.iframe_url),
-    iframeUrlAfterEnrichment: stringValue(enriched.iframe_url),
+    iframe_url: stringValue(enriched.iframe_url) || stringValue(base.iframe_url),
+    embed_code: stringValue(enriched.embed_code) || stringValue(base.embed_code),
     reason,
   };
 }
@@ -217,6 +221,7 @@ function diagnosticSample(video: VibixVideo) {
     kinopoisk_id: video.kinopoisk_id,
     imdb_id: video.imdb_id,
     iframe_url: video.iframe_url,
+    embed_code: video.embed_code,
     type: video.type,
   };
 }
@@ -237,7 +242,7 @@ async function enrichVibixVideo(
   result: VibixSyncResult,
   waitForDetailRequest: () => Promise<void>,
 ): Promise<EnrichmentResult> {
-  if (stringValue(base.iframe_url)) return { video: base, rateLimited: false };
+  if (stringValue(base.iframe_url) || stringValue(base.embed_code)) return { video: base, rateLimited: false };
 
   let enriched = { ...base };
   const kpId = stringValue(base.kp_id) || stringValue(base.kinopoisk_id);
@@ -247,7 +252,7 @@ async function enrichVibixVideo(
     if (lookup.rateLimited) return { video: enriched, rateLimited: true };
     if (lookup.video) {
       enriched = mergeVibixRecords(enriched, lookup.video);
-      if (stringValue(enriched.iframe_url)) {
+      if (stringValue(enriched.iframe_url) || stringValue(enriched.embed_code)) {
         result.enrichedByKp += 1;
         return { video: enriched, rateLimited: false };
       }
@@ -261,7 +266,7 @@ async function enrichVibixVideo(
     if (lookup.rateLimited) return { video: enriched, rateLimited: true };
     if (lookup.video) {
       enriched = mergeVibixRecords(enriched, lookup.video);
-      if (stringValue(enriched.iframe_url)) {
+      if (stringValue(enriched.iframe_url) || stringValue(enriched.embed_code)) {
         result.enrichedByImdb += 1;
         return { video: enriched, rateLimited: false };
       }
@@ -325,6 +330,7 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
         imdbRating: data.imdbRating ?? undefined,
         vibixId: data.vibixId,
         vibixIframeUrl: data.iframeUrl,
+        vibixEmbedCode: data.embedCode,
         vibixAvailable: true,
         vibixType: data.vibixType,
         vibixUploadedAt: data.vibixUploadedAt,
@@ -354,6 +360,7 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
       imdbRating: data.imdbRating,
       vibixId: data.vibixId,
       vibixIframeUrl: data.iframeUrl,
+      vibixEmbedCode: data.embedCode,
       vibixAvailable: true,
       vibixType: data.vibixType,
       vibixUploadedAt: data.vibixUploadedAt,
@@ -392,9 +399,10 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
     enrichedByKp: 0,
     enrichedByImdb: 0,
     enrichmentFailed: 0,
-    missingIframeAfterEnrichment: 0,
+    playerSourceByIframeUrl: 0,
+    playerSourceByEmbedCode: 0,
     skippedReasons: {
-      missing_iframe_url: 0,
+      missing_player_source: 0,
       missing_title: 0,
       missing_identifier: 0,
       unknown_type: 0,
@@ -469,10 +477,13 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
             }
             const saved = await saveVibixVideo(enrichment.video);
             if (saved.status === "skipped") {
-              if (saved.reason === "missing_iframe_url") result.missingIframeAfterEnrichment += 1;
               registerSkip(result, saved.reason, enrichment.video, 1, video);
             }
-            else result[saved.status] += 1;
+            else {
+              result[saved.status] += 1;
+              if (stringValue(enrichment.video.iframe_url)) result.playerSourceByIframeUrl += 1;
+              else result.playerSourceByEmbedCode += 1;
+            }
           } catch (error) {
             result.errors += 1;
             console.warn("[Vibix] Failed to save video:", error instanceof Error ? error.message : error);
@@ -495,7 +506,7 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
 }
 
 export async function ensureVibixPlayback(movie: Movie) {
-  if (movie.vibixIframeUrl) return movie;
+  if (movie.vibixIframeUrl || movie.vibixEmbedCode) return movie;
   let video = movie.kinopoiskId ? await getVibixVideoByKpId(movie.kinopoiskId) : null;
   if (!video && movie.imdbId) video = await getVibixVideoByImdbId(movie.imdbId);
   if (!video) return movie;
