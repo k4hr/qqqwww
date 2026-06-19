@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import {
   getVibixVideoByImdbId,
+  getVibixVideoByImdbIdResult,
   getVibixVideoByKpId,
+  getVibixVideoByKpIdResult,
   getVibixVideoLinks,
   sleep,
   type VibixCatalogType,
@@ -25,7 +27,8 @@ export type VibixSkippedSample = {
   kp_id: number | string | null;
   kinopoisk_id: number | string | null;
   imdb_id: number | string | null;
-  iframe_url: string | null;
+  iframeUrlFromLinks: string | null;
+  iframeUrlAfterEnrichment: string | null;
   reason: VibixSkippedReason;
 };
 
@@ -40,6 +43,10 @@ export type VibixSyncResult = {
   finishedAt: string;
   rateLimited: boolean;
   message: string | null;
+  enrichedByKp: number;
+  enrichedByImdb: number;
+  enrichmentFailed: number;
+  missingIframeAfterEnrichment: number;
   skippedReasons: Record<VibixSkippedReason, number>;
   skippedSamples: VibixSkippedSample[];
 };
@@ -49,6 +56,7 @@ type SyncOptions = {
   pages?: number;
   limit?: number;
   pageDelayMs?: number;
+  detailDelayMs?: number;
   maxPagesPerRun?: number;
   types?: VibixCatalogType[];
   existKpId?: boolean | null;
@@ -173,15 +181,29 @@ function normalizeVideoData(video: VibixVideo): { data: NormalizedVideo } | { re
   };
 }
 
-function skippedSample(video: VibixVideo, reason: VibixSkippedReason): VibixSkippedSample {
+function hasValue(value: unknown) {
+  return value !== null && value !== undefined && (typeof value !== "string" || value.trim() !== "");
+}
+
+export function mergeVibixRecords(base: VibixVideo, details: VibixVideo | null): VibixVideo {
+  if (!details) return { ...base };
+  const merged = { ...base };
+  for (const key of Object.keys(base) as (keyof VibixVideo)[]) {
+    if (hasValue(details[key])) merged[key] = details[key] as never;
+  }
+  return merged;
+}
+
+function skippedSample(base: VibixVideo, enriched: VibixVideo, reason: VibixSkippedReason): VibixSkippedSample {
   return {
-    id: video.id,
-    name: video.name,
-    name_rus: video.name_rus,
-    kp_id: video.kp_id,
-    kinopoisk_id: video.kinopoisk_id,
-    imdb_id: video.imdb_id,
-    iframe_url: video.iframe_url,
+    id: enriched.id ?? base.id,
+    name: enriched.name ?? base.name,
+    name_rus: enriched.name_rus ?? base.name_rus,
+    kp_id: enriched.kp_id ?? base.kp_id,
+    kinopoisk_id: enriched.kinopoisk_id ?? base.kinopoisk_id,
+    imdb_id: enriched.imdb_id ?? base.imdb_id,
+    iframeUrlFromLinks: stringValue(base.iframe_url),
+    iframeUrlAfterEnrichment: stringValue(enriched.iframe_url),
     reason,
   };
 }
@@ -199,10 +221,55 @@ function diagnosticSample(video: VibixVideo) {
   };
 }
 
-function registerSkip(result: VibixSyncResult, reason: VibixSkippedReason, video?: VibixVideo, count = 1) {
+function registerSkip(result: VibixSyncResult, reason: VibixSkippedReason, video?: VibixVideo, count = 1, baseVideo = video) {
   result.skipped += count;
   result.skippedReasons[reason] += count;
-  if (video && result.skippedSamples.length < 3) result.skippedSamples.push(skippedSample(video, reason));
+  if (video && baseVideo && result.skippedSamples.length < 3) result.skippedSamples.push(skippedSample(baseVideo, video, reason));
+}
+
+type EnrichmentResult = {
+  video: VibixVideo;
+  rateLimited: boolean;
+};
+
+async function enrichVibixVideo(
+  base: VibixVideo,
+  result: VibixSyncResult,
+  waitForDetailRequest: () => Promise<void>,
+): Promise<EnrichmentResult> {
+  if (stringValue(base.iframe_url)) return { video: base, rateLimited: false };
+
+  let enriched = { ...base };
+  const kpId = stringValue(base.kp_id) || stringValue(base.kinopoisk_id);
+  if (kpId) {
+    await waitForDetailRequest();
+    const lookup = await getVibixVideoByKpIdResult(kpId);
+    if (lookup.rateLimited) return { video: enriched, rateLimited: true };
+    if (lookup.video) {
+      enriched = mergeVibixRecords(enriched, lookup.video);
+      if (stringValue(enriched.iframe_url)) {
+        result.enrichedByKp += 1;
+        return { video: enriched, rateLimited: false };
+      }
+    }
+  }
+
+  const imdbId = stringValue(enriched.imdb_id) || stringValue(base.imdb_id);
+  if (imdbId) {
+    await waitForDetailRequest();
+    const lookup = await getVibixVideoByImdbIdResult(imdbId);
+    if (lookup.rateLimited) return { video: enriched, rateLimited: true };
+    if (lookup.video) {
+      enriched = mergeVibixRecords(enriched, lookup.video);
+      if (stringValue(enriched.iframe_url)) {
+        result.enrichedByImdb += 1;
+        return { video: enriched, rateLimited: false };
+      }
+    }
+  }
+
+  result.enrichmentFailed += 1;
+  return { video: enriched, rateLimited: false };
 }
 
 async function uniqueSlug(title: string, year: number) {
@@ -254,8 +321,8 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
         country: data.country || undefined,
         kinopoiskId: data.kinopoiskId || undefined,
         imdbId: data.imdbId || undefined,
-        kpRating: data.kpRating,
-        imdbRating: data.imdbRating,
+        kpRating: data.kpRating ?? undefined,
+        imdbRating: data.imdbRating ?? undefined,
         vibixId: data.vibixId,
         vibixIframeUrl: data.iframeUrl,
         vibixAvailable: true,
@@ -306,6 +373,7 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
   const quickPages = Math.max(1, Math.min(options.pages ?? 5, 1000));
   const limit = Math.max(1, Math.min(options.limit ?? 50, 200));
   const pageDelayMs = Math.max(250, Math.min(options.pageDelayMs ?? 2_000, 60_000));
+  const detailDelayMs = Math.max(500, Math.min(options.detailDelayMs ?? 750, 10_000));
   const maxPagesPerRun = Math.max(1, Math.min(options.maxPagesPerRun ?? (mode === "quick" ? quickPages : 20), 10_000));
   const defaultTypes: VibixCatalogType[] = ["movie", "serial"];
   const types: VibixCatalogType[] = Array.from(new Set(options.types?.length ? options.types : defaultTypes));
@@ -321,6 +389,10 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
     finishedAt: startedAt,
     rateLimited: false,
     message: null,
+    enrichedByKp: 0,
+    enrichedByImdb: 0,
+    enrichmentFailed: 0,
+    missingIframeAfterEnrichment: 0,
     skippedReasons: {
       missing_iframe_url: 0,
       missing_title: 0,
@@ -334,6 +406,12 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
 
   try {
     let stopSync = false;
+    let lastDetailRequestAt = 0;
+    const waitForDetailRequest = async () => {
+      const remainingDelay = detailDelayMs - (Date.now() - lastDetailRequestAt);
+      if (remainingDelay > 0) await sleep(remainingDelay);
+      lastDetailRequestAt = Date.now();
+    };
     for (const catalogType of types) {
       if (stopSync || result.pagesProcessed >= maxPagesPerRun) break;
       let page = 1;
@@ -382,14 +460,26 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
 
         for (const video of response.data) {
           try {
-            const saved = await saveVibixVideo(video);
-            if (saved.status === "skipped") registerSkip(result, saved.reason, video);
+            const enrichment = await enrichVibixVideo(video, result, waitForDetailRequest);
+            if (enrichment.rateLimited) {
+              result.rateLimited = true;
+              result.message = "Vibix API rate limit reached during enrichment";
+              stopSync = true;
+              break;
+            }
+            const saved = await saveVibixVideo(enrichment.video);
+            if (saved.status === "skipped") {
+              if (saved.reason === "missing_iframe_url") result.missingIframeAfterEnrichment += 1;
+              registerSkip(result, saved.reason, enrichment.video, 1, video);
+            }
             else result[saved.status] += 1;
           } catch (error) {
             result.errors += 1;
             console.warn("[Vibix] Failed to save video:", error instanceof Error ? error.message : error);
           }
         }
+
+        if (stopSync) break;
 
         const hasMorePages = page < pagesPerType && (lastPage === null || page < lastPage);
         page += 1;

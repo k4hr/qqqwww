@@ -22,6 +22,7 @@ async function handleSync(request: Request) {
       mode: "all",
       limit: 50,
       pageDelayMs: 2_000,
+      detailDelayMs: 750,
       maxPagesPerRun: 20,
       types: ["movie", "serial"],
       existKpId: null,

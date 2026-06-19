@@ -14,6 +14,10 @@ type Props = {
     totalFromVibix?: string;
     rateLimited?: string;
     message?: string;
+    enrichedByKp?: string;
+    enrichedByImdb?: string;
+    enrichmentFailed?: string;
+    missingIframeAfterEnrichment?: string;
     skippedReasons?: string;
     skippedSamples?: string;
     error?: string;
@@ -78,6 +82,10 @@ export default async function VibixAdminPage({ searchParams }: Props) {
           <Result label="Обновлено" value={result.updated} />
           <Result label="Пропущено" value={result.skipped} />
           <Result label="Ошибок" value={result.errors} />
+          <Result label="Дополнено через KP" value={result.enrichedByKp} />
+          <Result label="Дополнено через IMDb" value={result.enrichedByImdb} />
+          <Result label="Enrichment не удался" value={result.enrichmentFailed} />
+          <Result label="Нет iframe после enrichment" value={result.missingIframeAfterEnrichment} />
         </div>
       ) : null}
 
@@ -93,16 +101,18 @@ export default async function VibixAdminPage({ searchParams }: Props) {
           </div>
           {skippedSamples.length ? (
             <div className="mt-5 overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-xs text-[#333]">
-                <thead className="border-b border-[#ddd] text-neutral-500"><tr><th className="p-2">Причина</th><th className="p-2">ID</th><th className="p-2">Название</th><th className="p-2">KP</th><th className="p-2">IMDb</th><th className="p-2">iframe_url</th></tr></thead>
+              <table className="w-full min-w-[1100px] text-left text-xs text-[#333]">
+                <thead className="border-b border-[#ddd] text-neutral-500"><tr><th className="p-2">Причина</th><th className="p-2">ID</th><th className="p-2">Название</th><th className="p-2">kp_id</th><th className="p-2">kinopoisk_id</th><th className="p-2">imdb_id</th><th className="p-2">iframe из links</th><th className="p-2">iframe после enrichment</th></tr></thead>
                 <tbody>{skippedSamples.map((sample, index) => (
                   <tr key={`${sample.id ?? "unknown"}-${index}`} className="border-b border-[#eee] align-top">
                     <td className="p-2 font-bold">{sample.reason}</td>
                     <td className="p-2">{String(sample.id ?? "—")}</td>
                     <td className="p-2">{sample.name_rus || sample.name || "—"}</td>
-                    <td className="p-2">{String(sample.kp_id ?? sample.kinopoisk_id ?? "—")}</td>
+                    <td className="p-2">{String(sample.kp_id ?? "—")}</td>
+                    <td className="p-2">{String(sample.kinopoisk_id ?? "—")}</td>
                     <td className="p-2">{String(sample.imdb_id ?? "—")}</td>
-                    <td className="max-w-[320px] break-all p-2 text-neutral-500">{sample.iframe_url || "—"}</td>
+                    <td className="max-w-[260px] break-all p-2 text-neutral-500">{sample.iframeUrlFromLinks || "—"}</td>
+                    <td className="max-w-[260px] break-all p-2 text-neutral-500">{sample.iframeUrlAfterEnrichment || "—"}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -115,7 +125,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
         <form action={syncVibixQuickAction} className="admin-panel grid gap-4 p-5 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <h2 className="text-xl font-bold text-[#222]">Быстрая синхронизация</h2>
-            <p className="mt-1 text-sm text-neutral-500">Ограниченный запуск для проверки настроек.</p>
+            <p className="mt-1 text-sm text-neutral-500">Безопасный тест: начните с одной страницы по 10–20 записей.</p>
           </div>
           <label className="text-sm font-bold text-[#333]">
             Тип каталога
@@ -126,11 +136,11 @@ export default async function VibixAdminPage({ searchParams }: Props) {
           </label>
           <label className="text-sm font-bold text-[#333]">
             Страниц
-            <input name="pages" type="number" min="1" max="20" defaultValue="5" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
+            <input name="pages" type="number" min="1" max="20" defaultValue="1" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
           </label>
           <label className="text-sm font-bold text-[#333]">
             Видео на страницу
-            <input name="limit" type="number" min="1" max="100" defaultValue="50" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
+            <input name="limit" type="number" min="1" max="100" defaultValue="10" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
           </label>
           <div className="flex flex-wrap gap-5 text-sm text-[#333] sm:col-span-2">
             <label className="flex items-center gap-2"><input name="noAds" type="checkbox" /> Отправить no_ads=true</label>
@@ -146,7 +156,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
         <form action={syncVibixAllAction} className="admin-panel flex flex-col p-5">
           <h2 className="text-xl font-bold text-[#222]">Полная база Vibix</h2>
           <p className="mt-1 text-sm leading-relaxed text-neutral-500">Автоматически пройдёт все страницы из meta.last_page. Если meta отсутствует, остановится на первой пустой странице.</p>
-          <div className="mt-4 rounded-xl bg-[#f5f5f5] p-4 text-sm text-neutral-600">Фильмы + сериалы · Limit: 50 · Задержка: 2 000 мс · До 100 страниц за ручной запуск</div>
+          <div className="mt-4 rounded-xl bg-[#f5f5f5] p-4 text-sm text-neutral-600">Фильмы + сериалы · Limit: 50 · Задержка страниц: 2 000 мс · Задержка detail-запросов: 750 мс · До 20 страниц за запуск</div>
           <div className="mt-4 flex flex-wrap gap-5 text-sm text-[#333]">
             <label className="flex items-center gap-2"><input name="noAds" type="checkbox" /> Отправить no_ads=true</label>
             <label className="flex items-center gap-2"><input name="lgbt" type="checkbox" /> Отправить lgbt=true</label>

@@ -44,6 +44,13 @@ export type VibixVideoPage = {
   invalidItems: number;
 };
 
+export type VibixVideoLookupResult = {
+  video: VibixVideo | null;
+  rateLimited: boolean;
+  retryAfterMs: number | null;
+  requestFailed: boolean;
+};
+
 type VibixLinksParams = {
   page?: number;
   limit?: number;
@@ -117,6 +124,7 @@ function firstValue(record: Record<string, unknown>, ...keys: string[]) {
 }
 
 function numberValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -132,7 +140,7 @@ function normalizeVideo(value: unknown): VibixVideo | null {
     name_original: firstValue(record, "name_original", "nameOriginal") as string | null,
     type: firstValue(record, "type") as string | null,
     year: firstValue(record, "year") as number | string | null,
-    kp_id: firstValue(record, "kp_id", "kpId", "kinopoisk_id") as number | string | null,
+    kp_id: firstValue(record, "kp_id", "kpId") as number | string | null,
     kinopoisk_id: firstValue(record, "kinopoisk_id", "kinopoiskId") as number | string | null,
     imdb_id: firstValue(record, "imdb_id", "imdbId") as number | string | null,
     kp_rating: firstValue(record, "kp_rating", "kpRating") as number | string | null,
@@ -312,12 +320,30 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
   } satisfies VibixVideoPage;
 }
 
-export async function getVibixVideoByKpId(kpId: string | number) {
+export async function getVibixVideoByKpIdResult(kpId: string | number): Promise<VibixVideoLookupResult> {
   const response = await vibixRequest(`/kp/${encodeURIComponent(String(kpId))}`);
-  return extractSingle(response.data);
+  return {
+    video: extractSingle(response.data),
+    rateLimited: response.rateLimited,
+    retryAfterMs: response.retryAfterMs,
+    requestFailed: response.requestFailed,
+  };
+}
+
+export async function getVibixVideoByImdbIdResult(imdbId: string | number): Promise<VibixVideoLookupResult> {
+  const response = await vibixRequest(`/imdb/${encodeURIComponent(String(imdbId))}`);
+  return {
+    video: extractSingle(response.data),
+    rateLimited: response.rateLimited,
+    retryAfterMs: response.retryAfterMs,
+    requestFailed: response.requestFailed,
+  };
+}
+
+export async function getVibixVideoByKpId(kpId: string | number) {
+  return (await getVibixVideoByKpIdResult(kpId)).video;
 }
 
 export async function getVibixVideoByImdbId(imdbId: string | number) {
-  const response = await vibixRequest(`/imdb/${encodeURIComponent(String(imdbId))}`);
-  return extractSingle(response.data);
+  return (await getVibixVideoByImdbIdResult(imdbId)).video;
 }

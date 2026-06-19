@@ -23,6 +23,10 @@ function resultUrl(result: VibixSyncResult) {
     totalFromVibix: String(result.totalFromVibix),
     rateLimited: result.rateLimited ? "1" : "0",
     message: result.message || "",
+    enrichedByKp: String(result.enrichedByKp),
+    enrichedByImdb: String(result.enrichedByImdb),
+    enrichmentFailed: String(result.enrichmentFailed),
+    missingIframeAfterEnrichment: String(result.missingIframeAfterEnrichment),
     skippedReasons: JSON.stringify(result.skippedReasons),
     skippedSamples: JSON.stringify(result.skippedSamples),
   });
@@ -51,9 +55,10 @@ export async function syncVibixQuickAction(formData: FormData) {
   const catalogType = formData.get("type") === "serial" ? "serial" : "movie";
   await runSync({
     mode: "quick",
-    pages: numberField(formData, "pages", 5, 20),
-    limit: numberField(formData, "limit", 50, 100),
+    pages: numberField(formData, "pages", 1, 20),
+    limit: numberField(formData, "limit", 10, 100),
     pageDelayMs: numberField(formData, "pageDelayMs", 2_000, 60_000),
+    detailDelayMs: 750,
     maxPagesPerRun: 20,
     types: [catalogType],
     existKpId: true,
@@ -67,7 +72,8 @@ export async function syncVibixAllAction(formData: FormData) {
     mode: "all",
     limit: 50,
     pageDelayMs: 2_000,
-    maxPagesPerRun: 100,
+    detailDelayMs: 750,
+    maxPagesPerRun: 20,
     types: ["movie", "serial"],
     existKpId: null,
     noAds: booleanField(formData, "noAds"),
