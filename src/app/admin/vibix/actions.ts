@@ -9,6 +9,10 @@ function numberField(formData: FormData, name: string, fallback: number, max: nu
   return Number.isFinite(value) ? Math.max(1, Math.min(Math.trunc(value), max)) : fallback;
 }
 
+function booleanField(formData: FormData, name: string) {
+  return formData.get(name) === "on";
+}
+
 function resultUrl(result: VibixSyncResult) {
   const params = new URLSearchParams({
     imported: String(result.imported),
@@ -19,6 +23,8 @@ function resultUrl(result: VibixSyncResult) {
     totalFromVibix: String(result.totalFromVibix),
     rateLimited: result.rateLimited ? "1" : "0",
     message: result.message || "",
+    skippedReasons: JSON.stringify(result.skippedReasons),
+    skippedSamples: JSON.stringify(result.skippedSamples),
   });
   return `/admin/vibix?${params.toString()}`;
 }
@@ -42,15 +48,29 @@ async function runSync(options: Parameters<typeof syncVibixVideos>[0]) {
 }
 
 export async function syncVibixQuickAction(formData: FormData) {
+  const catalogType = formData.get("type") === "serial" ? "serial" : "movie";
   await runSync({
     mode: "quick",
     pages: numberField(formData, "pages", 5, 20),
-    limit: numberField(formData, "limit", 100, 100),
+    limit: numberField(formData, "limit", 50, 100),
     pageDelayMs: numberField(formData, "pageDelayMs", 2_000, 60_000),
     maxPagesPerRun: 20,
+    types: [catalogType],
+    existKpId: true,
+    noAds: booleanField(formData, "noAds"),
+    lgbt: booleanField(formData, "lgbt"),
   });
 }
 
-export async function syncVibixAllAction() {
-  await runSync({ mode: "all", limit: 100, pageDelayMs: 2_000, maxPagesPerRun: 100 });
+export async function syncVibixAllAction(formData: FormData) {
+  await runSync({
+    mode: "all",
+    limit: 50,
+    pageDelayMs: 2_000,
+    maxPagesPerRun: 100,
+    types: ["movie", "serial"],
+    existKpId: null,
+    noAds: booleanField(formData, "noAds"),
+    lgbt: booleanField(formData, "lgbt"),
+  });
 }

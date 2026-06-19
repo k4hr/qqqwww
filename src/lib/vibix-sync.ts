@@ -1,7 +1,33 @@
 import { ContentType, type Movie } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
-import { getVibixVideoByImdbId, getVibixVideoByKpId, getVibixVideoLinks, sleep, type VibixVideo } from "@/lib/vibix";
+import {
+  getVibixVideoByImdbId,
+  getVibixVideoByKpId,
+  getVibixVideoLinks,
+  sleep,
+  type VibixCatalogType,
+  type VibixVideo,
+} from "@/lib/vibix";
+
+export type VibixSkippedReason =
+  | "missing_iframe_url"
+  | "missing_title"
+  | "missing_identifier"
+  | "unknown_type"
+  | "invalid_response"
+  | "other";
+
+export type VibixSkippedSample = {
+  id: number | string | null;
+  name: string | null;
+  name_rus: string | null;
+  kp_id: number | string | null;
+  kinopoisk_id: number | string | null;
+  imdb_id: number | string | null;
+  iframe_url: string | null;
+  reason: VibixSkippedReason;
+};
 
 export type VibixSyncResult = {
   imported: number;
@@ -14,6 +40,8 @@ export type VibixSyncResult = {
   finishedAt: string;
   rateLimited: boolean;
   message: string | null;
+  skippedReasons: Record<VibixSkippedReason, number>;
+  skippedSamples: VibixSkippedSample[];
 };
 
 type SyncOptions = {
@@ -22,6 +50,31 @@ type SyncOptions = {
   limit?: number;
   pageDelayMs?: number;
   maxPagesPerRun?: number;
+  types?: VibixCatalogType[];
+  existKpId?: boolean | null;
+  noAds?: boolean;
+  lgbt?: boolean;
+};
+
+type NormalizedVideo = {
+  title: string;
+  titleOriginal: string | null;
+  description: string | null;
+  year: number;
+  kinopoiskId: string | null;
+  imdbId: string | null;
+  iframeUrl: string;
+  posterUrl: string | null;
+  backdropUrl: string | null;
+  quality: string;
+  duration: number | null;
+  country: string | null;
+  kpRating: number | null;
+  imdbRating: number | null;
+  type: ContentType;
+  vibixType: string;
+  vibixId: number | null;
+  vibixUploadedAt: Date | null;
 };
 
 const vibixSyncState = globalThis as typeof globalThis & { __redfilmVibixSyncRunning?: boolean };
@@ -40,8 +93,15 @@ function stringValue(value: unknown) {
 }
 
 function intValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : null;
+  return Number.isSafeInteger(parsed) && parsed >= -2_147_483_648 && parsed <= 2_147_483_647 ? parsed : null;
+}
+
+function floatValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function dateValue(value: unknown) {
@@ -51,36 +111,98 @@ function dateValue(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function contentType(value: unknown) {
-  const normalized = stringValue(value)?.toLowerCase() ?? "";
-  if (["serial", "series", "tv", "tv_series", "show"].includes(normalized)) return ContentType.SERIES;
-  if (["cartoon", "animation"].includes(normalized)) return ContentType.CARTOON;
-  if (normalized === "anime") return ContentType.ANIME;
-  return ContentType.MOVIE;
+function textFromUnknown(value: unknown): string | null {
+  if (typeof value === "string") return stringValue(value);
+  if (Array.isArray(value)) {
+    const parts = value.map(textFromUnknown).filter((item): item is string => Boolean(item));
+    return parts.length ? parts.join(", ") : null;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return stringValue(record.name ?? record.title ?? record.value);
+  }
+  return null;
 }
 
-function videoData(video: VibixVideo) {
-  const title = stringValue(video.name_rus) || stringValue(video.name) || stringValue(video.name_eng);
-  const year = intValue(video.year);
-  const kinopoiskId = stringValue(video.kp_id);
-  const imdbId = stringValue(video.imdb_id);
+function contentType(value: unknown) {
+  const normalized = stringValue(value)?.toLowerCase() ?? "";
+  if (["movie", "film"].includes(normalized)) return ContentType.MOVIE;
+  if (["serial", "series", "tv", "tv_series", "show"].includes(normalized)) return ContentType.SERIES;
+  return null;
+}
+
+function normalizeVideoData(video: VibixVideo): { data: NormalizedVideo } | { reason: VibixSkippedReason } {
   const iframeUrl = stringValue(video.iframe_url);
-  if (!title || !year || year < 1880 || year > 2200 || (!kinopoiskId && !imdbId) || !iframeUrl) return null;
+  if (!iframeUrl) return { reason: "missing_iframe_url" };
+
+  const title = stringValue(video.name_rus) || stringValue(video.name) || stringValue(video.name_eng) || stringValue(video.name_original);
+  if (!title) return { reason: "missing_title" };
+
+  const kinopoiskId = stringValue(video.kp_id) || stringValue(video.kinopoisk_id);
+  const imdbId = stringValue(video.imdb_id);
+  const vibixId = intValue(video.id);
+  if (!kinopoiskId && !imdbId && vibixId === null) return { reason: "missing_identifier" };
+
+  const type = contentType(video.type);
+  if (!type) return { reason: "unknown_type" };
+
+  const year = intValue(video.year);
+  if (!year || year < 1880 || year > 2200) return { reason: "other" };
 
   return {
-    title,
-    titleOriginal: stringValue(video.name_eng),
-    year,
-    kinopoiskId,
-    imdbId,
-    iframeUrl,
-    posterUrl: stringValue(video.poster_url),
-    quality: stringValue(video.quality) || "HD",
-    type: contentType(video.type),
-    vibixType: stringValue(video.type),
-    vibixId: intValue(video.id),
-    vibixUploadedAt: dateValue(video.uploaded_at),
+    data: {
+      title,
+      titleOriginal: stringValue(video.name_original) || stringValue(video.name_eng),
+      description: stringValue(video.description) || stringValue(video.description_short),
+      year,
+      kinopoiskId,
+      imdbId,
+      iframeUrl,
+      posterUrl: stringValue(video.poster_url),
+      backdropUrl: stringValue(video.backdrop_url),
+      quality: stringValue(video.quality) || "HD",
+      duration: intValue(video.duration),
+      country: textFromUnknown(video.country),
+      kpRating: floatValue(video.kp_rating),
+      imdbRating: floatValue(video.imdb_rating),
+      type,
+      vibixType: stringValue(video.type) || "movie",
+      vibixId,
+      vibixUploadedAt: dateValue(video.uploaded_at),
+    },
   };
+}
+
+function skippedSample(video: VibixVideo, reason: VibixSkippedReason): VibixSkippedSample {
+  return {
+    id: video.id,
+    name: video.name,
+    name_rus: video.name_rus,
+    kp_id: video.kp_id,
+    kinopoisk_id: video.kinopoisk_id,
+    imdb_id: video.imdb_id,
+    iframe_url: video.iframe_url,
+    reason,
+  };
+}
+
+function diagnosticSample(video: VibixVideo) {
+  return {
+    id: video.id,
+    name: video.name,
+    name_rus: video.name_rus,
+    kp_id: video.kp_id,
+    kinopoisk_id: video.kinopoisk_id,
+    imdb_id: video.imdb_id,
+    iframe_url: video.iframe_url,
+    type: video.type,
+  };
+}
+
+function registerSkip(result: VibixSyncResult, reason: VibixSkippedReason, video?: VibixVideo, count = 1) {
+  result.skipped += count;
+  result.skippedReasons[reason] += count;
+  if (video && result.skippedSamples.length < 3) result.skippedSamples.push(skippedSample(video, reason));
 }
 
 async function uniqueSlug(title: string, year: number) {
@@ -94,20 +216,26 @@ async function uniqueSlug(title: string, year: number) {
   return slug;
 }
 
-async function findExisting(kinopoiskId: string | null, imdbId: string | null) {
-  const OR = [
-    kinopoiskId ? { kinopoiskId } : null,
-    imdbId ? { imdbId } : null,
-  ].filter((item): item is { kinopoiskId: string } | { imdbId: string } => item !== null);
-  return OR.length ? prisma.movie.findFirst({ where: { OR } }) : null;
+async function findExisting(kinopoiskId: string | null, imdbId: string | null, vibixId: number | null) {
+  if (kinopoiskId) {
+    const movie = await prisma.movie.findFirst({ where: { kinopoiskId } });
+    if (movie) return movie;
+  }
+  if (imdbId) {
+    const movie = await prisma.movie.findFirst({ where: { imdbId } });
+    if (movie) return movie;
+  }
+  if (vibixId !== null) return prisma.movie.findFirst({ where: { vibixId } });
+  return null;
 }
 
 async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
-  const data = videoData(video);
-  if (!data) return "skipped" as const;
+  const normalized = normalizeVideoData(video);
+  if ("reason" in normalized) return { status: "skipped" as const, reason: normalized.reason };
+  const data = normalized.data;
   const existing = targetMovieId
     ? await prisma.movie.findUnique({ where: { id: targetMovieId } })
-    : await findExisting(data.kinopoiskId, data.imdbId);
+    : await findExisting(data.kinopoiskId, data.imdbId, data.vibixId);
   const syncedAt = new Date();
 
   if (existing) {
@@ -116,12 +244,18 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
       data: {
         titleRu: data.title,
         titleOriginal: data.titleOriginal || undefined,
+        description: data.description || undefined,
         year: data.year,
         type: data.type,
         posterUrl: data.posterUrl || undefined,
+        backdropUrl: data.backdropUrl || undefined,
         quality: data.quality,
+        duration: data.duration || undefined,
+        country: data.country || undefined,
         kinopoiskId: data.kinopoiskId || undefined,
         imdbId: data.imdbId || undefined,
+        kpRating: data.kpRating,
+        imdbRating: data.imdbRating,
         vibixId: data.vibixId,
         vibixIframeUrl: data.iframeUrl,
         vibixAvailable: true,
@@ -131,7 +265,7 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
         isPublished: true,
       },
     });
-    return "updated" as const;
+    return { status: "updated" as const };
   }
 
   await prisma.movie.create({
@@ -139,13 +273,18 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
       slug: await uniqueSlug(data.title, data.year),
       titleRu: data.title,
       titleOriginal: data.titleOriginal,
-      description: `${data.title} (${data.year}) доступен для просмотра на REDFILM.`,
+      description: data.description || `${data.title} (${data.year}) доступен для просмотра на REDFILM.`,
       year: data.year,
       type: data.type,
       posterUrl: data.posterUrl,
+      backdropUrl: data.backdropUrl,
       quality: data.quality,
+      duration: data.duration,
+      country: data.country,
       kinopoiskId: data.kinopoiskId,
       imdbId: data.imdbId,
+      kpRating: data.kpRating,
+      imdbRating: data.imdbRating,
       vibixId: data.vibixId,
       vibixIframeUrl: data.iframeUrl,
       vibixAvailable: true,
@@ -155,7 +294,7 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
       isPublished: true,
     },
   });
-  return "imported" as const;
+  return { status: "imported" as const };
 }
 
 export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixSyncResult> {
@@ -165,10 +304,12 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
   const startedAt = new Date().toISOString();
   const mode = options.mode ?? "quick";
   const quickPages = Math.max(1, Math.min(options.pages ?? 5, 1000));
-  const limit = Math.max(1, Math.min(options.limit ?? 100, 200));
+  const limit = Math.max(1, Math.min(options.limit ?? 50, 200));
   const pageDelayMs = Math.max(250, Math.min(options.pageDelayMs ?? 2_000, 60_000));
   const maxPagesPerRun = Math.max(1, Math.min(options.maxPagesPerRun ?? (mode === "quick" ? quickPages : 20), 10_000));
-  const pagesToProcess = mode === "quick" ? Math.min(quickPages, maxPagesPerRun) : maxPagesPerRun;
+  const defaultTypes: VibixCatalogType[] = ["movie", "serial"];
+  const types: VibixCatalogType[] = Array.from(new Set(options.types?.length ? options.types : defaultTypes));
+  const pagesPerType = mode === "quick" ? quickPages : Math.max(1, Math.floor(maxPagesPerRun / types.length));
   const result: VibixSyncResult = {
     imported: 0,
     updated: 0,
@@ -180,50 +321,80 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
     finishedAt: startedAt,
     rateLimited: false,
     message: null,
+    skippedReasons: {
+      missing_iframe_url: 0,
+      missing_title: 0,
+      missing_identifier: 0,
+      unknown_type: 0,
+      invalid_response: 0,
+      other: 0,
+    },
+    skippedSamples: [],
   };
-  let page = 1;
-  let lastPage: number | null = null;
-  let hasReportedTotal = false;
 
   try {
-    while (page <= pagesToProcess) {
-      if (lastPage !== null && page > lastPage) break;
+    let stopSync = false;
+    for (const catalogType of types) {
+      if (stopSync || result.pagesProcessed >= maxPagesPerRun) break;
+      let page = 1;
+      let lastPage: number | null = null;
+      let hasReportedTotal = false;
 
-      const response = await getVibixVideoLinks({ page, limit });
-      if (response.rateLimited) {
-        result.rateLimited = true;
-        result.message = "Vibix API rate limit reached";
-        break;
-      }
-      if (response.requestFailed) {
-        result.errors += 1;
-        result.message = "Vibix API request failed";
-        break;
-      }
-      if (response.meta?.lastPage !== null && response.meta?.lastPage !== undefined) {
-        lastPage = Math.min(Math.max(1, response.meta.lastPage), 10_000);
-      }
-      if (response.meta?.total !== null && response.meta?.total !== undefined) {
-        result.totalFromVibix = Math.max(0, response.meta.total);
-        hasReportedTotal = true;
-      }
-      if (!response.data.length) break;
+      while (page <= pagesPerType && result.pagesProcessed < maxPagesPerRun) {
+        if (lastPage !== null && page > lastPage) break;
 
-      result.pagesProcessed += 1;
-      if (!hasReportedTotal) result.totalFromVibix += response.data.length;
-
-      for (const video of response.data) {
-        try {
-          const status = await saveVibixVideo(video);
-          result[status] += 1;
-        } catch (error) {
-          result.errors += 1;
-          console.warn("[Vibix] Failed to save video:", error instanceof Error ? error.message : error);
+        const response = await getVibixVideoLinks({
+          page,
+          limit,
+          type: catalogType,
+          existKpId: options.existKpId ?? (mode === "quick" ? true : null),
+          noAds: options.noAds,
+          lgbt: options.lgbt,
+        });
+        if (response.rateLimited) {
+          result.rateLimited = true;
+          result.message = "Vibix API rate limit reached";
+          stopSync = true;
+          break;
         }
+        if (response.requestFailed) {
+          result.errors += 1;
+          result.message = "Vibix API request failed";
+          stopSync = true;
+          break;
+        }
+        if (response.meta?.lastPage !== null && response.meta?.lastPage !== undefined) {
+          lastPage = Math.min(Math.max(1, response.meta.lastPage), 10_000);
+        }
+        if (response.meta?.total !== null && response.meta?.total !== undefined) {
+          if (!hasReportedTotal) result.totalFromVibix += Math.max(0, response.meta.total);
+          hasReportedTotal = true;
+        }
+        if (!response.data.length && !response.invalidItems) break;
+
+        if (page === 1) {
+          console.info(`[Vibix] First ${catalogType} page samples:`, response.data.slice(0, 2).map(diagnosticSample));
+        }
+
+        result.pagesProcessed += 1;
+        if (!hasReportedTotal) result.totalFromVibix += response.data.length + response.invalidItems;
+        if (response.invalidItems) registerSkip(result, "invalid_response", undefined, response.invalidItems);
+
+        for (const video of response.data) {
+          try {
+            const saved = await saveVibixVideo(video);
+            if (saved.status === "skipped") registerSkip(result, saved.reason, video);
+            else result[saved.status] += 1;
+          } catch (error) {
+            result.errors += 1;
+            console.warn("[Vibix] Failed to save video:", error instanceof Error ? error.message : error);
+          }
+        }
+
+        const hasMorePages = page < pagesPerType && (lastPage === null || page < lastPage);
+        page += 1;
+        if (hasMorePages) await sleep(pageDelayMs);
       }
-      const hasMorePages = page < pagesToProcess && (lastPage === null || page < lastPage);
-      page += 1;
-      if (hasMorePages) await sleep(pageDelayMs);
     }
 
     result.finishedAt = new Date().toISOString();
@@ -237,7 +408,8 @@ export async function ensureVibixPlayback(movie: Movie) {
   if (movie.vibixIframeUrl) return movie;
   let video = movie.kinopoiskId ? await getVibixVideoByKpId(movie.kinopoiskId) : null;
   if (!video && movie.imdbId) video = await getVibixVideoByImdbId(movie.imdbId);
-  if (!video || !videoData(video)) return movie;
-  await saveVibixVideo(video, movie.id);
+  if (!video) return movie;
+  const saved = await saveVibixVideo(video, movie.id);
+  if (saved.status === "skipped") return movie;
   return (await prisma.movie.findUnique({ where: { id: movie.id } })) ?? movie;
 }

@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
+import { VibixUnion } from "@/components/vibix-union";
 
 export const metadata: Metadata = {
   title: "REDFILM — фильмы и сериалы онлайн",
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             });
           `}
         </Script>
+        <Script id="vibix-union-script" src="https://v-js-menu.run/public/lib.en.min.js" strategy="afterInteractive" />
 
         <noscript>
           <div>
@@ -55,6 +57,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Header />
         <main className="cinematic-page">{children}</main>
         <Footer />
+        <VibixUnion
+          publisherId={process.env.VIBIX_PUBLISHER_ID?.trim() || "678353780"}
+          adTypes={process.env.NEXT_PUBLIC_VIBIX_AD_TYPES?.trim() || "brand,sticker,pcsticker,banners,flyroll"}
+        />
       </body>
     </html>
   );

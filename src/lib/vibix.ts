@@ -5,13 +5,26 @@ export type VibixVideo = {
   name: string | null;
   name_rus: string | null;
   name_eng: string | null;
+  name_original: string | null;
   type: string | null;
   year: number | string | null;
   kp_id: number | string | null;
+  kinopoisk_id: number | string | null;
   imdb_id: number | string | null;
+  kp_rating: number | string | null;
+  imdb_rating: number | string | null;
   iframe_url: string | null;
+  voiceovers: unknown;
+  tags: unknown;
   poster_url: string | null;
+  backdrop_url: string | null;
   quality: string | null;
+  duration: number | string | null;
+  genre: unknown;
+  country: unknown;
+  description: string | null;
+  description_short: string | null;
+  updated_at: string | null;
   uploaded_at: string | null;
 };
 
@@ -28,12 +41,47 @@ export type VibixVideoPage = {
   rateLimited: boolean;
   retryAfterMs: number | null;
   requestFailed: boolean;
+  invalidItems: number;
 };
 
 type VibixLinksParams = {
   page?: number;
   limit?: number;
+  type?: VibixCatalogType;
+  existKpId?: boolean | null;
+  noAds?: boolean;
+  lgbt?: boolean;
 };
+
+export type VibixCatalogType = "movie" | "serial";
+
+const VIBIX_LINK_FIELDS = [
+  "id",
+  "name",
+  "name_rus",
+  "name_eng",
+  "name_original",
+  "type",
+  "year",
+  "kp_id",
+  "kinopoisk_id",
+  "imdb_id",
+  "kp_rating",
+  "imdb_rating",
+  "iframe_url",
+  "voiceovers",
+  "tags",
+  "poster_url",
+  "backdrop_url",
+  "quality",
+  "duration",
+  "genre",
+  "country",
+  "description",
+  "description_short",
+  "updated_at",
+  "uploaded_at",
+] as const;
 
 let warnedAboutMissingKey = false;
 
@@ -81,13 +129,26 @@ function normalizeVideo(value: unknown): VibixVideo | null {
     name: firstValue(record, "name") as string | null,
     name_rus: firstValue(record, "name_rus", "nameRus") as string | null,
     name_eng: firstValue(record, "name_eng", "nameEng") as string | null,
+    name_original: firstValue(record, "name_original", "nameOriginal") as string | null,
     type: firstValue(record, "type") as string | null,
     year: firstValue(record, "year") as number | string | null,
     kp_id: firstValue(record, "kp_id", "kpId", "kinopoisk_id") as number | string | null,
+    kinopoisk_id: firstValue(record, "kinopoisk_id", "kinopoiskId") as number | string | null,
     imdb_id: firstValue(record, "imdb_id", "imdbId") as number | string | null,
+    kp_rating: firstValue(record, "kp_rating", "kpRating") as number | string | null,
+    imdb_rating: firstValue(record, "imdb_rating", "imdbRating") as number | string | null,
     iframe_url: firstValue(record, "iframe_url", "iframeUrl") as string | null,
+    voiceovers: firstValue(record, "voiceovers"),
+    tags: firstValue(record, "tags"),
     poster_url: firstValue(record, "poster_url", "posterUrl") as string | null,
+    backdrop_url: firstValue(record, "backdrop_url", "backdropUrl") as string | null,
     quality: firstValue(record, "quality") as string | null,
+    duration: firstValue(record, "duration") as number | string | null,
+    genre: firstValue(record, "genre", "genres"),
+    country: firstValue(record, "country", "countries"),
+    description: firstValue(record, "description") as string | null,
+    description_short: firstValue(record, "description_short", "descriptionShort") as string | null,
+    updated_at: firstValue(record, "updated_at", "updatedAt") as string | null,
     uploaded_at: firstValue(record, "uploaded_at", "uploadedAt") as string | null,
   };
   return video.id !== null || video.name !== null || video.name_rus !== null || video.kp_id !== null || video.imdb_id !== null || video.iframe_url !== null
@@ -230,16 +291,24 @@ async function vibixRequest(path: string, searchParams?: URLSearchParams) {
 
 export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
   const query = new URLSearchParams({
+    type: params.type ?? "movie",
     page: String(Math.max(1, params.page ?? 1)),
-    limit: String(Math.max(1, Math.min(params.limit ?? 100, 200))),
+    limit: String(Math.max(1, Math.min(params.limit ?? 50, 200))),
+    fields: VIBIX_LINK_FIELDS.join(","),
   });
+  if (params.existKpId !== null) query.set("exist_kp_id", String(params.existKpId ?? true));
+  if (params.noAds === true) query.set("no_ads", "true");
+  if (params.lgbt === true) query.set("lgbt", "true");
   const response = await vibixRequest("/links", query);
+  const rawItems = extractItems(response.data);
+  const data = rawItems.map(normalizeVideo).filter((item): item is VibixVideo => item !== null);
   return {
-    data: extractItems(response.data).map(normalizeVideo).filter((item): item is VibixVideo => item !== null),
+    data,
     meta: extractMeta(response.data),
     rateLimited: response.rateLimited,
     retryAfterMs: response.retryAfterMs,
     requestFailed: response.requestFailed,
+    invalidItems: rawItems.length - data.length,
   } satisfies VibixVideoPage;
 }
 

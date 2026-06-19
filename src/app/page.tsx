@@ -5,6 +5,7 @@ import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
 import { collectionLinksForYear } from "@/lib/collections";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
+import { VibixBanner } from "@/components/vibix-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export default async function HomePage() {
 
       <SectionGrid title="Фильмы" href="/movies" movies={movies} />
       <SectionGrid title="Сериалы" href="/series" movies={series} />
+      <VibixBanner size="728x90" />
       <SectionGrid title="Мультфильмы" href="/cartoons" movies={cartoons} />
       <SectionGrid title="Аниме" href="/anime" movies={anime} />
     </div>

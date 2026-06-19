@@ -18,7 +18,14 @@ async function handleSync(request: Request) {
   }
 
   try {
-    const result = await syncVibixVideos({ mode: "all", limit: 100, pageDelayMs: 2_000, maxPagesPerRun: 20 });
+    const result = await syncVibixVideos({
+      mode: "all",
+      limit: 50,
+      pageDelayMs: 2_000,
+      maxPagesPerRun: 20,
+      types: ["movie", "serial"],
+      existKpId: null,
+    });
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof VibixSyncAlreadyRunningError) {

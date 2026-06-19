@@ -10,5 +10,6 @@ export const vibixPublicMovieWhere = {
   OR: [
     { kinopoiskId: { not: "" } },
     { imdbId: { not: "" } },
+    { vibixId: { not: null } },
   ],
 } satisfies Prisma.MovieWhereInput;

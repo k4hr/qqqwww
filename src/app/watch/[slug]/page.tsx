@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PlayerBlock } from "@/components/player-block";
 import { ensureVibixPlayback } from "@/lib/vibix-sync";
+import { VibixBanner } from "@/components/vibix-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function WatchPage({ params }: Props) {
     where: {
       slug,
       isPublished: true,
-      OR: [{ kinopoiskId: { not: null } }, { imdbId: { not: null } }],
+      OR: [{ kinopoiskId: { not: null } }, { imdbId: { not: null } }, { vibixId: { not: null } }],
     },
   });
   if (!movie) notFound();
@@ -54,6 +55,7 @@ export default async function WatchPage({ params }: Props) {
       </section>
 
       <PlayerBlock movie={playableMovie} />
+      <VibixBanner size="680x200" />
     </div>
   );
 }

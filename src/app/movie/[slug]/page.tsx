@@ -8,6 +8,7 @@ import { PlayerBlock } from "@/components/player-block";
 import { MovieCard } from "@/components/movie-card";
 import { getContentTypeLabel, getContentTypePath } from "@/lib/content";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
+import { VibixBanner } from "@/components/vibix-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,7 @@ export default async function MoviePage({ params }: Props) {
       </section>
 
       <PlayerBlock movie={movie} />
+      <VibixBanner size="680x200" />
 
       <section className="mf-panel mt-6 p-5 sm:p-6">
         <h2 className="text-xl font-bold text-white">Похожие фильмы и подборки</h2>
