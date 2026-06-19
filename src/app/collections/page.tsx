@@ -10,13 +10,13 @@ export const metadata = {
 
 export default function CollectionsPage() {
   return (
-    <div className="container py-5">
-      <h1 className="text-3xl font-medium mb-5 text-[#333]">Подборки фильмов и сериалов</h1>
+    <div className="container py-6">
+      <h1 className="mb-6 text-3xl font-black tracking-[-.035em] text-white">Подборки фильмов и сериалов</h1>
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {collections.map((collection) => (
-          <Link key={collection.slug} href={`/collections/${collection.slug}`} className="bg-white border border-[#ddd] p-5 hover:border-[#e50914] transition-colors">
-            <h2 className="text-xl font-bold text-[#333] mb-2">{collection.h1}</h2>
-            <p className="text-neutral-600 leading-relaxed">{collection.description}</p>
+          <Link key={collection.slug} href={`/collections/${collection.slug}`} className="glass-panel section-glow rounded-3xl p-5 transition-all hover:-translate-y-1 hover:border-[#e50914]/60">
+            <h2 className="mb-2 text-xl font-black text-white">{collection.h1}</h2>
+            <p className="leading-relaxed text-[#a1a1aa]">{collection.description}</p>
           </Link>
         ))}
       </div>

@@ -34,7 +34,7 @@ export default async function AdminPage() {
         <Stat title="Без плеера" value={total - withAlloha} />
       </div>
 
-      <div className="vip-panel p-5">
+      <div className="admin-panel p-5">
         <h2 className="text-xl font-bold mb-4 text-[#222]">Последние карточки</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-[#222]">
@@ -76,5 +76,5 @@ export default async function AdminPage() {
 }
 
 function Stat({ title, value }: { title: string; value: number }) {
-  return <div className="vip-panel p-5"><div className="text-neutral-500 text-sm">{title}</div><div className="text-4xl font-bold mt-2 text-[#e50914]">{value}</div></div>;
+  return <div className="admin-panel p-5"><div className="text-neutral-500 text-sm">{title}</div><div className="text-4xl font-bold mt-2 text-[#e50914]">{value}</div></div>;
 }

@@ -36,8 +36,8 @@ export function Header() {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#e50914]/70 to-transparent" />
       <div className="container flex min-h-[76px] items-center gap-5 py-3">
         <Link href="/" className="group flex shrink-0 items-center gap-3 text-xl font-black tracking-[-0.04em] text-white">
-          <span className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-[#e50914]/30 bg-[#e50914]/12 shadow-[0_0_28px_rgba(229,9,20,.28)]">
-            <Image src="/logo-icon.png" alt="" fill className="object-cover opacity-90 transition-transform duration-300 group-hover:scale-110" priority />
+          <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-[#e50914]/45 bg-black shadow-[0_0_30px_rgba(229,9,20,.34)] max-sm:h-10 max-sm:w-10">
+            <Image src="/redfilm-emblem.png" alt="Эмблема REDFILM" fill className="object-contain transition-transform duration-300 group-hover:scale-105" sizes="48px" priority />
           </span>
           <span className="leading-none"><span className="text-[#e50914]">RED</span>FILM</span>
         </Link>

@@ -32,16 +32,18 @@ export default async function CollectionPage({ params }: Props) {
   });
 
   return (
-    <div className="container py-5">
-      <h1 className="text-3xl font-medium mb-3 text-[#333]">{collection.h1}</h1>
-      <p className="text-neutral-600 max-w-4xl leading-relaxed mb-5">{collection.description}</p>
+    <div className="container py-6">
+      <section className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
+        <h1 className="text-3xl font-black tracking-[-.035em] text-white">{collection.h1}</h1>
+        <p className="mt-3 max-w-4xl leading-relaxed text-[#a1a1aa]">{collection.description}</p>
+      </section>
 
       {movies.length ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {movies.map((movie) => <MovieCard key={movie.slug} movie={movie} />)}
         </div>
       ) : (
-        <div className="bg-white border border-[#ddd] p-8 text-neutral-600">
+        <div className="glass-panel rounded-3xl p-8 text-[#a1a1aa]">
           В подборке пока нет карточек. Запусти массовый импорт в админке.
         </div>
       )}

@@ -25,14 +25,14 @@ export default async function BulkImportPage({ searchParams }: Props) {
       </p>
 
       {hasResult ? (
-        <div className="vip-panel p-5 mb-6 grid md:grid-cols-3 gap-3">
+        <div className="admin-panel p-5 mb-6 grid md:grid-cols-3 gap-3">
           <Result title="Добавлено" value={created || "0"} />
           <Result title="Пропущено дублей" value={skipped || "0"} />
           <Result title="Ошибок" value={failed || "0"} />
         </div>
       ) : null}
 
-      <form action={bulkImportFromKinopoisk} className="vip-panel p-5 grid md:grid-cols-2 gap-4 max-w-3xl">
+      <form action={bulkImportFromKinopoisk} className="admin-panel p-5 grid md:grid-cols-2 gap-4 max-w-3xl">
         <div className="md:col-span-2">
           <label className="block text-sm font-bold mb-2 text-[#333]">Что импортировать</label>
           <select name="collection" className="w-full rounded-xl border border-[#ddd] bg-white text-[#222] h-12 px-4 outline-none focus:border-[#e50914]">
@@ -66,7 +66,7 @@ function Field({ label, name, defaultValue, helper, className = "" }: { label: s
 
 function Result({ title, value }: { title: string; value: string }) {
   return (
-    <div className="vip-soft-panel p-4">
+    <div className="admin-soft-panel p-4">
       <div className="text-sm text-neutral-500">{title}</div>
       <div className="text-3xl font-black text-[#e50914] mt-1">{value}</div>
     </div>

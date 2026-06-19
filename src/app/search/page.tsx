@@ -20,12 +20,14 @@ export default async function SearchPage({ searchParams }: Props) {
     : [];
 
   return (
-    <div className="container py-5">
-      <h1 className="text-3xl font-medium mb-5">Поиск: {query || "введите запрос"}</h1>
-      <form className="mb-6 flex gap-2" action="/search">
-        <input name="q" defaultValue={query} className="bg-white border [#ddd] h-11 px-4 flex-1" placeholder="Название фильма или сериала" />
-        <button className="bg-[#e50914] text-white font-bold px-6">Найти</button>
-      </form>
+    <div className="container py-6">
+      <section className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
+        <h1 className="text-3xl font-black tracking-[-.035em] text-white">Поиск: {query || "введите запрос"}</h1>
+        <form className="mt-5 flex gap-2" action="/search">
+          <input name="q" defaultValue={query} className="h-12 min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/30 px-4 text-white outline-none placeholder:text-[#666670] focus:border-[#e50914]" placeholder="Название фильма или сериала" />
+          <button className="mf-btn mf-btn-primary">Найти</button>
+        </form>
+      </section>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
         {movies.map((movie) => <MovieCard key={movie.slug} movie={movie} />)}
       </div>

@@ -26,15 +26,17 @@ export async function ListPage({ title, type, year, genreSlug, sort, description
   });
 
   return (
-    <div className="container py-5">
-      <h1 className="text-3xl font-medium mb-3 text-[#333]">{title}</h1>
-      {description ? <p className="text-neutral-600 max-w-4xl leading-relaxed mb-5">{description}</p> : null}
+    <div className="container py-6">
+      <div className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
+        <h1 className="text-3xl font-black tracking-[-.035em] text-white">{title}</h1>
+        {description ? <p className="mt-3 max-w-4xl leading-relaxed text-[#a9a9b2]">{description}</p> : null}
 
-      <div className="flex flex-wrap gap-2 mb-5">
-        <FilterLink href="?sort=latest" label="Последние" active={!sort || sort === "latest"} />
-        <FilterLink href="?sort=popular" label="Популярные" active={sort === "popular"} />
-        <FilterLink href="?sort=rating" label="По рейтингу" active={sort === "rating"} />
-        <FilterLink href="?sort=year" label="По году" active={sort === "year"} />
+        <div className="mt-5 flex flex-wrap gap-2">
+          <FilterLink href="?sort=latest" label="Последние" active={!sort || sort === "latest"} />
+          <FilterLink href="?sort=popular" label="Популярные" active={sort === "popular"} />
+          <FilterLink href="?sort=rating" label="По рейтингу" active={sort === "rating"} />
+          <FilterLink href="?sort=year" label="По году" active={sort === "year"} />
+        </div>
       </div>
 
       {movies.length ? (
@@ -44,7 +46,7 @@ export async function ListPage({ title, type, year, genreSlug, sort, description
           ))}
         </div>
       ) : (
-        <div className="bg-white border border-[#ddd] p-8 text-neutral-600">
+        <div className="glass-panel rounded-3xl p-8 text-[#a1a1aa]">
           Пока нет карточек в этом разделе. Запусти массовый импорт в админке, и страница начнёт наполняться автоматически.
         </div>
       )}
@@ -56,7 +58,7 @@ function FilterLink({ href, label, active }: { href: string; label: string; acti
   return (
     <Link
       href={href}
-      className={active ? "bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm" : "bg-white border border-[#ddd] px-5 py-3 text-neutral-600 rounded-sm hover:border-[#e50914]"}
+      className={active ? "mf-btn mf-btn-primary" : "mf-btn"}
     >
       {label}
     </Link>
