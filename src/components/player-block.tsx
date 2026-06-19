@@ -2,7 +2,7 @@ import type { Movie } from "@prisma/client";
 import { VibixPlayer } from "@/components/vibix-player";
 
 type Props = {
-  movie: Pick<Movie, "titleRu" | "year" | "vibixIframeUrl" | "vibixEmbedCode">;
+  movie: Pick<Movie, "titleRu" | "year" | "kinopoiskId" | "imdbId" | "vibixIframeUrl" | "vibixEmbedCode" | "posterUrl">;
 };
 
 export function PlayerBlock({ movie }: Props) {
@@ -15,7 +15,14 @@ export function PlayerBlock({ movie }: Props) {
 
       <div className="relative bg-black text-white">
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-[#e50914]/80 to-transparent" />
-        <VibixPlayer iframeUrl={movie.vibixIframeUrl} embedCode={movie.vibixEmbedCode} title={movie.titleRu} />
+        <VibixPlayer
+          title={movie.titleRu}
+          kinopoiskId={movie.kinopoiskId}
+          imdbId={movie.imdbId}
+          embedCode={movie.vibixEmbedCode}
+          iframeUrl={movie.vibixIframeUrl}
+          posterUrl={movie.posterUrl}
+        />
       </div>
     </section>
   );

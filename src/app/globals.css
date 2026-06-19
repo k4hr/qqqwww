@@ -208,6 +208,28 @@ button, input, select, textarea { font: inherit; }
     linear-gradient(145deg, #202029, #0b0b0f);
 }
 
+.vibix-player-shell {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 520px;
+  background: #000;
+  overflow: hidden;
+}
+
+.vibix-player-shell ins {
+  display: block;
+  width: 100%;
+  min-height: 520px;
+}
+
+.vibix-player-shell iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+  border: 0;
+}
+
 .cinema-glow {
   box-shadow:
     0 0 0 1px rgba(255,255,255,.08),
