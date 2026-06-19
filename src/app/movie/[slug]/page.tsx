@@ -45,13 +45,13 @@ export default async function MoviePage({ params }: Props) {
         <span className="text-[#a1a1aa]">{movie.titleRu}</span>
       </div>
 
-      <section className="mf-panel relative overflow-hidden p-4 sm:p-6">
-        {movie.backdropUrl ? <div className="absolute inset-x-0 top-0 h-64 bg-cover bg-center opacity-15 blur-sm" style={{ backgroundImage: `url(${movie.backdropUrl})` }} /> : null}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#101015]/90 to-[#101015]" />
+      <section className="cinema-glow mf-panel relative overflow-hidden p-4 sm:p-6 lg:p-7">
+        {movie.backdropUrl ? <div className="absolute inset-x-0 top-0 h-80 bg-cover bg-center opacity-20 blur-sm" style={{ backgroundImage: `url(${movie.backdropUrl})` }} /> : null}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_0%,rgba(229,9,20,.16),transparent_34%),linear-gradient(to_bottom,rgba(8,8,12,.55),#08080c_72%)]" />
 
         <div className="relative grid gap-7 md:grid-cols-[230px_1fr] lg:gap-10">
           <div>
-            <div className="poster-fallback relative aspect-[2/3] overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
+            <div className="poster-fallback relative aspect-[2/3] overflow-hidden rounded-[24px] border border-white/10 shadow-2xl">
               {movie.posterUrl ? (
                 <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="230px" unoptimized priority />
               ) : (
@@ -64,7 +64,7 @@ export default async function MoviePage({ params }: Props) {
               <Rating label="IMDb" value={movie.imdbRating?.toFixed(1)} className="rating-imdb" />
               <Rating label="TMDB" value={movie.tmdbRating?.toFixed(1)} className="text-white" />
             </div>
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-[#27272f] bg-black/20 px-4 py-3 text-xs">
+            <div className="mt-3 flex items-center justify-between rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-xs backdrop-blur">
               <span className="flex items-center gap-1.5 text-[#a1a1aa]"><ThumbsUp size={14} className="text-[#e50914]" /> {movie.likes}</span>
               <span className="flex items-center gap-1.5 text-[#71717a]"><ThumbsDown size={14} /> {movie.dislikes}</span>
             </div>
@@ -88,7 +88,7 @@ export default async function MoviePage({ params }: Props) {
               <Info label="Качество" value={movie.quality} />
             </div>
 
-            <div className="mt-6 rounded-xl border border-[#27272f] bg-black/20 p-4 text-sm leading-relaxed text-[#a1a1aa]">
+            <div className="mt-6 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-relaxed text-[#a1a1aa] backdrop-blur">
               <b className="text-white">В ролях:</b> {movie.cast.map((item) => item.person.nameRu).join(", ") || "—"}
             </div>
           </div>
@@ -120,9 +120,9 @@ export default async function MoviePage({ params }: Props) {
 }
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
-  return <div className="rounded-xl border border-[#27272f] bg-black/20 p-3"><div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#71717a]">{label}</div><div className="text-sm text-[#d4d4d8]">{value}</div></div>;
+  return <div className="rounded-2xl border border-white/10 bg-black/25 p-3 backdrop-blur"><div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#71717a]">{label}</div><div className="text-sm text-[#d4d4d8]">{value}</div></div>;
 }
 
 function Rating({ label, value, className }: { label: string; value?: string; className: string }) {
-  return <div className="rounded-xl border border-[#27272f] bg-black/25 px-2 py-2"><div className={`font-black ${className}`}>{label}</div><div className="mt-0.5 font-bold text-white">{value ?? "—"}</div></div>;
+  return <div className="rounded-2xl border border-white/10 bg-black/30 px-2 py-2 backdrop-blur"><div className={`font-black ${className}`}>{label}</div><div className="mt-0.5 font-bold text-white">{value ?? "—"}</div></div>;
 }

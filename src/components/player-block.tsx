@@ -22,13 +22,14 @@ export function PlayerBlock({ movie }: Props) {
   const trailerEmbed = movie.trailerUrl ? youtubeEmbedUrl(movie.trailerUrl) : null;
 
   return (
-    <section className="mf-panel mt-6 overflow-hidden">
-      <div className="flex flex-col gap-2 border-b border-[#27272f] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="cinema-glow mf-panel mt-6 overflow-hidden">
+      <div className="relative flex flex-col gap-2 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-bold text-white">Смотреть онлайн {movie.titleRu} ({movie.year})</h2>
         <span className="text-xs font-bold uppercase tracking-[0.14em] text-[#e50914]">Плеер / трейлер</span>
       </div>
 
-      <div className="bg-black text-white">
+      <div className="relative bg-black text-white">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-[#e50914]/80 to-transparent" />
         {allohaEnabled && movie.allohaId ? (
           <iframe
             src={`https://example-player-domain.test/${movie.allohaId}`}
@@ -45,8 +46,8 @@ export function PlayerBlock({ movie }: Props) {
           />
         ) : (
           <div className="poster-fallback relative flex aspect-video flex-col items-center justify-center overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(229,9,20,.2),transparent_45%)]" />
-            <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-[#e50914] shadow-[0_0_40px_rgba(229,9,20,.35)]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(229,9,20,.24),transparent_45%),linear-gradient(180deg,rgba(255,255,255,.04),transparent)]" />
+            <div className="relative z-10 flex h-[72px] w-[72px] items-center justify-center rounded-full border border-white/10 bg-[#e50914] shadow-[0_0_52px_rgba(229,9,20,.42)]">
               <Play fill="white" color="white" size={28} />
             </div>
             <p className="relative z-10 mt-5 px-5 text-center text-sm text-white/60">Видео пока недоступно.</p>
