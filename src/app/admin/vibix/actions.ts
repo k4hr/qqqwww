@@ -17,6 +17,8 @@ function resultUrl(result: VibixSyncResult) {
     errors: String(result.errors),
     pagesProcessed: String(result.pagesProcessed),
     totalFromVibix: String(result.totalFromVibix),
+    rateLimited: result.rateLimited ? "1" : "0",
+    message: result.message || "",
   });
   return `/admin/vibix?${params.toString()}`;
 }
@@ -42,11 +44,13 @@ async function runSync(options: Parameters<typeof syncVibixVideos>[0]) {
 export async function syncVibixQuickAction(formData: FormData) {
   await runSync({
     mode: "quick",
-    pages: numberField(formData, "pages", 5, 1000),
-    limit: numberField(formData, "limit", 100, 200),
+    pages: numberField(formData, "pages", 5, 20),
+    limit: numberField(formData, "limit", 100, 100),
+    pageDelayMs: numberField(formData, "pageDelayMs", 2_000, 60_000),
+    maxPagesPerRun: 20,
   });
 }
 
 export async function syncVibixAllAction() {
-  await runSync({ mode: "all", limit: 100, maxPages: 10_000 });
+  await runSync({ mode: "all", limit: 100, pageDelayMs: 2_000, maxPagesPerRun: 100 });
 }

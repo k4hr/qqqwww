@@ -1,7 +1,7 @@
 import { ContentType, type Movie } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
-import { getVibixVideoByImdbId, getVibixVideoByKpId, getVibixVideoLinks, type VibixVideo } from "@/lib/vibix";
+import { getVibixVideoByImdbId, getVibixVideoByKpId, getVibixVideoLinks, sleep, type VibixVideo } from "@/lib/vibix";
 
 export type VibixSyncResult = {
   imported: number;
@@ -12,13 +12,16 @@ export type VibixSyncResult = {
   totalFromVibix: number;
   startedAt: string;
   finishedAt: string;
+  rateLimited: boolean;
+  message: string | null;
 };
 
 type SyncOptions = {
   mode?: "quick" | "all";
   pages?: number;
   limit?: number;
-  maxPages?: number;
+  pageDelayMs?: number;
+  maxPagesPerRun?: number;
 };
 
 const vibixSyncState = globalThis as typeof globalThis & { __redfilmVibixSyncRunning?: boolean };
@@ -163,7 +166,9 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
   const mode = options.mode ?? "quick";
   const quickPages = Math.max(1, Math.min(options.pages ?? 5, 1000));
   const limit = Math.max(1, Math.min(options.limit ?? 100, 200));
-  const maxPages = Math.max(1, Math.min(options.maxPages ?? 10_000, 10_000));
+  const pageDelayMs = Math.max(250, Math.min(options.pageDelayMs ?? 2_000, 60_000));
+  const maxPagesPerRun = Math.max(1, Math.min(options.maxPagesPerRun ?? (mode === "quick" ? quickPages : 20), 10_000));
+  const pagesToProcess = mode === "quick" ? Math.min(quickPages, maxPagesPerRun) : maxPagesPerRun;
   const result: VibixSyncResult = {
     imported: 0,
     updated: 0,
@@ -173,19 +178,30 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
     totalFromVibix: 0,
     startedAt,
     finishedAt: startedAt,
+    rateLimited: false,
+    message: null,
   };
   let page = 1;
   let lastPage: number | null = null;
   let hasReportedTotal = false;
 
   try {
-    while (page <= maxPages) {
-      if (mode === "quick" && page > quickPages) break;
+    while (page <= pagesToProcess) {
       if (lastPage !== null && page > lastPage) break;
 
       const response = await getVibixVideoLinks({ page, limit });
+      if (response.rateLimited) {
+        result.rateLimited = true;
+        result.message = "Vibix API rate limit reached";
+        break;
+      }
+      if (response.requestFailed) {
+        result.errors += 1;
+        result.message = "Vibix API request failed";
+        break;
+      }
       if (response.meta?.lastPage !== null && response.meta?.lastPage !== undefined) {
-        lastPage = Math.min(Math.max(1, response.meta.lastPage), maxPages);
+        lastPage = Math.min(Math.max(1, response.meta.lastPage), 10_000);
       }
       if (response.meta?.total !== null && response.meta?.total !== undefined) {
         result.totalFromVibix = Math.max(0, response.meta.total);
@@ -205,7 +221,9 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
           console.warn("[Vibix] Failed to save video:", error instanceof Error ? error.message : error);
         }
       }
+      const hasMorePages = page < pagesToProcess && (lastPage === null || page < lastPage);
       page += 1;
+      if (hasMorePages) await sleep(pageDelayMs);
     }
 
     result.finishedAt = new Date().toISOString();

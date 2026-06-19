@@ -11,6 +11,8 @@ type Props = {
     errors?: string;
     pagesProcessed?: string;
     totalFromVibix?: string;
+    rateLimited?: string;
+    message?: string;
     error?: string;
   }>;
 };
@@ -26,6 +28,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
   const configured = Boolean(process.env.VIBIX_API_KEY?.trim());
   const hasResult = [result.imported, result.updated, result.skipped, result.errors, result.pagesProcessed, result.totalFromVibix].some(Boolean);
   const errorMessage = result.error ? errorMessages[result.error] || "Не удалось запустить синхронизацию." : null;
+  const rateLimited = result.rateLimited === "1";
 
   return (
     <div className="container admin-shell py-6">
@@ -46,6 +49,12 @@ export default async function VibixAdminPage({ searchParams }: Props) {
       </div>
 
       {errorMessage ? <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 font-bold text-red-700">{errorMessage}</div> : null}
+      {rateLimited ? <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 font-bold text-amber-800">Vibix временно ограничил запросы. Попробуйте позже или уменьшите количество страниц.</div> : null}
+      {!rateLimited && result.message ? <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 font-bold text-red-700">{result.message}</div> : null}
+
+      <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Если Vibix вернул 429, подождите и запустите позже. Для полной базы лучше синхронизировать частями.
+      </div>
 
       {hasResult ? (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -66,11 +75,15 @@ export default async function VibixAdminPage({ searchParams }: Props) {
           </div>
           <label className="text-sm font-bold text-[#333]">
             Страниц
-            <input name="pages" type="number" min="1" max="1000" defaultValue="5" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
+            <input name="pages" type="number" min="1" max="20" defaultValue="5" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
           </label>
           <label className="text-sm font-bold text-[#333]">
             Видео на страницу
-            <input name="limit" type="number" min="1" max="200" defaultValue="100" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
+            <input name="limit" type="number" min="1" max="100" defaultValue="100" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
+          </label>
+          <label className="text-sm font-bold text-[#333] sm:col-span-2">
+            Задержка между страницами, мс
+            <input name="pageDelayMs" type="number" min="250" max="60000" step="250" defaultValue="2000" className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222] outline-none focus:border-[#e50914]" />
           </label>
           <button type="submit" disabled={!configured} className="h-12 rounded-xl bg-[#333] font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400 sm:col-span-2">Быстрая синхронизация</button>
         </form>
@@ -78,7 +91,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
         <form action={syncVibixAllAction} className="admin-panel flex flex-col p-5">
           <h2 className="text-xl font-bold text-[#222]">Полная база Vibix</h2>
           <p className="mt-1 text-sm leading-relaxed text-neutral-500">Автоматически пройдёт все страницы из meta.last_page. Если meta отсутствует, остановится на первой пустой странице.</p>
-          <div className="mt-4 rounded-xl bg-[#f5f5f5] p-4 text-sm text-neutral-600">Limit: 100 · Safety limit: 10 000 страниц</div>
+          <div className="mt-4 rounded-xl bg-[#f5f5f5] p-4 text-sm text-neutral-600">Limit: 100 · Задержка: 2 000 мс · До 100 страниц за ручной запуск</div>
           <button type="submit" disabled={!configured} className="mt-auto h-12 rounded-xl bg-[#e50914] font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400">Синхронизировать всю базу Vibix</button>
         </form>
       </div>

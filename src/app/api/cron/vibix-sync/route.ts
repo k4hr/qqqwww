@@ -18,7 +18,7 @@ async function handleSync(request: Request) {
   }
 
   try {
-    const result = await syncVibixVideos({ mode: "all", limit: 100, maxPages: 10_000 });
+    const result = await syncVibixVideos({ mode: "all", limit: 100, pageDelayMs: 2_000, maxPagesPerRun: 20 });
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof VibixSyncAlreadyRunningError) {

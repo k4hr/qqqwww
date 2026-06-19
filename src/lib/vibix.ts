@@ -25,6 +25,9 @@ export type VibixPaginationMeta = {
 export type VibixVideoPage = {
   data: VibixVideo[];
   meta: VibixPaginationMeta | null;
+  rateLimited: boolean;
+  retryAfterMs: number | null;
+  requestFailed: boolean;
 };
 
 type VibixLinksParams = {
@@ -33,6 +36,17 @@ type VibixLinksParams = {
 };
 
 let warnedAboutMissingKey = false;
+
+type VibixFetchResult = {
+  data: unknown | null;
+  rateLimited: boolean;
+  retryAfterMs: number | null;
+  requestFailed: boolean;
+};
+
+export function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function getApiKey() {
   const key = process.env.VIBIX_API_KEY?.trim();
@@ -134,30 +148,84 @@ function extractMeta(payload: unknown): VibixPaginationMeta | null {
   return null;
 }
 
-async function vibixRequest(path: string, searchParams?: URLSearchParams) {
-  const apiKey = getApiKey();
-  if (!apiKey) return null;
+function retryAfterMilliseconds(response: Response, attempt: number) {
+  const value = response.headers.get("retry-after")?.trim();
+  if (value) {
+    const seconds = Number(value);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+    const date = Date.parse(value);
+    if (!Number.isNaN(date)) return Math.max(0, date - Date.now());
+  }
+  return 30_000 * (attempt + 1);
+}
 
+async function fetchVibixJson(url: URL): Promise<VibixFetchResult> {
+  const apiKey = getApiKey();
+  if (!apiKey) return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          Accept: "application/json",
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(20_000),
+      });
+
+      if (response.status === 404) {
+        return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: false };
+      }
+
+      if (response.status === 429) {
+        const retryAfterMs = retryAfterMilliseconds(response, attempt);
+        if (attempt === maxAttempts - 1) {
+          console.warn(`[Vibix] Rate limit reached after ${maxAttempts} attempts.`);
+          return { data: null, rateLimited: true, retryAfterMs, requestFailed: false };
+        }
+        console.warn(`[Vibix] HTTP 429. Retrying in ${Math.ceil(retryAfterMs / 1000)} seconds.`);
+        await sleep(retryAfterMs);
+        continue;
+      }
+
+      if (response.status >= 500) {
+        if (attempt < maxAttempts - 1) {
+          const delayMs = 2_000 * 2 ** attempt;
+          console.warn(`[Vibix] HTTP ${response.status}. Retrying in ${delayMs} ms.`);
+          await sleep(delayMs);
+          continue;
+        }
+        console.warn(`[Vibix] Request failed with HTTP ${response.status} after ${maxAttempts} attempts.`);
+        return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+      }
+
+      if (!response.ok) {
+        console.warn(`[Vibix] Request failed with HTTP ${response.status}.`);
+        return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+      }
+
+      return { data: await response.json() as unknown, rateLimited: false, retryAfterMs: null, requestFailed: false };
+    } catch (error) {
+      if (attempt < maxAttempts - 1) {
+        const delayMs = 2_000 * 2 ** attempt;
+        console.warn(`[Vibix] Network error. Retrying in ${delayMs} ms:`, error instanceof Error ? error.message : error);
+        await sleep(delayMs);
+        continue;
+      }
+      console.warn("[Vibix] Request failed:", error instanceof Error ? error.message : error);
+      return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+    }
+  }
+
+  return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true };
+}
+
+async function vibixRequest(path: string, searchParams?: URLSearchParams) {
   const url = new URL(`${VIBIX_API_URL}${path}`);
   if (searchParams) searchParams.forEach((value, key) => url.searchParams.set(key, value));
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        Accept: "application/json",
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!response.ok) {
-      console.warn(`[Vibix] Request ${path} failed with HTTP ${response.status}.`);
-      return null;
-    }
-    return await response.json() as unknown;
-  } catch (error) {
-    console.warn(`[Vibix] Request ${path} failed:`, error instanceof Error ? error.message : error);
-    return null;
-  }
+  return fetchVibixJson(url);
 }
 
 export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
@@ -165,19 +233,22 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
     page: String(Math.max(1, params.page ?? 1)),
     limit: String(Math.max(1, Math.min(params.limit ?? 100, 200))),
   });
-  const payload = await vibixRequest("/links", query);
+  const response = await vibixRequest("/links", query);
   return {
-    data: extractItems(payload).map(normalizeVideo).filter((item): item is VibixVideo => item !== null),
-    meta: extractMeta(payload),
+    data: extractItems(response.data).map(normalizeVideo).filter((item): item is VibixVideo => item !== null),
+    meta: extractMeta(response.data),
+    rateLimited: response.rateLimited,
+    retryAfterMs: response.retryAfterMs,
+    requestFailed: response.requestFailed,
   } satisfies VibixVideoPage;
 }
 
 export async function getVibixVideoByKpId(kpId: string | number) {
-  const payload = await vibixRequest(`/kp/${encodeURIComponent(String(kpId))}`);
-  return extractSingle(payload);
+  const response = await vibixRequest(`/kp/${encodeURIComponent(String(kpId))}`);
+  return extractSingle(response.data);
 }
 
 export async function getVibixVideoByImdbId(imdbId: string | number) {
-  const payload = await vibixRequest(`/imdb/${encodeURIComponent(String(imdbId))}`);
-  return extractSingle(payload);
+  const response = await vibixRequest(`/imdb/${encodeURIComponent(String(imdbId))}`);
+  return extractSingle(response.data);
 }
