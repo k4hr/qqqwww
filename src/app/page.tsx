@@ -4,16 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
 import { collectionLinksForYear } from "@/lib/collections";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
   const [movies, series, cartoons, anime, genres] = await Promise.all([
-    prisma.movie.findMany({ where: { type: ContentType.MOVIE, isPublished: true }, orderBy: { createdAt: "desc" }, take: 12 }),
-    prisma.movie.findMany({ where: { type: ContentType.SERIES, isPublished: true }, orderBy: { createdAt: "desc" }, take: 12 }),
-    prisma.movie.findMany({ where: { type: ContentType.CARTOON, isPublished: true }, orderBy: { createdAt: "desc" }, take: 12 }),
-    prisma.movie.findMany({ where: { type: ContentType.ANIME, isPublished: true }, orderBy: { createdAt: "desc" }, take: 12 }),
+    prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.MOVIE }, orderBy: { createdAt: "desc" }, take: 12 }),
+    prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.SERIES }, orderBy: { createdAt: "desc" }, take: 12 }),
+    prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.CARTOON }, orderBy: { createdAt: "desc" }, take: 12 }),
+    prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.ANIME }, orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.genre.findMany({ orderBy: { name: "asc" }, take: 18 }),
   ]);
 

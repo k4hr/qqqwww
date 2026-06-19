@@ -33,7 +33,7 @@ export function SectionGrid({ title, href, movies }: Props) {
         </div>
       ) : (
         <div className="poster-fallback relative rounded-2xl border border-white/10 px-5 py-12 text-center text-sm text-[#a1a1aa]">
-          В этом разделе пока нет опубликованных карточек.
+          Каталог обновляется. Фильмы скоро появятся.
         </div>
       )}
     </section>

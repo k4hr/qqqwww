@@ -4,6 +4,7 @@ import { Film } from "lucide-react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PlayerBlock } from "@/components/player-block";
+import { ensureVibixPlayback } from "@/lib/vibix-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +12,22 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
-  const movie = await prisma.movie.findUnique({ where: { slug } });
+  const movie = await prisma.movie.findFirst({ where: { slug, isPublished: true } });
   if (!movie) return {};
   return { title: `Смотреть ${movie.titleRu} (${movie.year}) — REDFILM`, description: movie.description };
 }
 
 export default async function WatchPage({ params }: Props) {
   const { slug } = await params;
-  const movie = await prisma.movie.findUnique({ where: { slug } });
+  const movie = await prisma.movie.findFirst({
+    where: {
+      slug,
+      isPublished: true,
+      OR: [{ kinopoiskId: { not: null } }, { imdbId: { not: null } }],
+    },
+  });
   if (!movie) notFound();
+  const playableMovie = movie.vibixIframeUrl ? movie : await ensureVibixPlayback(movie);
 
   return (
     <div className="container py-5 sm:py-7">
@@ -45,7 +53,7 @@ export default async function WatchPage({ params }: Props) {
         </div>
       </section>
 
-      <PlayerBlock movie={movie} />
+      <PlayerBlock movie={playableMovie} />
     </div>
   );
 }

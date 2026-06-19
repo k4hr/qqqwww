@@ -40,6 +40,12 @@ model Movie {
   imdbId         String?
   tmdbId         String?
   allohaId       String?
+  vibixId        Int?
+  vibixIframeUrl String?
+  vibixAvailable Boolean       @default(false)
+  vibixType      String?
+  vibixUploadedAt DateTime?
+  vibixLastSyncAt DateTime?
   kpRating       Float?
   imdbRating     Float?
   tmdbRating     Float?
@@ -55,6 +61,9 @@ model Movie {
 
   @@index([type, year])
   @@index([isPublished])
+  @@index([kinopoiskId])
+  @@index([imdbId])
+  @@index([vibixAvailable, isPublished])
 }
 
 model Genre {

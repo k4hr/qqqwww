@@ -40,7 +40,7 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
         <div className="background-overlay absolute inset-0" />
         <div className="relative z-10 flex min-h-[560px] max-w-2xl flex-col justify-end p-7 sm:p-12">
           <h1 className="text-4xl font-black tracking-[-.045em] text-white sm:text-6xl">REDFILM</h1>
-          <p className="mt-4 text-lg text-[#c7c7ce]">Каталог наполнится после импорта фильмов.</p>
+          <p className="mt-4 text-lg text-[#c7c7ce]">Каталог обновляется. Фильмы скоро появятся.</p>
         </div>
       </section>
     );

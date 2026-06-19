@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { MovieCard } from "@/components/movie-card";
 import { getCollection } from "@/lib/collections";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,7 @@ export default async function CollectionPage({ params }: Props) {
   if (!collection) notFound();
 
   const movies = await prisma.movie.findMany({
-    where: {
-      isPublished: true,
-      ...collection.where,
-    },
+    where: { AND: [vibixPublicMovieWhere, collection.where] },
     orderBy: collection.orderBy,
     take: slug === "top-100" ? 100 : 96,
   });
@@ -44,7 +42,7 @@ export default async function CollectionPage({ params }: Props) {
         </div>
       ) : (
         <div className="glass-panel rounded-3xl p-8 text-[#a1a1aa]">
-          В подборке пока нет карточек. Запусти массовый импорт в админке.
+          Каталог обновляется. Фильмы скоро появятся.
         </div>
       )}
     </div>

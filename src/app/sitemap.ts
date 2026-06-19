@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { ContentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { collections } from "@/lib/collections";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +11,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const [movies, genres, years] = await Promise.all([
     prisma.movie.findMany({
-      where: { isPublished: true },
+      where: vibixPublicMovieWhere,
       select: { slug: true, updatedAt: true, year: true, type: true, genres: { select: { genre: { select: { slug: true } } } } },
       take: 5000,
     }),
     prisma.genre.findMany({ select: { slug: true }, take: 500 }),
-    prisma.movie.findMany({ where: { isPublished: true }, select: { year: true }, distinct: ["year"], take: 100 }),
+    prisma.movie.findMany({ where: vibixPublicMovieWhere, select: { year: true }, distinct: ["year"], take: 100 }),
   ]);
 
   const yearPaths = years
@@ -50,7 +51,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...yearPaths,
     ...Array.from(genreYearSet).slice(0, 3000),
     ...movies.map((movie) => `/movie/${movie.slug}`),
+    ...movies.map((movie) => `/watch/${movie.slug}`),
     ...movies.map((movie) => `/similar/${movie.slug}`),
+    ...movies.map((movie) => `/f/${movie.slug}`),
   ];
 
   const uniquePaths = Array.from(new Set(paths));

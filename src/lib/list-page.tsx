@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { MovieCard } from "@/components/movie-card";
 import type { ContentType } from "@prisma/client";
 import { parseSort } from "@/lib/content";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 type Props = {
   title: string;
@@ -16,7 +17,7 @@ type Props = {
 export async function ListPage({ title, type, year, genreSlug, sort, description }: Props) {
   const movies = await prisma.movie.findMany({
     where: {
-      isPublished: true,
+      ...vibixPublicMovieWhere,
       ...(type ? { type } : {}),
       ...(year ? { year } : {}),
       ...(genreSlug ? { genres: { some: { genre: { slug: genreSlug } } } } : {}),
@@ -47,7 +48,7 @@ export async function ListPage({ title, type, year, genreSlug, sort, description
         </div>
       ) : (
         <div className="glass-panel rounded-3xl p-8 text-[#a1a1aa]">
-          Пока нет карточек в этом разделе. Запусти массовый импорт в админке, и страница начнёт наполняться автоматически.
+          Каталог обновляется. Фильмы скоро появятся.
         </div>
       )}
     </div>

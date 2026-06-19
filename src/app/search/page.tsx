@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { MovieCard } from "@/components/movie-card";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +11,11 @@ export default async function SearchPage({ searchParams }: Props) {
   const query = q.trim();
   const movies = query
     ? await prisma.movie.findMany({
-        where: { isPublished: true, OR: [
+        where: { AND: [vibixPublicMovieWhere, { OR: [
           { titleRu: { contains: query, mode: "insensitive" } },
           { titleOriginal: { contains: query, mode: "insensitive" } },
           { description: { contains: query, mode: "insensitive" } },
-        ] },
+        ] }] },
         take: 60
       })
     : [];
@@ -31,6 +32,7 @@ export default async function SearchPage({ searchParams }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
         {movies.map((movie) => <MovieCard key={movie.slug} movie={movie} />)}
       </div>
+      {query && !movies.length ? <div className="glass-panel rounded-3xl p-8 text-center text-[#a1a1aa]">Каталог обновляется. Фильмы скоро появятся.</div> : null}
     </div>
   );
 }

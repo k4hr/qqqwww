@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { MovieCard } from "@/components/movie-card";
 import { similarIntro, sortSimilarMovies } from "@/lib/similar";
 import { getContentTypePath, getContentTypeLabel } from "@/lib/content";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
-  const movie = await prisma.movie.findUnique({ where: { slug } });
+  const movie = await prisma.movie.findFirst({ where: { slug, ...vibixPublicMovieWhere } });
   if (!movie) return {};
 
   return {
@@ -24,8 +25,8 @@ export async function generateMetadata({ params }: Props) {
 export default async function SimilarPage({ params }: Props) {
   const { slug } = await params;
 
-  const movie = await prisma.movie.findUnique({
-    where: { slug },
+  const movie = await prisma.movie.findFirst({
+    where: { slug, ...vibixPublicMovieWhere },
     include: {
       genres: { include: { genre: true } },
       cast: { include: { person: true }, orderBy: { sortOrder: "asc" } },
@@ -35,7 +36,7 @@ export default async function SimilarPage({ params }: Props) {
   if (!movie) notFound();
 
   const candidates = await prisma.movie.findMany({
-    where: { id: { not: movie.id }, isPublished: true },
+    where: { ...vibixPublicMovieWhere, id: { not: movie.id } },
     include: {
       genres: { include: { genre: true } },
       cast: { include: { person: true }, orderBy: { sortOrder: "asc" } },
@@ -46,7 +47,7 @@ export default async function SimilarPage({ params }: Props) {
   const similar = sortSimilarMovies(movie, candidates, 10);
   const fallback = similar.length < 10
     ? await prisma.movie.findMany({
-        where: { id: { not: movie.id }, isPublished: true, type: movie.type },
+        where: { ...vibixPublicMovieWhere, id: { not: movie.id }, type: movie.type },
         orderBy: [{ kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
         take: 10 - similar.length,
       })

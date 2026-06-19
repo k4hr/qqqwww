@@ -6,10 +6,10 @@ import { getContentTypeLabel } from "@/lib/content";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const [total, published, withAlloha, latest] = await Promise.all([
+  const [total, published, withVibix, latest] = await Promise.all([
     prisma.movie.count(),
     prisma.movie.count({ where: { isPublished: true } }),
-    prisma.movie.count({ where: { allohaId: { not: null } } }),
+    prisma.movie.count({ where: { vibixAvailable: true, vibixIframeUrl: { not: null } } }),
     prisma.movie.findMany({ orderBy: { createdAt: "desc" }, take: 40 }),
   ]);
 
@@ -24,14 +24,15 @@ export default async function AdminPage() {
           <Link href="/admin/new" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">Добавить вручную</Link>
           <Link href="/admin/import" className="bg-[#333] text-white font-bold px-5 py-3 rounded-sm">Импорт</Link>
           <Link href="/admin/bulk" className="bg-[#c9a86a] text-[#0b1020] font-bold px-5 py-3 rounded-sm">Массовый импорт</Link>
+          <Link href="/admin/vibix" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">Vibix</Link>
         </div>
       </div>
 
       <div className="grid md:grid-cols-4 gap-4 mb-6">
         <Stat title="Всего карточек" value={total} />
         <Stat title="Опубликовано" value={published} />
-        <Stat title="С Alloha ID" value={withAlloha} />
-        <Stat title="Без плеера" value={total - withAlloha} />
+        <Stat title="Доступно в Vibix" value={withVibix} />
+        <Stat title="Без Vibix-плеера" value={total - withVibix} />
       </div>
 
       <div className="admin-panel p-5">
@@ -54,7 +55,7 @@ export default async function AdminPage() {
                   <td className="py-3 pr-4 font-medium"><Link className="hover:text-[#e50914]" href={`/movie/${movie.slug}`}>{movie.titleRu}</Link></td>
                   <td className="py-3 pr-4">{getContentTypeLabel(movie.type)}</td>
                   <td className="py-3 pr-4">{movie.year}</td>
-                  <td className="py-3 pr-4 text-neutral-500">{movie.allohaId ? `Alloha: ${movie.allohaId}` : "нет"}</td>
+                  <td className="py-3 pr-4 text-neutral-500">{movie.vibixIframeUrl ? "Vibix" : "нет"}</td>
                   <td className="py-3 pr-4">{movie.isPublished ? "Опубликовано" : "Скрыто"}</td>
                   <td className="py-3 pr-4">
                     <form action={toggleMoviePublished}>

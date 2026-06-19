@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { PlayerBlock } from "@/components/player-block";
 import { MovieCard } from "@/components/movie-card";
 import { getContentTypeLabel, getContentTypePath } from "@/lib/content";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
-  const movie = await prisma.movie.findUnique({ where: { slug } });
+  const movie = await prisma.movie.findFirst({ where: { slug, ...vibixPublicMovieWhere } });
   if (!movie) return {};
   return {
     title: `${movie.titleRu} (${movie.year}) смотреть онлайн — REDFILM`,
@@ -24,15 +25,15 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function MoviePage({ params }: Props) {
   const { slug } = await params;
-  const movie = await prisma.movie.findUnique({
-    where: { slug },
+  const movie = await prisma.movie.findFirst({
+    where: { slug, ...vibixPublicMovieWhere },
     include: { genres: { include: { genre: true } }, cast: { include: { person: true }, orderBy: { sortOrder: "asc" } } }
   });
 
   if (!movie) notFound();
 
   const related = await prisma.movie.findMany({
-    where: { id: { not: movie.id }, type: movie.type, isPublished: true },
+    where: { ...vibixPublicMovieWhere, id: { not: movie.id }, type: movie.type },
     orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }],
     take: 6
   });
