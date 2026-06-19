@@ -119,3 +119,22 @@ TMDB можно оставить запасным источником:
 ```env
 TMDB_API_KEY=твой_tmdb_ключ
 ```
+
+## Vibix и автоматическая синхронизация
+
+Добавь в Railway Variables:
+
+```env
+VIBIX_API_KEY=твой_ключ
+VIBIX_PUBLISHER_ID=678353780
+CRON_SECRET=случайная_длинная_строка
+```
+
+Ручной запуск доступен в `/admin/vibix`. Для полной автоматической синхронизации настрой cron:
+
+```text
+POST https://redfilm.win/api/cron/vibix-sync
+Authorization: Bearer <CRON_SECRET>
+```
+
+Публичные страницы читают фильмы только из PostgreSQL. Cron и админка являются единственными точками запуска массовой синхронизации.

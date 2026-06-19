@@ -15,6 +15,18 @@ export type VibixVideo = {
   uploaded_at: string | null;
 };
 
+export type VibixPaginationMeta = {
+  currentPage: number | null;
+  lastPage: number | null;
+  perPage: number | null;
+  total: number | null;
+};
+
+export type VibixVideoPage = {
+  data: VibixVideo[];
+  meta: VibixPaginationMeta | null;
+};
+
 type VibixLinksParams = {
   page?: number;
   limit?: number;
@@ -40,6 +52,11 @@ function firstValue(record: Record<string, unknown>, ...keys: string[]) {
     if (record[key] !== undefined && record[key] !== null) return record[key];
   }
   return null;
+}
+
+function numberValue(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normalizeVideo(value: unknown): VibixVideo | null {
@@ -98,6 +115,25 @@ function extractItems(payload: unknown): unknown[] {
   return [];
 }
 
+function extractMeta(payload: unknown): VibixPaginationMeta | null {
+  const record = asRecord(payload);
+  if (!record) return null;
+  const meta = asRecord(record.meta);
+  if (meta) {
+    return {
+      currentPage: numberValue(firstValue(meta, "current_page", "currentPage")),
+      lastPage: numberValue(firstValue(meta, "last_page", "lastPage")),
+      perPage: numberValue(firstValue(meta, "per_page", "perPage")),
+      total: numberValue(firstValue(meta, "total")),
+    };
+  }
+  for (const key of ["data", "result"]) {
+    const nested = extractMeta(record[key]);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 async function vibixRequest(path: string, searchParams?: URLSearchParams) {
   const apiKey = getApiKey();
   if (!apiKey) return null;
@@ -127,10 +163,13 @@ async function vibixRequest(path: string, searchParams?: URLSearchParams) {
 export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
   const query = new URLSearchParams({
     page: String(Math.max(1, params.page ?? 1)),
-    limit: String(Math.max(1, Math.min(params.limit ?? 100, 100))),
+    limit: String(Math.max(1, Math.min(params.limit ?? 100, 200))),
   });
   const payload = await vibixRequest("/links", query);
-  return extractItems(payload).map(normalizeVideo).filter((item): item is VibixVideo => item !== null);
+  return {
+    data: extractItems(payload).map(normalizeVideo).filter((item): item is VibixVideo => item !== null),
+    meta: extractMeta(payload),
+  } satisfies VibixVideoPage;
 }
 
 export async function getVibixVideoByKpId(kpId: string | number) {

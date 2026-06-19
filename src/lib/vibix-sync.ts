@@ -8,12 +8,27 @@ export type VibixSyncResult = {
   updated: number;
   skipped: number;
   errors: number;
+  pagesProcessed: number;
+  totalFromVibix: number;
+  startedAt: string;
+  finishedAt: string;
 };
 
 type SyncOptions = {
+  mode?: "quick" | "all";
   pages?: number;
   limit?: number;
+  maxPages?: number;
 };
+
+const vibixSyncState = globalThis as typeof globalThis & { __redfilmVibixSyncRunning?: boolean };
+
+export class VibixSyncAlreadyRunningError extends Error {
+  constructor() {
+    super("Vibix sync is already running");
+    this.name = "VibixSyncAlreadyRunningError";
+  }
+}
 
 function stringValue(value: unknown) {
   if (value === null || value === undefined) return null;
@@ -141,24 +156,63 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
 }
 
 export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixSyncResult> {
-  const pages = Math.max(1, Math.min(options.pages ?? 5, 20));
-  const limit = Math.max(1, Math.min(options.limit ?? 100, 100));
-  const result: VibixSyncResult = { imported: 0, updated: 0, skipped: 0, errors: 0 };
+  if (vibixSyncState.__redfilmVibixSyncRunning) throw new VibixSyncAlreadyRunningError();
+  vibixSyncState.__redfilmVibixSyncRunning = true;
 
-  for (let page = 1; page <= pages; page += 1) {
-    const videos = await getVibixVideoLinks({ page, limit });
-    if (!videos.length) break;
-    for (const video of videos) {
-      try {
-        const status = await saveVibixVideo(video);
-        result[status] += 1;
-      } catch (error) {
-        result.errors += 1;
-        console.warn("[Vibix] Failed to save video:", error instanceof Error ? error.message : error);
+  const startedAt = new Date().toISOString();
+  const mode = options.mode ?? "quick";
+  const quickPages = Math.max(1, Math.min(options.pages ?? 5, 1000));
+  const limit = Math.max(1, Math.min(options.limit ?? 100, 200));
+  const maxPages = Math.max(1, Math.min(options.maxPages ?? 10_000, 10_000));
+  const result: VibixSyncResult = {
+    imported: 0,
+    updated: 0,
+    skipped: 0,
+    errors: 0,
+    pagesProcessed: 0,
+    totalFromVibix: 0,
+    startedAt,
+    finishedAt: startedAt,
+  };
+  let page = 1;
+  let lastPage: number | null = null;
+  let hasReportedTotal = false;
+
+  try {
+    while (page <= maxPages) {
+      if (mode === "quick" && page > quickPages) break;
+      if (lastPage !== null && page > lastPage) break;
+
+      const response = await getVibixVideoLinks({ page, limit });
+      if (response.meta?.lastPage !== null && response.meta?.lastPage !== undefined) {
+        lastPage = Math.min(Math.max(1, response.meta.lastPage), maxPages);
       }
+      if (response.meta?.total !== null && response.meta?.total !== undefined) {
+        result.totalFromVibix = Math.max(0, response.meta.total);
+        hasReportedTotal = true;
+      }
+      if (!response.data.length) break;
+
+      result.pagesProcessed += 1;
+      if (!hasReportedTotal) result.totalFromVibix += response.data.length;
+
+      for (const video of response.data) {
+        try {
+          const status = await saveVibixVideo(video);
+          result[status] += 1;
+        } catch (error) {
+          result.errors += 1;
+          console.warn("[Vibix] Failed to save video:", error instanceof Error ? error.message : error);
+        }
+      }
+      page += 1;
     }
+
+    result.finishedAt = new Date().toISOString();
+    return result;
+  } finally {
+    vibixSyncState.__redfilmVibixSyncRunning = false;
   }
-  return result;
 }
 
 export async function ensureVibixPlayback(movie: Movie) {
