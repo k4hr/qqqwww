@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Clapperboard, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
 const nav = [
   ["Фильмы", "/movies"],
@@ -32,14 +32,12 @@ function SearchForm({ mobile = false }: { mobile?: boolean }) {
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#050507]/82 shadow-[0_18px_60px_rgba(0,0,0,.38)] backdrop-blur-2xl">
+    <header className="sticky top-0 z-50 border-b border-[#e50914]/25 bg-[rgba(5,5,8,.72)] shadow-[0_18px_60px_rgba(0,0,0,.28)] backdrop-blur-[18px]">
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#e50914]/70 to-transparent" />
       <div className="container flex min-h-[76px] items-center gap-5 py-3">
-        <Link href="/" className="group flex shrink-0 items-center gap-3 text-xl font-black tracking-[-0.04em] text-white">
-          <span className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-[#e50914]/45 bg-black shadow-[0_0_30px_rgba(229,9,20,.34)] max-sm:h-10 max-sm:w-10">
-            <Image src="/redfilm-emblem.png" alt="Эмблема REDFILM" fill className="object-contain transition-transform duration-300 group-hover:scale-105" sizes="48px" priority />
-          </span>
-          <span className="leading-none"><span className="text-[#e50914]">RED</span>FILM</span>
+        <Link href="/" className="brand group">
+          <Image src="/redfilm-emblem.png" alt="REDFILM" width={56} height={56} className="brand-emblem transition-transform duration-300 group-hover:scale-105" priority />
+          <span className="brand-text"><span className="text-[#e50914]">RED</span>FILM</span>
         </Link>
 
         <nav className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-full border border-white/[.07] bg-white/[.035] p-1 text-[13px] font-bold text-[#a1a1aa] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-xl:gap-1">
@@ -50,12 +48,7 @@ export function Header() {
 
         <SearchForm />
       </div>
-      <div className="container pb-3 md:hidden">
-        <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#71717a]">
-          <Clapperboard size={14} className="text-[#e50914]" /> REDFILM
-        </div>
-        <SearchForm mobile />
-      </div>
+      <div className="container pb-3 md:hidden"><SearchForm mobile /></div>
     </header>
   );
 }
