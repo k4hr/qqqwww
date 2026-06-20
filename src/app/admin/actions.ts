@@ -8,6 +8,7 @@ import { slugify } from "@/lib/slug";
 import { getTmdbDetails } from "@/lib/tmdb";
 import { getKinopoiskCollectionIds, getKinopoiskDetails } from "@/lib/kinopoisk";
 import { parseContentType } from "@/lib/content";
+import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
 
 type MovieInput = {
   titleRu: string;
@@ -88,6 +89,7 @@ async function createMovie(input: MovieInput) {
   const slug = await uniqueSlug(input.slug || `${slugify(input.titleRu)}-${input.year}`);
   const genres = uniqueStrings(input.genres);
   const cast = uniqueStrings(input.cast).slice(0, 12);
+  const catalogVisibility = evaluateMovieCatalogVisibility({ country: input.country });
 
   return prisma.movie.create({
     data: {
@@ -101,6 +103,7 @@ async function createMovie(input: MovieInput) {
       backdropUrl: input.backdropUrl || null,
       trailerUrl: input.trailerUrl || null,
       country: input.country || null,
+      ...catalogVisibility,
       director: input.director || null,
       ageRating: input.ageRating || null,
       quality: input.quality || "WEB-DL",

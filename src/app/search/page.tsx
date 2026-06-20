@@ -4,6 +4,7 @@ import { MovieCard } from "@/components/movie-card";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildCountryFilterWhere, normalizeCatalogCountry } from "@/lib/catalog-filters";
 import { CountryFilter } from "@/components/country-filter";
+import { timedMovieQuery } from "@/lib/query-performance";
 
 export const dynamic = "force-dynamic";
 
@@ -16,17 +17,16 @@ export default async function SearchPage({ searchParams }: Props) {
   const searchWhere: Prisma.MovieWhereInput = query ? { OR: [
     { titleRu: { contains: query, mode: "insensitive" } },
     { titleOriginal: { contains: query, mode: "insensitive" } },
-    { description: { contains: query, mode: "insensitive" } },
   ] } : {};
-  const movies = await prisma.movie.findMany({
+  const movies = await timedMovieQuery("search movies", () => prisma.movie.findMany({
         where: { AND: [
           vibixPublicMovieWhere,
           buildCountryFilterWhere(selectedCountry),
           searchWhere,
         ] },
         orderBy: [{ createdAt: "desc" }],
-        take: 60,
-      });
+        take: 30,
+      }));
 
   return (
     <div className="container py-6">

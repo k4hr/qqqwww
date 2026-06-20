@@ -10,6 +10,7 @@ import { getContentTypeLabel, getContentTypePath } from "@/lib/content";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { VibixBanner } from "@/components/vibix-banner";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
+import { timedMovieQuery } from "@/lib/query-performance";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,11 @@ export default async function MoviePage({ params }: Props) {
 
   if (!movie) notFound();
 
-  const related = await prisma.movie.findMany({
+  const related = await timedMovieQuery("movie related", () => prisma.movie.findMany({
     where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id }, type: movie.type }] },
     orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }],
     take: 6
-  });
+  }));
 
   return (
     <div className="container py-5 sm:py-7">

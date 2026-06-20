@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Movie, Prisma } from "@prisma/client";
 
 export const LOW_PRIORITY_COUNTRIES = [
   "Китай",
@@ -77,6 +77,29 @@ export function isLowPriorityCountry(countryText?: string | null) {
   return normalizedLowPriorityCountries.some((country) => normalized.includes(country));
 }
 
+export function extractCountries(countryText?: string | null) {
+  if (!countryText?.trim()) return [];
+  return Array.from(new Set(
+    countryText
+      .split(/[,;/|]+/)
+      .map((country) => country.trim())
+      .filter(Boolean),
+  ));
+}
+
+export function evaluateMovieCatalogVisibility(movie: Pick<Movie, "country"> | { country?: string | null }) {
+  const countryText = movie.country?.trim() ?? "";
+  const normalized = normalizeCountryText(countryText);
+  const blockedCountry = LOW_PRIORITY_COUNTRIES.find((country) => normalized.includes(normalizeCountryText(country)));
+
+  return {
+    isCatalogAllowed: !blockedCountry,
+    catalogBlockReason: blockedCountry ? `country: ${blockedCountry}` : null,
+    normalizedCountries: extractCountries(countryText),
+    catalogCheckedAt: new Date(),
+  };
+}
+
 export function normalizeCatalogCountry(value?: string | null): CatalogCountry {
   return COUNTRY_FILTER_OPTIONS.some((option) => option.value === value)
     ? value as CatalogCountry
@@ -84,12 +107,7 @@ export function normalizeCatalogCountry(value?: string | null): CatalogCountry {
 }
 
 export function buildDefaultCatalogCountryWhere(): Prisma.MovieWhereInput {
-  return {
-    OR: [
-      { country: null },
-      { AND: excludesAliases(LOW_PRIORITY_COUNTRIES) },
-    ],
-  };
+  return { isCatalogAllowed: true };
 }
 
 export function buildCountryFilterWhere(country?: string | null): Prisma.MovieWhereInput {

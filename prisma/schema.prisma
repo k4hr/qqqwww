@@ -47,6 +47,10 @@ model Movie {
   vibixType       String?
   vibixUploadedAt DateTime?
   vibixLastSyncAt DateTime?
+  isCatalogAllowed Boolean        @default(true)
+  catalogBlockReason String?
+  normalizedCountries String[]    @default([])
+  catalogCheckedAt DateTime?
   kpRating        Float?
   imdbRating      Float?
   tmdbRating      Float?
@@ -65,6 +69,13 @@ model Movie {
   @@index([kinopoiskId])
   @@index([imdbId])
   @@index([vibixAvailable, isPublished])
+  @@index([year])
+  @@index([createdAt])
+  @@index([kpRating])
+  @@index([isCatalogAllowed])
+  @@index([isCatalogAllowed, createdAt])
+  @@index([isCatalogAllowed, type, createdAt])
+  @@index([isCatalogAllowed, kpRating])
 }
 
 model Genre {

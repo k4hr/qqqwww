@@ -6,6 +6,7 @@ import { parseSort } from "@/lib/content";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildCountryFilterWhere, normalizeCatalogCountry } from "@/lib/catalog-filters";
 import { CountryFilter } from "@/components/country-filter";
+import { timedMovieQuery } from "@/lib/query-performance";
 
 type Props = {
   title: string;
@@ -28,7 +29,7 @@ function filterHref(sort: string, country?: string, year?: number) {
 
 export async function ListPage({ title, type, year, genreSlug, sort, description, country, showCountryFilter = false }: Props) {
   const selectedCountry = normalizeCatalogCountry(country);
-  const movies = await prisma.movie.findMany({
+  const movies = await timedMovieQuery(`catalog ${type ?? "all"}`, () => prisma.movie.findMany({
     where: {
       AND: [
         vibixPublicMovieWhere,
@@ -41,8 +42,8 @@ export async function ListPage({ title, type, year, genreSlug, sort, description
       ],
     },
     orderBy: parseSort(sort),
-    take: 96,
-  });
+    take: 48,
+  }));
 
   return (
     <div className="container py-6">

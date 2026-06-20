@@ -154,6 +154,14 @@ Service 2: `redfilm-vibix-worker`
 npx prisma db push && npx prisma generate && npm run vibix:worker
 ```
 
+После добавления полей видимости один раз пересчитайте существующий каталог небольшими batch-ами:
+
+```bash
+npm run redfilm:recheck-catalog
+```
+
+Новые и обновляемые записи Vibix классифицируются во время обычной синхронизации. Команда пересчёта не запускает Vibix-запросы и не изменяет состояние full-sync job.
+
 Оба service должны использовать одинаковые переменные:
 
 ```env

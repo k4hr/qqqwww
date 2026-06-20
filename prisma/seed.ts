@@ -1,5 +1,6 @@
 import { PrismaClient, ContentType } from "@prisma/client";
 import { slugify } from "../src/lib/slug";
+import { evaluateMovieCatalogVisibility } from "../src/lib/catalog-filters";
 
 const prisma = new PrismaClient();
 
@@ -123,6 +124,7 @@ const movies = [
 async function main() {
   for (const movie of movies) {
     const slug = `${slugify(movie.titleRu)}-${movie.year}`;
+    const catalogVisibility = evaluateMovieCatalogVisibility({ country: movie.country });
     const createdMovie = await prisma.movie.upsert({
       where: { slug },
       update: {},
@@ -134,6 +136,7 @@ async function main() {
         type: movie.type,
         quality: movie.quality,
         country: movie.country,
+        ...catalogVisibility,
         director: movie.director,
         ageRating: movie.ageRating,
         duration: movie.duration,

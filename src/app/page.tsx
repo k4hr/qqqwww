@@ -7,14 +7,15 @@ import { collectionLinksForYear } from "@/lib/collections";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { VibixBanner } from "@/components/vibix-banner";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
+import { timedMovieQuery } from "@/lib/query-performance";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
   const [movies, series, genres] = await Promise.all([
-    prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { type: ContentType.MOVIE }] }, orderBy: { createdAt: "desc" }, take: 12 }),
-    prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { type: ContentType.SERIES }] }, orderBy: { createdAt: "desc" }, take: 12 }),
+    timedMovieQuery("home movies", () => prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { type: ContentType.MOVIE }] }, orderBy: { createdAt: "desc" }, take: 12 })),
+    timedMovieQuery("home series", () => prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { type: ContentType.SERIES }] }, orderBy: { createdAt: "desc" }, take: 12 })),
     prisma.genre.findMany({ orderBy: { name: "asc" }, take: 18 }),
   ]);
 

@@ -10,7 +10,8 @@
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "vibix:worker": "tsx src/scripts/vibix-sync-worker.ts"
+    "vibix:worker": "tsx src/scripts/vibix-sync-worker.ts",
+    "redfilm:recheck-catalog": "tsx scripts/recheck-movie-catalog-visibility.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

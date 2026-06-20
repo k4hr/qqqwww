@@ -7,6 +7,7 @@ import { similarIntro, sortSimilarMovies } from "@/lib/similar";
 import { getContentTypePath, getContentTypeLabel } from "@/lib/content";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
+import { timedMovieQuery } from "@/lib/query-performance";
 
 export const dynamic = "force-dynamic";
 
@@ -36,22 +37,30 @@ export default async function SimilarPage({ params }: Props) {
 
   if (!movie) notFound();
 
-  const candidates = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id } }] },
+  const genreIds = movie.genres.map((item) => item.genreId);
+  const candidates = await timedMovieQuery("similar candidates", () => prisma.movie.findMany({
+    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), {
+      id: { not: movie.id },
+      OR: [
+        { type: movie.type },
+        { year: { gte: movie.year - 5, lte: movie.year + 5 } },
+        ...(genreIds.length ? [{ genres: { some: { genreId: { in: genreIds } } } }] : []),
+      ],
+    }] },
     include: {
       genres: { include: { genre: true } },
       cast: { include: { person: true }, orderBy: { sortOrder: "asc" } },
     },
-    take: 1200,
-  });
+    take: 100,
+  }));
 
   const similar = sortSimilarMovies(movie, candidates, 10);
   const fallback = similar.length < 10
-    ? await prisma.movie.findMany({
+    ? await timedMovieQuery("similar fallback", () => prisma.movie.findMany({
         where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id }, type: movie.type }] },
         orderBy: [{ kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
         take: 10 - similar.length,
-      })
+      }))
     : [];
 
   return (

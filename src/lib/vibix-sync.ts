@@ -1,6 +1,7 @@
 import { ContentType, type Movie } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
+import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
 import {
   getVibixVideoByImdbId,
   getVibixVideoByImdbIdResult,
@@ -332,6 +333,7 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
   const syncedAt = new Date();
 
   if (existing) {
+    const catalogVisibility = evaluateMovieCatalogVisibility({ country: data.country || existing.country });
     await prisma.movie.update({
       where: { id: existing.id },
       data: {
@@ -345,6 +347,7 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
         quality: data.quality,
         duration: data.duration || undefined,
         country: data.country || undefined,
+        ...catalogVisibility,
         kinopoiskId: data.kinopoiskId || undefined,
         imdbId: data.imdbId || undefined,
         kpRating: data.kpRating ?? undefined,
@@ -362,6 +365,7 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
     return { status: "updated" as const };
   }
 
+  const catalogVisibility = evaluateMovieCatalogVisibility({ country: data.country });
   await prisma.movie.create({
     data: {
       slug: await uniqueSlug(data.title, data.year),
@@ -375,6 +379,7 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
       quality: data.quality,
       duration: data.duration,
       country: data.country,
+      ...catalogVisibility,
       kinopoiskId: data.kinopoiskId,
       imdbId: data.imdbId,
       kpRating: data.kpRating,
