@@ -22,6 +22,8 @@ export function Footer() {
           <Link className="hover:text-white" href="/series">Сериалы</Link>
           <Link className="hover:text-white" href="/latest">Последнее</Link>
           <Link className="hover:text-white" href="/top">ТОП</Link>
+          <Link className="hover:text-white" href="/favorites">Избранное</Link>
+          <Link className="hover:text-white" href="/history">Недавно смотрели</Link>
         </div>
         <div className="text-sm text-[#71717a] md:text-right">
           <p>© {new Date().getFullYear()} REDFILM</p>

@@ -10,6 +10,7 @@ export function SearchAutocomplete({ mobile = false }: { mobile?: boolean }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,8 +26,11 @@ export function SearchAutocomplete({ mobile = false }: { mobile?: boolean }) {
     if (normalized.length < 2) {
       setResults([]);
       setOpen(false);
+      setLoading(false);
       return;
     }
+    setLoading(true);
+    setOpen(true);
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
@@ -37,6 +41,8 @@ export function SearchAutocomplete({ mobile = false }: { mobile?: boolean }) {
         setOpen(true);
       } catch {
         // Suggestions are optional and must never block search.
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
       }
     }, 320);
     return () => {
@@ -54,8 +60,8 @@ export function SearchAutocomplete({ mobile = false }: { mobile?: boolean }) {
       <input name="q" value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => results.length && setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }} autoComplete="off" aria-label="Поиск по сайту" placeholder="Поиск по сайту..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#71717a]" />
       <Search size={18} className="shrink-0 text-[#e50914]" />
     </form>
-    {open && results.length ? <div className="absolute inset-x-0 top-[calc(100%+8px)] z-[90] max-h-[min(420px,60vh)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0b0b0f]/[.98] p-2 shadow-[0_24px_70px_rgba(0,0,0,.75)] backdrop-blur-xl">
-      {results.map((movie) => <Link key={movie.id} href={movie.href} onClick={() => setOpen(false)} className="grid min-h-14 grid-cols-[38px_minmax(0,1fr)] items-center gap-3 rounded-xl p-2 transition hover:bg-white/[.07]">
+    {open && (loading || results.length > 0) ? <div className="absolute inset-x-0 top-[calc(100%+8px)] z-[90] max-h-[min(420px,60vh)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0b0b0f]/[.98] p-2 shadow-[0_24px_70px_rgba(0,0,0,.75)] backdrop-blur-xl">
+      {loading ? Array.from({ length: 3 }, (_, index) => <div key={index} className="grid min-h-14 grid-cols-[38px_minmax(0,1fr)] items-center gap-3 p-2"><div className="skeleton h-12 rounded-md" /><div className="space-y-2"><div className="skeleton h-3 w-4/5 rounded" /><div className="skeleton h-3 w-2/5 rounded" /></div></div>) : results.map((movie) => <Link key={movie.id} href={movie.href} onClick={() => setOpen(false)} className="grid min-h-14 grid-cols-[38px_minmax(0,1fr)] items-center gap-3 rounded-xl p-2 transition hover:bg-white/[.07]">
         <div className="relative h-12 overflow-hidden rounded-md bg-[#18181f]">{movie.posterUrl ? <img src={movie.posterUrl} alt="" className="h-full w-full object-cover" /> : null}</div>
         <div className="min-w-0"><div className="truncate text-sm font-bold text-white">{movie.title}</div><div className="mt-1 text-xs text-[#8d8d97]">{movie.year} · {movie.type === "SERIES" ? "Сериал" : "Фильм"}</div></div>
       </Link>)}

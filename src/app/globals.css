@@ -280,6 +280,31 @@ button, input, select, textarea { font: inherit; }
 
 .rating-kp { color: #ff6b35; font-weight: 800; }
 .rating-imdb { color: #facc15; font-weight: 800; }
+.card-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 999px;
+  background: rgba(0,0,0,.25);
+  padding: 4px 8px;
+  color: #d4d4d8;
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #17171e;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent);
+  animation: skeleton-shimmer 1.4s infinite;
+}
+@keyframes skeleton-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .skeleton::after { animation: none; } }
 .text-muted { color: var(--muted); }
 
 .mobile-menu-link {

@@ -75,12 +75,12 @@ export function Header() {
       <nav className="hidden items-center gap-1 min-[900px]:flex" aria-label="Основная навигация">
         <DesktopCatalogMenu label="Фильмы" base="/movies" kind="movies" open={openMenu === "movies"} setOpen={(value) => setOpenMenu(value ? "movies" : null)} />
         <DesktopCatalogMenu label="Сериалы" base="/series" kind="series" open={openMenu === "series"} setOpen={(value) => setOpenMenu(value ? "series" : null)} />
-        <MenuLink href="/latest">Новинки</MenuLink><MenuLink href="/top">Популярное</MenuLink><MenuLink href="/collections">Подборки</MenuLink>
+        <MenuLink href="/latest">Новинки</MenuLink><MenuLink href="/top">Популярное</MenuLink><MenuLink href="/collections">Подборки</MenuLink><span className="hidden min-[1180px]:contents"><MenuLink href="/favorites">Избранное</MenuLink></span>
       </nav>
       <SearchAutocomplete />
       <button type="button" aria-label={mobileOpen ? "Закрыть меню" : "Открыть меню"} aria-expanded={mobileOpen} aria-controls="mobile-navigation" onClick={() => setMobileOpen(!mobileOpen)} className="ml-auto flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[.05] text-white min-[900px]:hidden">{mobileOpen ? <X /> : <Menu />}</button>
     </div>
     <div className="container pb-2.5 min-[900px]:hidden"><SearchAutocomplete mobile /></div>
-    {mobileOpen ? <div id="mobile-navigation" className="container max-h-[calc(100svh-116px)] overflow-y-auto border-t border-white/10 bg-[rgba(5,5,8,.98)] pb-5 min-[900px]:hidden"><MobileAccordion label="Фильмы" base="/movies" kind="movies" close={closeMobile} /><MobileAccordion label="Сериалы" base="/series" kind="series" close={closeMobile} /><div className="grid grid-cols-2 gap-2 pt-4"><Link onClick={closeMobile} className="mobile-menu-link" href="/latest">Новинки</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/top">Популярное</Link><Link onClick={closeMobile} className="mobile-menu-link col-span-2" href="/collections">Подборки</Link></div></div> : null}
+    {mobileOpen ? <div id="mobile-navigation" className="container max-h-[calc(100svh-116px)] overflow-y-auto border-t border-white/10 bg-[rgba(5,5,8,.98)] pb-5 min-[900px]:hidden"><MobileAccordion label="Фильмы" base="/movies" kind="movies" close={closeMobile} /><MobileAccordion label="Сериалы" base="/series" kind="series" close={closeMobile} /><div className="grid grid-cols-2 gap-2 pt-4"><Link onClick={closeMobile} className="mobile-menu-link" href="/latest">Новинки</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/top">Популярное</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/favorites">Избранное</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/history">Недавно смотрели</Link><Link onClick={closeMobile} className="mobile-menu-link col-span-2" href="/collections">Подборки</Link></div></div> : null}
   </header>;
 }

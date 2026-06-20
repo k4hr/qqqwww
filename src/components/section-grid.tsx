@@ -6,7 +6,7 @@ import { MovieCard } from "./movie-card";
 type Props = {
   title: string;
   href: string;
-  movies: Pick<Movie, "id" | "slug" | "titleRu" | "year" | "posterUrl" | "quality" | "kpRating" | "imdbRating">[];
+  movies: Pick<Movie, "id" | "slug" | "titleRu" | "year" | "type" | "posterUrl" | "quality" | "kpRating" | "imdbRating">[];
   showSorts?: boolean;
   mobileCarousel?: boolean;
 };

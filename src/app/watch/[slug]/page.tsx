@@ -8,9 +8,10 @@ import { MovieCard } from "@/components/movie-card";
 import { PlayerBlock } from "@/components/player-block";
 import { VibixBanner } from "@/components/vibix-banner";
 import { AnalyticsEvent } from "@/components/analytics-event";
+import { WatchClientActions } from "@/components/watch-client-actions";
 import { extractCountries } from "@/lib/catalog-filters";
 import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
-import { countryPath, genrePath, personPath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
+import { countryPath, genrePath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
 
 export const dynamic = "force-dynamic";
 
@@ -94,17 +95,12 @@ export default async function WatchPage({ params }: Props) {
               <Fact label="Страна">{countries[0] ? <Link href={countryPath(countries[0])}>{countries[0]}</Link> : "—"}</Fact>
               <Fact label="Жанр">{movie.genres[0] ? <Link href={genrePath(movie.genres[0].genre)}>{movie.genres[0].genre.name}</Link> : "—"}</Fact>
             </dl>
+            <WatchClientActions movie={{ id: movie.id, slug: movie.slug, title: movie.titleRu, year: movie.year, posterUrl: movie.posterUrl, type: movie.type, kpRating: movie.kpRating, imdbRating: movie.imdbRating }} />
           </div>
         </div>
       </article>
 
       <PlayerBlock movie={movie} />
-
-      <section id="description" className="mf-panel mt-6 scroll-mt-24 p-5 sm:p-6">
-        <h2 className="text-2xl font-black text-white">О фильме</h2>
-        <p className="mt-4 max-w-5xl leading-relaxed text-[#b7b7c0]">{description}</p>
-        {movie.cast.length ? <p className="mt-4 text-sm text-[#a1a1aa]"><b className="text-white">В ролях:</b> {movie.cast.slice(0, 8).map((item, index) => <span key={item.personId}>{index ? ", " : ""}<Link href={personPath(item.person.nameRu)} className="hover:text-[#ff4d55]">{item.person.nameRu}</Link></span>)}</p> : null}
-      </section>
 
       <section className="mt-8">
         <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">Похожие фильмы</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>
