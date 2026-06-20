@@ -5,11 +5,16 @@ import { Film } from "lucide-react";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/json-ld";
 import { MovieCard } from "@/components/movie-card";
+import { SectionGrid } from "@/components/section-grid";
 import { PlayerBlock } from "@/components/player-block";
 import { VibixBanner } from "@/components/vibix-banner";
 import { AnalyticsEvent } from "@/components/analytics-event";
 import { WatchClientActions } from "@/components/watch-client-actions";
-import { extractCountries } from "@/lib/catalog-filters";
+import { buildDefaultCatalogCountryWhere, extractCountries } from "@/lib/catalog-filters";
+import { prisma } from "@/lib/prisma";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
+import { getPopularMovies, getRecentPopularityStats } from "@/lib/popularity";
+import { takeUniqueMovies } from "@/lib/recommendation-dedupe";
 import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
 import { countryPath, genrePath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
 
@@ -47,8 +52,28 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function WatchPage({ params }: Props) {
   const movie = await getSeoMovieBySlug((await params).slug);
   if (!movie) notFound();
-  const similar = await findSimilarSeoMovies(movie, 6);
   const countries = extractCountries(movie.country);
+  const primaryGenre = movie.genres[0]?.genre;
+  const recommendationWhere = [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id } }];
+  const [similarCandidates, genreCandidates, yearCandidates, countryCandidates, popularityStats] = await Promise.all([
+    findSimilarSeoMovies(movie, 12),
+    primaryGenre ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { genres: { some: { genreId: movie.genres[0].genreId } } }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 80 }) : Promise.resolve([]),
+    prisma.movie.findMany({ where: { AND: [...recommendationWhere, { year: movie.year }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 60 }),
+    countries[0] ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { country: { contains: countries[0], mode: "insensitive" } }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 60 }) : Promise.resolve([]),
+    getRecentPopularityStats(7),
+  ]);
+  const excluded = new Set([movie.id]);
+  const selectBlock = <T extends { id: string }>(items: T[], count = 6) => {
+    const selected = takeUniqueMovies(items, count, excluded);
+    if (selected.length < 4) return [];
+    selected.forEach((item) => excluded.add(item.id));
+    return selected;
+  };
+  const similar = selectBlock(similarCandidates);
+  const watchedTogether = selectBlock(getPopularMovies(genreCandidates, popularityStats, 20));
+  const moreInGenre = selectBlock(genreCandidates);
+  const sameYear = selectBlock(yearCandidates);
+  const sameCountry = sameYear.length ? [] : selectBlock(countryCandidates);
   const description = movie.description.trim() || "Описание скоро появится";
   const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
 
@@ -106,6 +131,10 @@ export default async function WatchPage({ params }: Props) {
         <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">Похожие фильмы</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>
         {similar.length ? <div className="movie-grid">{similar.map((item) => <MovieCard key={item.id} movie={item} />)}</div> : <div className="mf-panel p-5 text-[#a1a1aa]">Похожие фильмы скоро появятся.</div>}
       </section>
+      {watchedTogether.length ? <SectionGrid title="С этим фильмом смотрят" href={primaryGenre ? genrePath(primaryGenre) : "/top"} movies={watchedTogether} showSorts={false} mobileCarousel /> : null}
+      {moreInGenre.length && primaryGenre ? <SectionGrid title={`Ещё в жанре ${primaryGenre.name}`} href={genrePath(primaryGenre)} movies={moreInGenre} showSorts={false} mobileCarousel /> : null}
+      {sameYear.length ? <SectionGrid title={`Фильмы ${movie.year} года`} href={yearPath(movie)} movies={sameYear} showSorts={false} mobileCarousel /> : null}
+      {sameCountry.length && countries[0] ? <SectionGrid title={`Фильмы ${countries[0]}`} href={countryPath(countries[0])} movies={sameCountry} showSorts={false} mobileCarousel /> : null}
       <VibixBanner size="680x200" />
     </div>
   );

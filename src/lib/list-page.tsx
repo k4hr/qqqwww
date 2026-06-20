@@ -18,7 +18,7 @@ type Props = {
   genreSlug?: string;
   filterGenreSlug?: string;
   sort?: string;
-  description?: string;
+  description?: string | string[];
   country?: string;
   showCountryFilter?: boolean;
   showTypeFilter?: boolean;
@@ -75,7 +75,7 @@ export async function ListPage({ title, type, year, yearFilter, genreSlug, filte
       <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: title, mainEntity: { "@type": "ItemList", itemListElement: movies.map((movie, index) => ({ "@type": "ListItem", position: (safePage - 1) * 48 + index + 1, name: movie.titleRu, url: siteUrl(watchPath(movie)), image: movie.posterUrl || undefined })) } }} />
       <div className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
         <h1 className="text-[clamp(1.75rem,5vw,3.5rem)] font-black tracking-[-.035em] text-white">{title}</h1>
-        {description ? <p className="mt-3 max-w-4xl leading-relaxed text-[#a9a9b2]">{description}</p> : null}
+        {description ? (Array.isArray(description) ? description : [description]).map((text) => <p key={text} className="mt-3 max-w-4xl leading-relaxed text-[#a9a9b2]">{text}</p>) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
           <FilterLink href={filterHref({ sort: "new", country: selectedCountry, year: yearParam, type: typeParam, genre: selectedGenre })} label="Новинки" active={!sort || sort === "new" || sort === "latest"} />
