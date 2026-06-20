@@ -41,7 +41,7 @@ export default async function MoviePage({ params }: Props) {
 
   return (
     <div className="container py-5 sm:py-7">
-      <div className="mb-5 flex flex-wrap items-center gap-2 text-xs text-[#71717a] sm:text-sm">
+      <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2 break-words text-xs text-[#71717a] sm:text-sm">
         <Link className="hover:text-white" href="/">REDFILM</Link><span>/</span>
         <Link className="hover:text-white" href={getContentTypePath(movie.type)}>{getContentTypeLabel(movie.type)}</Link><span>/</span>
         <span className="text-[#a1a1aa]">{movie.titleRu}</span>
@@ -53,7 +53,7 @@ export default async function MoviePage({ params }: Props) {
 
         <div className="relative grid gap-7 md:grid-cols-[230px_1fr] lg:gap-10">
           <div>
-            <div className="poster-fallback relative aspect-[2/3] overflow-hidden rounded-[24px] border border-white/10 shadow-2xl">
+            <div className="poster-fallback relative mx-auto aspect-[2/3] w-full max-w-[230px] overflow-hidden rounded-[24px] border border-white/10 shadow-2xl">
               {movie.posterUrl ? (
                 <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="230px" unoptimized priority />
               ) : (
@@ -77,7 +77,7 @@ export default async function MoviePage({ params }: Props) {
               <span className="mf-badge">{getContentTypeLabel(movie.type)}</span>
               {movie.ageRating ? <span className="mf-pill min-h-[25px] px-2.5 text-[11px]">{movie.ageRating}</span> : null}
             </div>
-            <h1 className="text-3xl font-black leading-tight tracking-[-0.035em] text-white sm:text-4xl">{movie.titleRu} <span className="font-medium text-[#71717a]">({movie.year})</span></h1>
+            <h1 className="break-words text-[clamp(1.75rem,6vw,2.5rem)] font-black leading-tight tracking-[-0.035em] text-white">{movie.titleRu} <span className="font-medium text-[#71717a]">({movie.year})</span></h1>
             {movie.titleOriginal ? <div className="mt-2 text-sm text-[#8b8b95]">{movie.titleOriginal}</div> : null}
             <p className="mt-5 max-w-4xl leading-relaxed text-[#b3b3bd]">{movie.description}</p>
 
@@ -113,7 +113,7 @@ export default async function MoviePage({ params }: Props) {
       <section className="mt-8">
         <h2 className="mb-5 flex items-center gap-3 text-2xl font-black text-white"><span className="h-7 w-1 rounded-full bg-[#e50914]" />Смотрите также</h2>
         {related.length ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6 lg:gap-4">{related.map((item) => <MovieCard key={item.slug} movie={item} />)}</div>
+          <div className="movie-grid">{related.map((item) => <MovieCard key={item.slug} movie={item} />)}</div>
         ) : (
           <div className="mf-panel p-8 text-center text-sm text-[#a1a1aa]">Похожие карточки пока не найдены.</div>
         )}

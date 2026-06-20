@@ -84,13 +84,13 @@ export function VibixSyncJobPanel({ initialJob, configured }: Props) {
     <section className="admin-panel mt-5 p-5">
       <h2 className="text-xl font-bold text-[#222]">Полная фоновая синхронизация</h2>
       <p className="mt-1 text-sm text-neutral-500">Кнопка создаёт задачу в PostgreSQL. Отдельный worker продолжает её до конца и возобновляет после перезапуска.</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+      <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <select value={contentType} onChange={(event) => setContentType(event.target.value)} className="h-12 rounded-xl border border-[#ddd] bg-white px-4 text-[#222]">
           <option value="movie">Фильмы</option>
           <option value="serial">Сериалы</option>
           <option value="both">Фильмы + сериалы</option>
         </select>
-        <button type="button" onClick={start} disabled={!configured || busy || Boolean(job && ["QUEUED", "RUNNING"].includes(job.status))} className="min-h-12 rounded-xl bg-[#e50914] px-5 font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400">Запустить полную синхронизацию всей базы Vibix</button>
+        <button type="button" onClick={start} disabled={!configured || busy || Boolean(job && ["QUEUED", "RUNNING"].includes(job.status))} className="min-h-12 break-words rounded-xl bg-[#e50914] px-5 font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400 max-sm:w-full">Запустить полную синхронизацию всей базы Vibix</button>
       </div>
       {message ? <div className="mt-3 rounded-lg bg-[#f5f5f5] px-4 py-3 text-sm font-bold text-[#333]">{message}</div> : null}
 
@@ -105,8 +105,8 @@ export function VibixSyncJobPanel({ initialJob, configured }: Props) {
             <Metric label="Всего" value={job.total} /><Metric label="Импортировано" value={job.imported} /><Metric label="Обновлено" value={job.updated} /><Metric label="Пропущено" value={job.skipped} />
             <Metric label="Ошибок" value={job.errors} /><Metric label="Плеер embed" value={job.playerByEmbed} /><Metric label="Плеер iframe" value={job.playerByIframe} /><Metric label="Последнее обновление" value={formatDate(job.updatedAt)} />
           </div>
-          {job.lastError ? <pre className="mt-4 max-h-44 overflow-auto whitespace-pre-wrap rounded-xl bg-red-50 p-4 text-xs text-red-800">{job.lastError}</pre> : null}
-          <div className="mt-4 flex flex-wrap gap-2">
+          {job.lastError ? <pre className="mt-4 max-h-44 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-xl bg-red-50 p-4 text-xs text-red-800">{job.lastError}</pre> : null}
+          <div className="mt-4 flex flex-wrap gap-2 max-sm:[&>button]:flex-1">
             <button type="button" onClick={() => action("pause")} disabled={busy || !["QUEUED", "RUNNING"].includes(job.status)} className="rounded-lg border border-[#ddd] px-4 py-2 text-sm font-bold disabled:opacity-40">Пауза</button>
             <button type="button" onClick={() => action("resume")} disabled={busy || !["PAUSED", "FAILED"].includes(job.status)} className="rounded-lg border border-[#ddd] px-4 py-2 text-sm font-bold disabled:opacity-40">Продолжить</button>
             <button type="button" onClick={() => action("cancel")} disabled={busy || ["DONE", "CANCELED"].includes(job.status)} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-bold text-red-700 disabled:opacity-40">Отменить</button>

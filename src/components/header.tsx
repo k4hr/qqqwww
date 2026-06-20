@@ -36,10 +36,10 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-[#e50914]/25 bg-[rgba(5,5,8,.72)] shadow-[0_18px_60px_rgba(0,0,0,.28)] backdrop-blur-[18px]">
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#e50914]/70 to-transparent" />
 
-      <div className="container flex min-h-[76px] items-center gap-5 py-3">
+      <div className="container flex min-h-[76px] items-center gap-5 py-3 max-md:flex-wrap max-md:gap-3">
         <Link
           href="/"
-          className="group flex min-w-max items-center text-[28px] font-black tracking-[-0.06em] text-white transition-transform duration-300 hover:scale-[1.02] max-md:text-[24px]"
+          className="group flex min-w-0 shrink-0 items-center text-[clamp(22px,6vw,28px)] font-black tracking-[-0.06em] text-white transition-transform duration-300 hover:scale-[1.02]"
           aria-label="REDFILM"
         >
           <span className="text-[#e50914] drop-shadow-[0_0_18px_rgba(229,9,20,.55)]">
@@ -50,11 +50,11 @@ export function Header() {
           </span>
         </Link>
 
-        <nav className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-full border border-white/[.07] bg-white/[.035] p-1 text-[13px] font-bold text-[#a1a1aa] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-xl:gap-1">
+        <nav className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-full border border-white/[.07] bg-white/[.035] p-1 text-[13px] font-bold text-[#a1a1aa] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-md:order-3 max-md:w-full max-xl:gap-1">
           {nav.map(([label, href]) => (
             <Link
               key={href}
-              className="whitespace-nowrap rounded-full px-3.5 py-2 transition-all hover:bg-white/[.07] hover:text-white"
+              className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3.5 py-2 transition-all hover:bg-white/[.07] hover:text-white"
               href={href}
             >
               {label}

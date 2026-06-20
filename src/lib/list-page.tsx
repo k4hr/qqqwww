@@ -29,7 +29,7 @@ export async function ListPage({ title, type, year, genreSlug, sort, description
   return (
     <div className="container py-6">
       <div className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
-        <h1 className="text-3xl font-black tracking-[-.035em] text-white">{title}</h1>
+        <h1 className="text-[clamp(1.75rem,5vw,3.5rem)] font-black tracking-[-.035em] text-white">{title}</h1>
         {description ? <p className="mt-3 max-w-4xl leading-relaxed text-[#a9a9b2]">{description}</p> : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
@@ -41,7 +41,7 @@ export async function ListPage({ title, type, year, genreSlug, sort, description
       </div>
 
       {movies.length ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div className="movie-grid">
           {movies.map((movie) => (
             <MovieCard key={movie.slug} movie={movie} />
           ))}

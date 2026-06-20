@@ -55,18 +55,18 @@ export default async function SimilarPage({ params }: Props) {
 
   return (
     <div className="container py-5">
-      <div className="mb-5 text-sm text-[#777781]">
+      <div className="mb-5 break-words text-sm text-[#777781]">
         <Link href="/">REDFILM</Link> » <Link href={getContentTypePath(movie.type)}>{getContentTypeLabel(movie.type)}</Link> » <Link href={`/movie/${movie.slug}`}>{movie.titleRu}</Link> » похожие фильмы
       </div>
 
       <section className="glass-panel section-glow mb-6 rounded-[26px] p-5 md:p-6">
-        <div className="grid md:grid-cols-[150px_1fr] gap-5">
-          <Link href={`/movie/${movie.slug}`} className="poster-fallback relative block aspect-[2/3] overflow-hidden rounded-2xl border border-white/10">
+        <div className="grid gap-5 md:grid-cols-[150px_1fr]">
+          <Link href={`/movie/${movie.slug}`} className="poster-fallback relative block aspect-[2/3] w-32 overflow-hidden rounded-2xl border border-white/10 md:w-auto">
             {movie.posterUrl ? <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="150px" unoptimized /> : null}
           </Link>
 
           <div>
-            <h1 className="mb-3 text-2xl font-black tracking-[-.03em] text-white md:text-3xl">
+            <h1 className="mb-3 break-words text-[clamp(1.5rem,5vw,2.25rem)] font-black tracking-[-.03em] text-white">
               Фильмы похожие на {movie.titleRu}
             </h1>
             <p className="mb-4 max-w-4xl leading-relaxed text-[#a9a9b2]">{similarIntro(movie)}</p>
@@ -87,12 +87,12 @@ export default async function SimilarPage({ params }: Props) {
         {similar.length ? (
           <div className="space-y-4">
             {similar.map((item, index) => (
-              <article key={item.id} className="grid gap-4 border-b border-white/10 pb-4 last:border-b-0 last:pb-0 md:grid-cols-[84px_1fr]">
-                <Link href={`/movie/${item.slug}`} className="poster-fallback relative aspect-[2/3] w-[84px] overflow-hidden rounded-xl border border-white/10">
+              <article key={item.id} className="grid min-w-0 grid-cols-[72px_minmax(0,1fr)] gap-3 border-b border-white/10 pb-4 last:border-b-0 last:pb-0 sm:grid-cols-[84px_minmax(0,1fr)] sm:gap-4">
+                <Link href={`/movie/${item.slug}`} className="poster-fallback relative aspect-[2/3] w-[72px] overflow-hidden rounded-xl border border-white/10 sm:w-[84px]">
                   {item.posterUrl ? <Image src={item.posterUrl} alt={item.titleRu} fill className="object-cover" sizes="84px" unoptimized /> : null}
                 </Link>
-                <div>
-                  <h3 className="text-lg font-bold text-white">
+                <div className="min-w-0">
+                  <h3 className="break-words text-base font-bold text-white sm:text-lg">
                     {index + 1}. <Link href={`/movie/${item.slug}`} className="hover:text-[#e50914]">{item.titleRu} ({item.year})</Link>
                   </h3>
                   {item.titleOriginal ? <div className="mt-1 text-sm text-[#777781]">{item.titleOriginal}</div> : null}
@@ -116,7 +116,7 @@ export default async function SimilarPage({ params }: Props) {
       {fallback.length ? (
         <section className="mt-8">
           <h2 className="mb-4 text-xl font-black text-white">Ещё можно посмотреть</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-3">
+          <div className="movie-grid">
             {fallback.map((item) => <MovieCard key={item.slug} movie={item} />)}
           </div>
         </section>

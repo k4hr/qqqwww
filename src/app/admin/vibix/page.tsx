@@ -59,7 +59,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
   return (
     <div className="container admin-shell py-6">
       <Link href="/admin" className="text-sm text-neutral-500 hover:text-[#e50914]">← Назад в админку</Link>
-      <h1 className="mt-3 text-3xl font-bold text-[#222]">Синхронизация Vibix</h1>
+      <h1 className="mt-3 break-words text-[clamp(1.75rem,6vw,2.5rem)] font-bold text-[#222]">Синхронизация Vibix</h1>
       <p className="mt-2 max-w-3xl text-neutral-600">Импортирует реальные карточки и ссылки на плеер Vibix по Kinopoisk или IMDb ID.</p>
 
       <div className="admin-panel mt-6 p-5">
@@ -139,7 +139,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
       ) : null}
 
       <div className="mt-5 grid gap-5">
-        <form action={syncVibixQuickAction} className="admin-panel grid gap-4 p-5 sm:grid-cols-2">
+        <form action={syncVibixQuickAction} className="admin-panel grid min-w-0 gap-4 p-5 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <h2 className="text-xl font-bold text-[#222]">Быстрая синхронизация</h2>
             <p className="mt-1 text-sm text-neutral-500">Безопасный тест: начните с одной страницы по 10–20 записей.</p>

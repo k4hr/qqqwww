@@ -21,7 +21,7 @@ export default async function AdminPage() {
           <h1 className="text-3xl font-bold text-[#222]">Админка REDFILM</h1>
           <p className="text-neutral-600 mt-1">Управление карточками, импортом и будущим подключением плеера.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 max-sm:[&>a]:w-full max-sm:[&>a]:justify-center">
           <Link href="/admin/new" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">Добавить вручную</Link>
           <Link href="/admin/import" className="bg-[#333] text-white font-bold px-5 py-3 rounded-sm">Импорт</Link>
           <Link href="/admin/bulk" className="bg-[#c9a86a] text-[#0b1020] font-bold px-5 py-3 rounded-sm">Массовый импорт</Link>
@@ -29,7 +29,7 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-4 mb-6">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat title="Всего карточек" value={total} />
         <Stat title="Опубликовано" value={published} />
         <Stat title="Доступно в Vibix" value={withVibix} />

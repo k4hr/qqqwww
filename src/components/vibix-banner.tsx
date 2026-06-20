@@ -5,8 +5,8 @@ export type VibixBannerSize = typeof bannerSizes[number];
 export function VibixBanner({ size }: { size: VibixBannerSize }) {
   const wide = size.startsWith("680") || size.startsWith("728");
   return (
-    <aside className={`${wide ? "hidden md:flex" : "flex"} glass-panel section-glow my-7 min-h-[110px] items-center justify-center overflow-hidden rounded-3xl p-3`} aria-label="Реклама">
-      <ins data-pm-b={size} className="block max-w-full" />
+    <aside className={`${wide ? "hidden md:flex" : "flex"} glass-panel section-glow my-7 w-full max-w-full min-w-0 items-center justify-center overflow-hidden rounded-3xl p-3 md:min-h-[110px]`} aria-label="Реклама">
+      <ins data-pm-b={size} className="block h-auto max-w-full overflow-hidden" />
     </aside>
   );
 }

@@ -30,7 +30,7 @@ export default async function WatchPage({ params }: Props) {
 
   return (
     <div className="container py-5 sm:py-7">
-      <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-[#7d7d87]">
+      <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2 break-words text-sm text-[#7d7d87]">
         <Link href="/" className="hover:text-white">REDFILM</Link><span>/</span>
         <Link href={`/movie/${movie.slug}`} className="hover:text-white">{movie.titleRu}</Link><span>/</span>
         <span className="text-[#b5b5bd]">Просмотр</span>
@@ -45,7 +45,7 @@ export default async function WatchPage({ params }: Props) {
           </div>
           <div>
             <span className="mf-badge">{movie.quality || "HD"}</span>
-            <h1 className="mt-3 text-2xl font-black tracking-[-.03em] text-white sm:text-4xl">{movie.titleRu} <span className="font-medium text-[#777781]">({movie.year})</span></h1>
+            <h1 className="mt-3 break-words text-[clamp(1.5rem,6vw,2.5rem)] font-black tracking-[-.03em] text-white">{movie.titleRu} <span className="font-medium text-[#777781]">({movie.year})</span></h1>
             <p className="line-clamp-2 mt-3 max-w-3xl text-sm leading-relaxed text-[#b9b9c0]">{movie.description}</p>
             <Link href={`/movie/${movie.slug}`} className="mt-4 inline-flex text-sm font-bold text-[#ff4d55] hover:text-white">Описание и подробности</Link>
           </div>
