@@ -1,6 +1,11 @@
 import type { Movie } from "@prisma/client";
+import { getMovieFreshnessTimestamp } from "@/lib/date-utils";
 
-type RankableMovie = Pick<Movie, "kpRating" | "imdbRating" | "quality" | "posterUrl" | "backdropUrl" | "year" | "createdAt" | "vibixUploadedAt">;
+type RankableMovie = Pick<Movie, "kpRating" | "imdbRating" | "quality" | "posterUrl" | "backdropUrl" | "year"> & {
+  createdAt?: Date | string | null;
+  vibixUploadedAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
 
 export function getMoviePopularityScore(movie: RankableMovie) {
   let score = (movie.kpRating ?? 0) * 10 + (movie.imdbRating ?? 0) * 10;
@@ -14,7 +19,7 @@ export function getMoviePopularityScore(movie: RankableMovie) {
 }
 
 export function getMovieFreshnessScore(movie: RankableMovie) {
-  const timestamp = (movie.vibixUploadedAt ?? movie.createdAt).getTime();
+  const timestamp = getMovieFreshnessTimestamp(movie);
   return timestamp / 86_400_000 + (movie.year >= 2024 ? 10 : 0) + (movie.posterUrl ? 2 : 0);
 }
 

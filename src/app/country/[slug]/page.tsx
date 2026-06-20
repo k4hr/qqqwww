@@ -7,6 +7,7 @@ import { countryPageWhere, getCountryPage } from "@/lib/seo-pages";
 import { countryPath, genrePath, siteUrl, watchPath } from "@/lib/seo-links";
 import { MovieCard } from "@/components/movie-card";
 import { JsonLd } from "@/components/json-ld";
+import { toTimestamp } from "@/lib/date-utils";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -28,7 +29,7 @@ export default async function CountryPage({ params }: Props) {
   if (movies.length < 5) notFound();
   const genres = [...new Map(movies.flatMap((movie) => movie.genres.map((item) => [item.genre.slug, item.genre] as const))).values()].slice(0, 10);
   const years = [...new Set(movies.map((movie) => movie.year))].slice(0, 8);
-  const newest = [...movies].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 6);
+  const newest = [...movies].sort((a, b) => toTimestamp(b.createdAt) - toTimestamp(a.createdAt)).slice(0, 6);
   return <div className="container py-6">
     <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: `Фильмы ${page.name}`, url: siteUrl(countryPath(page.name)), mainEntity: { "@type": "ItemList", itemListElement: movies.map((movie, index) => ({ "@type": "ListItem", position: index + 1, name: movie.titleRu, url: siteUrl(watchPath(movie)) })) } }} />
     <section className="mf-panel mb-6 p-5 sm:p-7"><h1 className="text-[clamp(1.8rem,5vw,3rem)] font-black text-white">Фильмы {page.name}</h1><p className="mt-4 max-w-4xl text-[#b7b7c0]">В подборке собраны фильмы и сериалы производства {page.name}, доступные для просмотра на REDFILM.</p><p className="mt-3 max-w-4xl text-[#a1a1aa]">Используйте жанры и годы ниже, чтобы перейти к нужной части каталога без повторного поиска.</p></section>

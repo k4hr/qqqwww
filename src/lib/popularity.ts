@@ -14,7 +14,11 @@ export type MoviePopularityStats = {
 
 export type PopularityStats = Map<string, MoviePopularityStats>;
 
-type PopularMovie = Pick<Movie, "id" | "kpRating" | "imdbRating" | "quality" | "posterUrl" | "backdropUrl" | "year" | "createdAt" | "vibixUploadedAt">;
+type PopularMovie = Pick<Movie, "id" | "kpRating" | "imdbRating" | "quality" | "posterUrl" | "backdropUrl" | "year"> & {
+  createdAt?: Date | string | null;
+  vibixUploadedAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
 
 function emptyStats(): MoviePopularityStats {
   return { pageView: 0, playerView: 0, watchClick: 0, cardClick: 0, similarClick: 0, total: 0 };
