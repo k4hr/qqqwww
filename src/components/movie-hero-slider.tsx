@@ -114,9 +114,6 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
         <>
           <button type="button" onClick={() => showSlide(activeIndex - 1)} aria-label="Предыдущий фильм" className="hero-arrow hero-arrow-prev absolute left-4 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/45 text-white backdrop-blur-md transition hover:border-[#e50914]/70 hover:bg-[#e50914] max-sm:top-auto max-sm:bottom-5 max-sm:left-5 max-sm:translate-y-0"><ChevronLeft /></button>
           <button type="button" onClick={() => showSlide(activeIndex + 1)} aria-label="Следующий фильм" className="hero-arrow hero-arrow-next absolute right-4 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/45 text-white backdrop-blur-md transition hover:border-[#e50914]/70 hover:bg-[#e50914] max-sm:top-auto max-sm:bottom-5 max-sm:translate-y-0"><ChevronRight /></button>
-          <div className="hero-dots absolute bottom-7 left-1/2 z-20 flex -translate-x-1/2 gap-2 rounded-full border border-white/10 bg-black/35 px-3 py-2 backdrop-blur-md">
-            {movies.map((item, index) => <button key={item.slug} type="button" onClick={() => showSlide(index)} aria-label={`Слайд ${index + 1}`} aria-current={index === activeIndex} className={`h-1.5 rounded-full transition-all ${index === activeIndex ? "w-8 bg-[#e50914]" : "w-2 bg-white/35 hover:bg-white/70"}`} />)}
-          </div>
         </>
       ) : null}
     </section>

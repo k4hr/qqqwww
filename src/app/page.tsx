@@ -2,7 +2,6 @@ import { ContentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
-import { HomeCatalogTools } from "@/components/home-catalog-tools";
 import { VibixBanner } from "@/components/vibix-banner";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
@@ -34,7 +33,6 @@ export default async function HomePage() {
 
   return <div className="container py-4 sm:py-7">
     <MovieHeroSlider movies={heroMovies} />
-    <HomeCatalogTools />
     <SectionGrid title="Популярные фильмы" href="/movies?sort=popular" movies={popularMovies} showSorts={false} mobileCarousel />
     <SectionGrid title="Популярные сериалы" href="/series?sort=popular" movies={popularSeries} showSorts={false} mobileCarousel />
     <SectionGrid title={`Новинки ${currentYear}`} href={`/year/${currentYear}`} movies={yearNew} showSorts={false} mobileCarousel />

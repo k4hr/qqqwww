@@ -444,7 +444,7 @@ button, input, select, textarea { font: inherit; }
     height: min(72svh, 500px);
     max-height: 500px;
   }
-  .hero-slider .hero-layout { height: 100%; padding: 16px 12px 48px; }
+  .hero-slider .hero-layout { height: 100%; padding: 16px 12px 20px; }
   .hero-slider .hero-kicker { display: none; }
   .hero-slider .hero-description { -webkit-line-clamp: 2; font-size: 14px; }
   .hero-slider .hero-meta > span:nth-child(n+3) { display: none; }
@@ -456,26 +456,18 @@ button, input, select, textarea { font: inherit; }
   }
   .hero-slider .hero-arrow-prev { left: 14px; }
   .hero-slider .hero-arrow-next { right: 14px; }
-  .hero-slider .hero-dots {
-    bottom: 14px;
-    padding: 5px 8px;
-    gap: 5px;
-  }
-  .hero-slider .hero-dots button { height: 3px; }
   .home-movie-strip {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     max-width: 100%;
     gap: 10px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    padding-bottom: 6px;
-    scrollbar-width: none;
+    overflow: visible;
   }
-  .home-movie-strip::-webkit-scrollbar { display: none; }
-  .home-movie-strip .mf-card {
-    flex: 0 0 min(43vw, 160px);
-    scroll-snap-align: start;
-  }
+  .home-movie-strip .mf-card:nth-child(n+7) { display: none; }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .home-movie-strip .mf-card:nth-child(n+9) { display: none; }
 }
 
 @media (max-width: 768px) {
