@@ -8,7 +8,7 @@ import { VibixUnion } from "@/components/vibix-union";
 
 export const metadata: Metadata = {
   title: "REDFILM — фильмы и сериалы онлайн",
-  description: "Каталог фильмов, сериалов, мультфильмов и аниме REDFILM.",
+  description: "Каталог фильмов и сериалов REDFILM с описаниями и рейтингами.",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

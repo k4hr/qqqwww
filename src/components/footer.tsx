@@ -14,7 +14,7 @@ export function Footer() {
             <span><span className="text-[#e50914]">RED</span>FILM</span>
           </Link>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#71717a]">
-            Каталог фильмов, сериалов, мультфильмов и аниме с описаниями и рейтингами.
+            Каталог фильмов и сериалов с описаниями, рейтингами и новыми подборками.
           </p>
         </div>
         <div className="flex flex-wrap gap-3 text-sm font-bold text-[#8b8b95] md:justify-end">

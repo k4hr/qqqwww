@@ -4,8 +4,6 @@ import { Search } from "lucide-react";
 const nav = [
   ["Фильмы", "/movies"],
   ["Сериалы", "/series"],
-  ["Мультфильмы", "/cartoons"],
-  ["Аниме", "/anime"],
   ["Последнее", "/latest"],
   ["ТОП", "/top"],
 ] as const;
@@ -36,7 +34,7 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-[#e50914]/25 bg-[rgba(5,5,8,.72)] shadow-[0_18px_60px_rgba(0,0,0,.28)] backdrop-blur-[18px]">
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#e50914]/70 to-transparent" />
 
-      <div className="container flex min-h-[76px] items-center gap-5 py-3 max-md:flex-wrap max-md:gap-3">
+      <div className="container flex min-h-[76px] items-center gap-5 py-3 max-md:min-h-0 max-md:flex-wrap max-md:gap-2 max-md:py-2.5">
         <Link
           href="/"
           className="group flex min-w-0 shrink-0 items-center text-[clamp(22px,6vw,28px)] font-black tracking-[-0.06em] text-white transition-transform duration-300 hover:scale-[1.02]"
@@ -54,7 +52,7 @@ export function Header() {
           {nav.map(([label, href]) => (
             <Link
               key={href}
-              className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3.5 py-2 transition-all hover:bg-white/[.07] hover:text-white"
+              className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3.5 py-2 transition-all hover:bg-white/[.07] hover:text-white max-md:min-h-9 max-md:px-3 max-md:py-1.5"
               href={href}
             >
               {label}
@@ -65,7 +63,7 @@ export function Header() {
         <SearchForm />
       </div>
 
-      <div className="container pb-3 md:hidden">
+      <div className="container pb-2.5 md:hidden">
         <SearchForm mobile />
       </div>
     </header>

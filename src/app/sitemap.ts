@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { ContentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { collections } from "@/lib/collections";
+import { publicCollections } from "@/lib/collections";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +26,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       `/year/${year}`,
       `/movies/${year}`,
       `/series/${year}`,
-      `/cartoons/${year}`,
-      `/anime/${year}`,
     ]);
 
   const genreYearSet = new Set<string>();
@@ -41,12 +39,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "",
     "/movies",
     "/series",
-    "/cartoons",
-    "/anime",
     "/latest",
     "/top",
     "/collections",
-    ...collections.map((collection) => `/collections/${collection.slug}`),
+    ...publicCollections.map((collection) => `/collections/${collection.slug}`),
     ...genres.map((genre) => `/genre/${genre.slug}`),
     ...yearPaths,
     ...Array.from(genreYearSet).slice(0, 3000),

@@ -42,6 +42,9 @@ video,
 iframe,
 ins { max-width: 100%; }
 
+#vibix_union,
+#vibix_union > * { max-width: 100%; }
+
 body::before {
   content: "";
   position: fixed;
@@ -312,10 +315,72 @@ button, input, select, textarea { font: inherit; }
   .mf-btn { min-height: 40px; padding: 0 16px; }
   .admin-shell { padding-left: 14px; padding-right: 14px; border-radius: 0; }
   .admin-panel { padding-left: 14px; padding-right: 14px; }
-  .hero-slider { min-height: 500px; }
-  .vibix-player-shell { min-height: 0; height: auto; }
+  .hero-slider {
+    width: 100%;
+    min-height: 0;
+    border-radius: 22px;
+  }
+  .hero-slider .hero-layout {
+    min-height: 0;
+    padding: 18px 14px 62px;
+  }
+  .hero-slider .hero-content { padding-bottom: 0; }
+  .hero-slider .hero-kicker {
+    margin-bottom: 12px;
+    padding: 6px 10px;
+    font-size: 10px;
+    letter-spacing: .1em;
+  }
+  .hero-slider .hero-title {
+    max-width: 100%;
+    font-size: clamp(30px, 12vw, 52px);
+    line-height: .98;
+    overflow-wrap: anywhere;
+  }
+  .hero-slider .hero-meta {
+    margin-top: 14px;
+    gap: 7px;
+    font-size: 12px;
+  }
+  .hero-slider .hero-description {
+    margin-top: 14px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .hero-slider .hero-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .hero-slider .hero-primary-action { width: 100%; }
+  .hero-slider .hero-secondary-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .hero-slider .hero-secondary-actions .mf-btn {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 10px;
+  }
+  .movie-grid { gap: 10px; }
+  .mf-card { min-width: 0; border-radius: 14px; }
+  .mf-card h3 { overflow-wrap: anywhere; }
+  .home-catalog-ad { margin-top: 4px; }
+  .home-catalog-ad aside { display: none; }
+  .vibix-player-shell {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
   .vibix-player-shell ins,
-  .vibix-player-shell iframe { min-height: inherit; height: 100%; }
+  .vibix-player-shell iframe {
+    width: 100%;
+    min-height: 0;
+    height: 100%;
+  }
 }
 
 @media (min-width: 641px) and (max-width: 1024px) {
@@ -358,4 +423,20 @@ button, input, select, textarea { font: inherit; }
   button,
   input,
   select { min-height: 44px; }
+}
+
+@media (max-width: 640px) {
+  .hero-slider { min-height: 0 !important; }
+  .hero-slider .hero-arrow {
+    bottom: 14px;
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+  .hero-slider .hero-arrow-prev { left: 14px; }
+  .hero-slider .hero-arrow-next { right: 14px; }
+  .hero-slider .hero-dots {
+    bottom: 17px;
+    padding: 7px 10px;
+  }
 }

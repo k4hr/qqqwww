@@ -134,12 +134,16 @@ export function getCollection(slug: string) {
   return collections.find((collection) => collection.slug === slug);
 }
 
+const hiddenPublicCollectionSlugs = new Set(["anime-2026", "multfilmy-2026"]);
+
+export const publicCollections = collections.filter(
+  (collection) => !hiddenPublicCollectionSlugs.has(collection.slug),
+);
+
 export function collectionLinksForYear(year = currentYear) {
   return [
     { href: `/movies/${year}`, label: `Фильмы ${year}` },
     { href: `/series/${year}`, label: `Сериалы ${year}` },
-    { href: `/anime/${year}`, label: `Аниме ${year}` },
-    { href: `/cartoons/${year}`, label: `Мультфильмы ${year}` },
     { href: "/collections/top-100", label: "ТОП 100" },
     { href: "/collections/novinki-kino", label: "Новинки кино" },
   ];

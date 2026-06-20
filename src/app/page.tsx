@@ -11,15 +11,13 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
-  const [movies, series, cartoons, anime, genres] = await Promise.all([
+  const [movies, series, genres] = await Promise.all([
     prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.MOVIE }, orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.SERIES }, orderBy: { createdAt: "desc" }, take: 12 }),
-    prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.CARTOON }, orderBy: { createdAt: "desc" }, take: 12 }),
-    prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.ANIME }, orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.genre.findMany({ orderBy: { name: "asc" }, take: 18 }),
   ]);
 
-  const heroMovies = [...movies, ...series, ...cartoons, ...anime].slice(0, 8).map((movie) => ({
+  const heroMovies = [...movies, ...series].slice(0, 8).map((movie) => ({
     slug: movie.slug,
     titleRu: movie.titleRu,
     description: movie.description,
@@ -56,9 +54,9 @@ export default async function HomePage() {
 
       <SectionGrid title="Фильмы" href="/movies" movies={movies} />
       <SectionGrid title="Сериалы" href="/series" movies={series} />
-      <VibixBanner size="728x90" />
-      <SectionGrid title="Мультфильмы" href="/cartoons" movies={cartoons} />
-      <SectionGrid title="Аниме" href="/anime" movies={anime} />
+      <div className="home-catalog-ad">
+        <VibixBanner size="728x90" />
+      </div>
     </div>
   );
 }
