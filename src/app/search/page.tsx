@@ -7,6 +7,7 @@ import { CountryFilter } from "@/components/country-filter";
 import { timedMovieQuery } from "@/lib/query-performance";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Поиск фильмов и сериалов — REDFILM", description: "Поиск доступных фильмов и сериалов по всей базе REDFILM.", alternates: { canonical: "/search" }, robots: { index: false, follow: true } };
 
 type Props = { searchParams: Promise<{ q?: string; country?: string }> };
 

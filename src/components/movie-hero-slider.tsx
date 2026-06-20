@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Info, Play, Sparkles } from "lucide-react";
+import { filmPath, similarPath, watchPath } from "@/lib/seo-links";
 
 export type HeroMovie = {
   slug: string;
@@ -85,10 +86,10 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
           </div>
           <p className="hero-description line-clamp-3 mt-5 max-w-2xl text-base leading-relaxed text-[#d0d0d6] sm:text-lg">{movie.description}</p>
           <div className="hero-actions mt-7 flex flex-wrap gap-3">
-            <Link href={`/watch/${movie.slug}`} className="hero-primary-action mf-btn mf-btn-primary gap-2"><Play size={16} fill="currentColor" /> Смотреть</Link>
+            <Link href={watchPath(movie)} className="hero-primary-action mf-btn mf-btn-primary gap-2"><Play size={16} fill="currentColor" /> Смотреть</Link>
             <div className="hero-secondary-actions contents">
-              <Link href={`/movie/${movie.slug}`} className="mf-btn gap-2"><Info size={16} /> Подробнее</Link>
-              <Link href={`/similar/${movie.slug}`} className="mf-btn">Похожие</Link>
+              <Link href={filmPath(movie)} className="mf-btn gap-2"><Info size={16} /> Подробнее</Link>
+              <Link href={similarPath(movie)} className="mf-btn">Похожие</Link>
             </div>
           </div>
         </div>

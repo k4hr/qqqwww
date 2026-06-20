@@ -1,4 +1,5 @@
 import type { Movie, MovieCast, MovieGenre, Person, Genre, ContentType } from "@prisma/client";
+import { normalizeMovieBaseTitle } from "@/lib/seo-slugs";
 
 type MovieWithRelations = Movie & {
   genres: Array<MovieGenre & { genre: Genre }>;
@@ -124,6 +125,14 @@ export function calculateSimilarity(source: MovieWithRelations, candidate: Movie
   const sourceDescription = normalizeText(`${source.titleRu} ${source.titleOriginal || ""} ${source.description}`);
   const candidateDescription = normalizeText(`${candidate.titleRu} ${candidate.titleOriginal || ""} ${candidate.description}`);
 
+  const sharedTitleWords = intersectCount(new Set(tokenize(source.titleRu)), new Set(tokenize(candidate.titleRu)));
+  if (sharedTitleWords) score += Math.min(sharedTitleWords * 8, 24);
+
+  if (normalizeText(normalizeMovieBaseTitle(source.titleRu)) === normalizeText(normalizeMovieBaseTitle(candidate.titleRu))) {
+    score += 30;
+    reasons.push("та же серия фильмов");
+  }
+
   const themes = findThemeMatches(sourceDescription, candidateDescription);
   if (themes.length) {
     score += themes.length * 15;
@@ -162,6 +171,8 @@ export function calculateSimilarity(source: MovieWithRelations, candidate: Movie
   if (sourceRating && candidateRating && Math.abs(sourceRating - candidateRating) <= 0.8) {
     score += 5;
   }
+
+  if (source.quality && candidate.quality && normalizeText(source.quality) === normalizeText(candidate.quality)) score += 2;
 
   if (!reasons.length) reasons.push("похожий жанр и настроение");
 

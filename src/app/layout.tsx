@@ -7,6 +7,7 @@ import { Footer } from "@/components/footer";
 import { VibixUnion } from "@/components/vibix-union";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://redfilm.win"),
   title: "REDFILM — фильмы и сериалы онлайн",
   description: "Каталог фильмов и сериалов REDFILM с описаниями и рейтингами.",
   icons: {

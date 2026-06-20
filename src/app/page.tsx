@@ -10,6 +10,7 @@ import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 import { timedMovieQuery } from "@/lib/query-performance";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "REDFILM — фильмы и сериалы онлайн", description: "Фильмы и сериалы онлайн: новинки, рейтинги, подборки и страницы просмотра в каталоге REDFILM.", alternates: { canonical: "/" } };
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();

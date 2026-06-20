@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Подборки фильмов и сериалов — REDFILM",
   description: "Подборки фильмов и сериалов на REDFILM.",
+  alternates: { canonical: "/collections" },
 };
 
 export default function CollectionsPage() {
