@@ -6,6 +6,7 @@ import { MovieCard } from "@/components/movie-card";
 import { similarIntro, sortSimilarMovies } from "@/lib/similar";
 import { getContentTypePath, getContentTypeLabel } from "@/lib/content";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
+import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function SimilarPage({ params }: Props) {
   if (!movie) notFound();
 
   const candidates = await prisma.movie.findMany({
-    where: { ...vibixPublicMovieWhere, id: { not: movie.id } },
+    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id } }] },
     include: {
       genres: { include: { genre: true } },
       cast: { include: { person: true }, orderBy: { sortOrder: "asc" } },
@@ -47,7 +48,7 @@ export default async function SimilarPage({ params }: Props) {
   const similar = sortSimilarMovies(movie, candidates, 10);
   const fallback = similar.length < 10
     ? await prisma.movie.findMany({
-        where: { ...vibixPublicMovieWhere, id: { not: movie.id }, type: movie.type },
+        where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id }, type: movie.type }] },
         orderBy: [{ kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
         take: 10 - similar.length,
       })

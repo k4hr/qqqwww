@@ -4,6 +4,8 @@ import { MovieCard } from "@/components/movie-card";
 import type { ContentType } from "@prisma/client";
 import { parseSort } from "@/lib/content";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
+import { buildCountryFilterWhere, normalizeCatalogCountry } from "@/lib/catalog-filters";
+import { CountryFilter } from "@/components/country-filter";
 
 type Props = {
   title: string;
@@ -12,15 +14,31 @@ type Props = {
   genreSlug?: string;
   sort?: string;
   description?: string;
+  country?: string;
+  showCountryFilter?: boolean;
 };
 
-export async function ListPage({ title, type, year, genreSlug, sort, description }: Props) {
+function filterHref(sort: string, country?: string, year?: number) {
+  const params = new URLSearchParams();
+  params.set("sort", sort);
+  if (country) params.set("country", country);
+  if (year) params.set("year", String(year));
+  return `?${params.toString()}`;
+}
+
+export async function ListPage({ title, type, year, genreSlug, sort, description, country, showCountryFilter = false }: Props) {
+  const selectedCountry = normalizeCatalogCountry(country);
   const movies = await prisma.movie.findMany({
     where: {
-      ...vibixPublicMovieWhere,
-      ...(type ? { type } : {}),
-      ...(year ? { year } : {}),
-      ...(genreSlug ? { genres: { some: { genre: { slug: genreSlug } } } } : {}),
+      AND: [
+        vibixPublicMovieWhere,
+        buildCountryFilterWhere(selectedCountry),
+        {
+          ...(type ? { type } : {}),
+          ...(year ? { year } : {}),
+          ...(genreSlug ? { genres: { some: { genre: { slug: genreSlug } } } } : {}),
+        },
+      ],
     },
     orderBy: parseSort(sort),
     take: 96,
@@ -33,11 +51,12 @@ export async function ListPage({ title, type, year, genreSlug, sort, description
         {description ? <p className="mt-3 max-w-4xl leading-relaxed text-[#a9a9b2]">{description}</p> : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <FilterLink href="?sort=latest" label="Последние" active={!sort || sort === "latest"} />
-          <FilterLink href="?sort=popular" label="Популярные" active={sort === "popular"} />
-          <FilterLink href="?sort=rating" label="По рейтингу" active={sort === "rating"} />
-          <FilterLink href="?sort=year" label="По году" active={sort === "year"} />
+          <FilterLink href={filterHref("latest", selectedCountry, year)} label="Последние" active={!sort || sort === "latest"} />
+          <FilterLink href={filterHref("popular", selectedCountry, year)} label="Популярные" active={sort === "popular"} />
+          <FilterLink href={filterHref("rating", selectedCountry, year)} label="По рейтингу" active={sort === "rating"} />
+          <FilterLink href={filterHref("year", selectedCountry, year)} label="По году" active={sort === "year"} />
         </div>
+        {showCountryFilter ? <CountryFilter country={selectedCountry} preserve={{ sort, year: year ? String(year) : undefined }} /> : null}
       </div>
 
       {movies.length ? (

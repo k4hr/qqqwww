@@ -6,14 +6,15 @@ import { SectionGrid } from "@/components/section-grid";
 import { collectionLinksForYear } from "@/lib/collections";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { VibixBanner } from "@/components/vibix-banner";
+import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
   const [movies, series, genres] = await Promise.all([
-    prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.MOVIE }, orderBy: { createdAt: "desc" }, take: 12 }),
-    prisma.movie.findMany({ where: { ...vibixPublicMovieWhere, type: ContentType.SERIES }, orderBy: { createdAt: "desc" }, take: 12 }),
+    prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { type: ContentType.MOVIE }] }, orderBy: { createdAt: "desc" }, take: 12 }),
+    prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { type: ContentType.SERIES }] }, orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.genre.findMany({ orderBy: { name: "asc" }, take: 18 }),
   ]);
 

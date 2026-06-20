@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { MovieCard } from "@/components/movie-card";
 import { getCollection } from "@/lib/collections";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
+import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function CollectionPage({ params }: Props) {
   if (!collection) notFound();
 
   const movies = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, collection.where] },
+    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), collection.where] },
     orderBy: collection.orderBy,
     take: slug === "top-100" ? 100 : 96,
   });

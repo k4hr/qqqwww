@@ -9,6 +9,7 @@ import { MovieCard } from "@/components/movie-card";
 import { getContentTypeLabel, getContentTypePath } from "@/lib/content";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { VibixBanner } from "@/components/vibix-banner";
+import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function MoviePage({ params }: Props) {
   if (!movie) notFound();
 
   const related = await prisma.movie.findMany({
-    where: { ...vibixPublicMovieWhere, id: { not: movie.id }, type: movie.type },
+    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id }, type: movie.type }] },
     orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }],
     take: 6
   });
