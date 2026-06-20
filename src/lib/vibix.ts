@@ -284,13 +284,8 @@ async function fetchVibixJson(url: URL): Promise<VibixFetchResult> {
 
       if (response.status === 429) {
         const retryAfterMs = retryAfterMilliseconds(response, attempt);
-        if (attempt === maxAttempts - 1) {
-          console.warn(`[Vibix] Rate limit reached after ${maxAttempts} attempts.`);
-          return { data: null, rateLimited: true, retryAfterMs, requestFailed: false, error: await httpError(response, apiKey) };
-        }
-        console.warn(`[Vibix] HTTP 429. Retrying in ${Math.ceil(retryAfterMs / 1000)} seconds.`);
-        await sleep(retryAfterMs);
-        continue;
+        console.warn(`[Vibix] HTTP 429. Retry after ${Math.ceil(retryAfterMs / 1000)} seconds.`);
+        return { data: null, rateLimited: true, retryAfterMs, requestFailed: false, error: await httpError(response, apiKey) };
       }
 
       if (response.status >= 500) {

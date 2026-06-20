@@ -127,8 +127,8 @@ model VibixSyncJob {
   lastPage       Int?
   total          Int?
   limit          Int       @default(20)
-  pageDelayMs    Int       @default(2000)
-  detailDelayMs  Int       @default(500)
+  pageDelayMs    Int       @default(10000)
+  detailDelayMs  Int       @default(2000)
   imported       Int       @default(0)
   updated        Int       @default(0)
   skipped        Int       @default(0)
@@ -136,6 +136,7 @@ model VibixSyncJob {
   playerByIframe Int       @default(0)
   playerByEmbed  Int       @default(0)
   rateLimited    Boolean   @default(false)
+  rateLimitUntil DateTime?
   lastError      String?   @db.Text
   startedAt      DateTime?
   finishedAt     DateTime?

@@ -82,6 +82,7 @@ export type VibixPageSyncResult = VibixSyncResult & {
   lastPage: number | null;
   total: number | null;
   itemsReceived: number;
+  retryAfterMs: number | null;
 };
 
 type NormalizedVideo = {
@@ -254,6 +255,7 @@ function registerSkip(result: VibixSyncResult, reason: VibixSkippedReason, video
 type EnrichmentResult = {
   video: VibixVideo;
   rateLimited: boolean;
+  retryAfterMs: number | null;
 };
 
 async function enrichVibixVideo(
@@ -261,19 +263,19 @@ async function enrichVibixVideo(
   result: VibixSyncResult,
   waitForDetailRequest: () => Promise<void>,
 ): Promise<EnrichmentResult> {
-  if (stringValue(base.iframe_url) || stringValue(base.embed_code)) return { video: base, rateLimited: false };
+  if (stringValue(base.iframe_url) || stringValue(base.embed_code)) return { video: base, rateLimited: false, retryAfterMs: null };
 
   let enriched = { ...base };
   const kpId = stringValue(base.kp_id) || stringValue(base.kinopoisk_id);
   if (kpId) {
     await waitForDetailRequest();
     const lookup = await getVibixVideoByKpIdResult(kpId);
-    if (lookup.rateLimited) return { video: enriched, rateLimited: true };
+    if (lookup.rateLimited) return { video: enriched, rateLimited: true, retryAfterMs: lookup.retryAfterMs };
     if (lookup.video) {
       enriched = mergeVibixRecords(enriched, lookup.video);
       if (stringValue(enriched.iframe_url) || stringValue(enriched.embed_code)) {
         result.enrichedByKp += 1;
-        return { video: enriched, rateLimited: false };
+        return { video: enriched, rateLimited: false, retryAfterMs: null };
       }
     }
   }
@@ -282,18 +284,18 @@ async function enrichVibixVideo(
   if (imdbId) {
     await waitForDetailRequest();
     const lookup = await getVibixVideoByImdbIdResult(imdbId);
-    if (lookup.rateLimited) return { video: enriched, rateLimited: true };
+    if (lookup.rateLimited) return { video: enriched, rateLimited: true, retryAfterMs: lookup.retryAfterMs };
     if (lookup.video) {
       enriched = mergeVibixRecords(enriched, lookup.video);
       if (stringValue(enriched.iframe_url) || stringValue(enriched.embed_code)) {
         result.enrichedByImdb += 1;
-        return { video: enriched, rateLimited: false };
+        return { video: enriched, rateLimited: false, retryAfterMs: null };
       }
     }
   }
 
   result.enrichmentFailed += 1;
-  return { video: enriched, rateLimited: false };
+  return { video: enriched, rateLimited: false, retryAfterMs: null };
 }
 
 async function uniqueSlug(title: string, year: number) {
@@ -426,13 +428,17 @@ function emptySyncResult(): VibixSyncResult {
 export async function syncVibixPage(options: VibixPageSyncOptions): Promise<VibixPageSyncResult> {
   const page = Math.max(1, Math.min(Math.trunc(options.page), 10_000));
   const limit = normalizeVibixLimit(options.limit);
-  const detailDelayMs = Math.max(500, Math.min(options.detailDelayMs ?? 500, 10_000));
+  const detailDelayMs = Math.max(2_000, Math.min(options.detailDelayMs ?? 2_000, 10_000));
   const result = emptySyncResult();
   const response = await getVibixVideoLinks({ page, limit, type: options.type, existKpId: null });
+  let retryAfterMs = response.retryAfterMs;
 
   if (response.rateLimited) {
     result.rateLimited = true;
     result.message = "Vibix API rate limit reached";
+    result.httpStatus = response.error?.status ?? 429;
+    result.httpStatusText = response.error?.statusText ?? "Too Many Requests";
+    result.httpBodyPreview = response.error?.bodyPreview ?? null;
   } else if (response.requestFailed) {
     result.errors = 1;
     result.httpStatus = response.error?.status ?? null;
@@ -459,6 +465,7 @@ export async function syncVibixPage(options: VibixPageSyncOptions): Promise<Vibi
         if (enrichment.rateLimited) {
           result.rateLimited = true;
           result.message = "Vibix API rate limit reached during enrichment";
+          retryAfterMs = enrichment.retryAfterMs;
           break;
         }
         const saved = await saveVibixVideo(enrichment.video);
@@ -483,6 +490,7 @@ export async function syncVibixPage(options: VibixPageSyncOptions): Promise<Vibi
     lastPage: response.meta?.lastPage ?? null,
     total: response.meta?.total ?? null,
     itemsReceived: response.data.length + response.invalidItems,
+    retryAfterMs,
   };
 }
 
@@ -494,8 +502,8 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
   const mode = options.mode ?? "quick";
   const quickPages = Math.max(1, Math.min(options.pages ?? 5, 1000));
   const limit = normalizeVibixLimit(options.limit);
-  const pageDelayMs = Math.max(250, Math.min(options.pageDelayMs ?? 2_000, 60_000));
-  const detailDelayMs = Math.max(500, Math.min(options.detailDelayMs ?? 750, 10_000));
+  const pageDelayMs = Math.max(10_000, Math.min(options.pageDelayMs ?? 10_000, 60_000));
+  const detailDelayMs = Math.max(2_000, Math.min(options.detailDelayMs ?? 2_000, 10_000));
   const maxPagesPerRun = Math.max(1, Math.min(options.maxPagesPerRun ?? (mode === "quick" ? quickPages : 20), 10_000));
   const defaultTypes: VibixCatalogType[] = ["movie", "serial"];
   const types: VibixCatalogType[] = Array.from(new Set(options.types?.length ? options.types : defaultTypes));

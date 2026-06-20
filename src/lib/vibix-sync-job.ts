@@ -37,8 +37,8 @@ export async function createVibixFullSyncJob(options: CreateJobOptions = {}) {
         contentType,
         currentType: contentType === "serial" ? "serial" : "movie",
         limit: normalizeVibixLimit(options.limit),
-        pageDelayMs: normalizeDelay(options.pageDelayMs, 2_000, 250, 60_000),
-        detailDelayMs: normalizeDelay(options.detailDelayMs, 500, 500, 10_000),
+        pageDelayMs: normalizeDelay(options.pageDelayMs, 10_000, 10_000, 60_000),
+        detailDelayMs: normalizeDelay(options.detailDelayMs, 2_000, 2_000, 10_000),
       },
     }),
   };
@@ -66,7 +66,7 @@ async function processPageWithRetries(job: { nextPage: number; currentType: stri
     const temporary = lastResult.rateLimited
       || (lastResult.httpStatus !== null && lastResult.httpStatus >= 500)
       || (lastResult.message !== null && lastResult.httpStatus === null);
-    if (!lastResult.message || !temporary || attempt === 3) return lastResult;
+    if (lastResult.rateLimited || !lastResult.message || !temporary || attempt === 3) return lastResult;
     await sleep(15_000 * attempt);
   }
   return lastResult as VibixPageSyncResult;
@@ -78,7 +78,14 @@ export async function processVibixSyncJob(jobId: string) {
 
   job = await prisma.vibixSyncJob.update({
     where: { id: job.id },
-    data: { status: "RUNNING", startedAt: job.startedAt ?? new Date(), finishedAt: null },
+    data: {
+      status: "RUNNING",
+      startedAt: job.startedAt ?? new Date(),
+      finishedAt: null,
+      limit: 20,
+      pageDelayMs: Math.max(job.pageDelayMs, 10_000),
+      detailDelayMs: Math.max(job.detailDelayMs, 2_000),
+    },
   });
 
   try {
@@ -86,7 +93,31 @@ export async function processVibixSyncJob(jobId: string) {
       const current = await prisma.vibixSyncJob.findUnique({ where: { id: jobId } });
       if (!current || !ACTIVE_STATUSES.includes(current.status)) return current;
 
+      if (current.rateLimitUntil) {
+        const remainingMs = current.rateLimitUntil.getTime() - Date.now();
+        if (remainingMs > 0) {
+          await sleep(remainingMs);
+          continue;
+        }
+        await prisma.vibixSyncJob.update({ where: { id: jobId }, data: { rateLimited: false, rateLimitUntil: null } });
+      }
+
       const page = await processPageWithRetries(current);
+      if (page.rateLimited) {
+        const retryAfterMs = Math.max(1_000, page.retryAfterMs ?? 3_600_000);
+        const rateLimitUntil = new Date(Date.now() + retryAfterMs);
+        await prisma.vibixSyncJob.update({
+          where: { id: jobId },
+          data: {
+            status: "RUNNING",
+            rateLimited: true,
+            rateLimitUntil,
+            lastError: `${pageError(page)}. Retry at ${rateLimitUntil.toISOString()}`,
+          },
+        });
+        await sleep(retryAfterMs);
+        continue;
+      }
       if (page.message) {
         return prisma.vibixSyncJob.update({
           where: { id: jobId },
@@ -116,6 +147,7 @@ export async function processVibixSyncJob(jobId: string) {
         playerByIframe: { increment: page.playerSourceByIframeUrl },
         playerByEmbed: { increment: page.playerSourceByEmbedCode },
         rateLimited: false,
+        rateLimitUntil: null,
         lastError: null,
         total,
       };
@@ -154,7 +186,7 @@ export async function pauseVibixSyncJob(jobId: string) {
 }
 
 export async function resumeVibixSyncJob(jobId: string) {
-  await prisma.vibixSyncJob.updateMany({ where: { id: jobId, status: { in: ["PAUSED", "FAILED"] } }, data: { status: "QUEUED", rateLimited: false, lastError: null, finishedAt: null } });
+  await prisma.vibixSyncJob.updateMany({ where: { id: jobId, status: { in: ["PAUSED", "FAILED"] } }, data: { status: "QUEUED", finishedAt: null } });
   return prisma.vibixSyncJob.findUnique({ where: { id: jobId } });
 }
 

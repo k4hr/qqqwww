@@ -12,6 +12,6 @@ export async function POST(request: Request) {
   } catch {
     // The default covers an empty request body.
   }
-  const result = await createVibixFullSyncJob({ contentType, limit: 20, pageDelayMs: 2_000, detailDelayMs: 500 });
+  const result = await createVibixFullSyncJob({ contentType, limit: 20, pageDelayMs: 10_000, detailDelayMs: 2_000 });
   return NextResponse.json({ jobId: result.job.id, created: result.created, message: result.created ? "Задача запущена" : "Синхронизация уже идёт", job: result.job }, { status: result.created ? 201 : 200 });
 }

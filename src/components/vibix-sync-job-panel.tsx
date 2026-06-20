@@ -17,6 +17,7 @@ export type VibixJobView = {
   playerByIframe: number;
   playerByEmbed: number;
   rateLimited: boolean;
+  rateLimitUntil: string | null;
   lastError: string | null;
   startedAt: string | null;
   finishedAt: string | null;
@@ -112,7 +113,7 @@ export function VibixSyncJobPanel({ initialJob, configured }: Props) {
             <button type="button" onClick={() => action("cancel")} disabled={busy || ["DONE", "CANCELED"].includes(job.status)} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-bold text-red-700 disabled:opacity-40">Отменить</button>
             <button type="button" onClick={() => void refresh()} disabled={busy} className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-white disabled:opacity-40">Обновить статус</button>
           </div>
-          <div className="mt-3 text-xs text-neutral-500">Запущено: {formatDate(job.startedAt)} · Завершено: {formatDate(job.finishedAt)}{job.rateLimited ? " · Vibix rate limit" : ""}</div>
+          <div className="mt-3 text-xs text-neutral-500">Запущено: {formatDate(job.startedAt)} · Завершено: {formatDate(job.finishedAt)}{job.rateLimited ? ` · Пауза Vibix до ${formatDate(job.rateLimitUntil)}` : ""}</div>
         </div>
       ) : <div className="mt-5 text-sm text-neutral-500">Фоновые задачи ещё не запускались.</div>}
     </section>
