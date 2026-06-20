@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { syncVibixAllAction, syncVibixQuickAction } from "./actions";
+import { syncVibixQuickAction } from "./actions";
 import type { VibixSkippedReason, VibixSkippedSample } from "@/lib/vibix-sync";
+import { getLatestVibixSyncJob } from "@/lib/vibix-sync-job";
+import { VibixSyncJobPanel, type VibixJobView } from "@/components/vibix-sync-job-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +53,8 @@ export default async function VibixAdminPage({ searchParams }: Props) {
   const rateLimited = result.rateLimited === "1";
   const skippedReasons = parseSkippedReasons(result.skippedReasons);
   const skippedSamples = parseSkippedSamples(result.skippedSamples);
+  const latestJob = await getLatestVibixSyncJob();
+  const initialJob = latestJob ? JSON.parse(JSON.stringify(latestJob)) as VibixJobView : null;
 
   return (
     <div className="container admin-shell py-6">
@@ -81,8 +85,10 @@ export default async function VibixAdminPage({ searchParams }: Props) {
       ) : null}
 
       <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        Если Vibix вернул 429, подождите и запустите позже. Для полной базы лучше синхронизировать частями.
+        Если Vibix вернул 429, worker применит retry/backoff. Полная задача сохраняет прогресс после каждой страницы.
       </div>
+
+      <VibixSyncJobPanel initialJob={initialJob} configured={configured} />
 
       {hasResult ? (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -132,7 +138,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+      <div className="mt-5 grid gap-5">
         <form action={syncVibixQuickAction} className="admin-panel grid gap-4 p-5 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <h2 className="text-xl font-bold text-[#222]">Быстрая синхронизация</h2>
@@ -165,16 +171,6 @@ export default async function VibixAdminPage({ searchParams }: Props) {
           <button type="submit" disabled={!configured} className="h-12 rounded-xl bg-[#333] font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400 sm:col-span-2">Быстрая синхронизация</button>
         </form>
 
-        <form action={syncVibixAllAction} className="admin-panel flex flex-col p-5">
-          <h2 className="text-xl font-bold text-[#222]">Полная база Vibix</h2>
-          <p className="mt-1 text-sm leading-relaxed text-neutral-500">Автоматически пройдёт все страницы из meta.last_page. Если meta отсутствует, остановится на первой пустой странице.</p>
-          <div className="mt-4 rounded-xl bg-[#f5f5f5] p-4 text-sm text-neutral-600">Фильмы + сериалы · Limit: 20 · Задержка страниц: 2 000 мс · Задержка detail-запросов: 750 мс · До 20 страниц за запуск</div>
-          <div className="mt-4 flex flex-wrap gap-5 text-sm text-[#333]">
-            <label className="flex items-center gap-2"><input name="noAds" type="checkbox" /> Отправить no_ads=true</label>
-            <label className="flex items-center gap-2"><input name="lgbt" type="checkbox" /> Отправить lgbt=true</label>
-          </div>
-          <button type="submit" disabled={!configured} className="mt-auto h-12 rounded-xl bg-[#e50914] font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400">Синхронизировать всю базу Vibix</button>
-        </form>
       </div>
     </div>
   );

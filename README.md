@@ -138,6 +138,31 @@ POST https://redfilm.win/api/cron/vibix-sync
 Authorization: Bearer <CRON_SECRET>
 ```
 
-Публичные страницы читают фильмы только из PostgreSQL. Cron и админка являются единственными точками запуска массовой синхронизации.
+Публичные страницы читают фильмы только из PostgreSQL. Кнопка в `/admin/vibix` создаёт фоновую задачу в БД; отдельный worker автоматически проходит все страницы и продолжает с сохранённой страницы после перезапуска.
+
+Для полной синхронизации создай два Railway service из одного репозитория.
+
+Service 1: `redfilm-web`
+
+```bash
+npx prisma db push && npx prisma generate && next start -H 0.0.0.0 -p ${PORT:-3000}
+```
+
+Service 2: `redfilm-vibix-worker`
+
+```bash
+npx prisma db push && npx prisma generate && npm run vibix:worker
+```
+
+Оба service должны использовать одинаковые переменные:
+
+```env
+DATABASE_URL=...
+VIBIX_API_KEY=...
+VIBIX_PUBLISHER_ID=678353780
+NEXT_PUBLIC_VIBIX_AD_TYPES=sticker,pcsticker,banners,flyroll
+```
+
+Cron endpoint можно оставить для коротких ежедневных обновлений; основной full sync работает через job и worker.
 
 Форматы Vibix Union управляются через `NEXT_PUBLIC_VIBIX_AD_TYPES`. Формат `brand` принудительно отключён; доступны `sticker,pcsticker,banners,flyroll`.

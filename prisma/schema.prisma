@@ -21,44 +21,44 @@ enum ProviderName {
 }
 
 model Movie {
-  id             String        @id @default(cuid())
-  slug           String        @unique
-  titleRu        String
-  titleOriginal  String?
-  description    String       @db.Text
-  year           Int
-  type           ContentType   @default(MOVIE)
-  posterUrl      String?
-  backdropUrl    String?
-  trailerUrl     String?
-  country        String?
-  director       String?
-  ageRating      String?
-  quality        String        @default("WEB-DL")
-  duration       Int?
-  kinopoiskId    String?
-  imdbId         String?
-  tmdbId         String?
-  allohaId       String?
-  vibixId        Int?
-  vibixIframeUrl String?
-  vibixEmbedCode String?
-  vibixAvailable Boolean       @default(false)
-  vibixType      String?
+  id              String         @id @default(cuid())
+  slug            String         @unique
+  titleRu         String
+  titleOriginal   String?
+  description     String         @db.Text
+  year            Int
+  type            ContentType    @default(MOVIE)
+  posterUrl       String?
+  backdropUrl     String?
+  trailerUrl      String?
+  country         String?
+  director        String?
+  ageRating       String?
+  quality         String         @default("WEB-DL")
+  duration        Int?
+  kinopoiskId     String?
+  imdbId          String?
+  tmdbId          String?
+  allohaId        String?
+  vibixId         Int?
+  vibixIframeUrl  String?
+  vibixEmbedCode  String?
+  vibixAvailable  Boolean        @default(false)
+  vibixType       String?
   vibixUploadedAt DateTime?
   vibixLastSyncAt DateTime?
-  kpRating       Float?
-  imdbRating     Float?
-  tmdbRating     Float?
-  isPublished    Boolean       @default(true)
-  views          Int           @default(0)
-  likes          Int           @default(0)
-  dislikes       Int           @default(0)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  genres         MovieGenre[]
-  cast           MovieCast[]
-  providerLinks  ProviderLink[]
+  kpRating        Float?
+  imdbRating      Float?
+  tmdbRating      Float?
+  isPublished     Boolean        @default(true)
+  views           Int            @default(0)
+  likes           Int            @default(0)
+  dislikes        Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  genres          MovieGenre[]
+  cast            MovieCast[]
+  providerLinks   ProviderLink[]
 
   @@index([type, year])
   @@index([isPublished])
@@ -68,10 +68,10 @@ model Movie {
 }
 
 model Genre {
-  id        String       @id @default(cuid())
-  slug      String       @unique
-  name      String       @unique
-  movies    MovieGenre[]
+  id     String       @id @default(cuid())
+  slug   String       @unique
+  name   String       @unique
+  movies MovieGenre[]
 }
 
 model MovieGenre {
@@ -97,22 +97,50 @@ model MovieCast {
   movieId   String
   personId  String
   role      String?
-  sortOrder Int      @default(0)
-  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
-  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  sortOrder Int     @default(0)
+  movie     Movie   @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  person    Person  @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@id([movieId, personId])
 }
 
 model ProviderLink {
-  id          String       @id @default(cuid())
-  provider    ProviderName
-  movieId     String
-  externalId  String?
-  embedUrl    String?
-  isAvailable Boolean      @default(false)
+  id            String       @id @default(cuid())
+  provider      ProviderName
+  movieId       String
+  externalId    String?
+  embedUrl      String?
+  isAvailable   Boolean      @default(false)
   lastCheckedAt DateTime?
-  movie       Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  movie         Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
 
   @@index([provider, isAvailable])
+}
+
+model VibixSyncJob {
+  id             String    @id @default(cuid())
+  status         String    @default("QUEUED")
+  mode           String    @default("full")
+  contentType    String    @default("both")
+  currentType    String    @default("movie")
+  nextPage       Int       @default(1)
+  lastPage       Int?
+  total          Int?
+  limit          Int       @default(20)
+  pageDelayMs    Int       @default(2000)
+  detailDelayMs  Int       @default(500)
+  imported       Int       @default(0)
+  updated        Int       @default(0)
+  skipped        Int       @default(0)
+  errors         Int       @default(0)
+  playerByIframe Int       @default(0)
+  playerByEmbed  Int       @default(0)
+  rateLimited    Boolean   @default(false)
+  lastError      String?   @db.Text
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, createdAt])
 }

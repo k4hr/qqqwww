@@ -69,6 +69,21 @@ type SyncOptions = {
   lgbt?: boolean;
 };
 
+export type VibixPageSyncOptions = {
+  page: number;
+  limit?: number;
+  type: VibixCatalogType;
+  detailDelayMs?: number;
+};
+
+export type VibixPageSyncResult = VibixSyncResult & {
+  page: number;
+  type: VibixCatalogType;
+  lastPage: number | null;
+  total: number | null;
+  itemsReceived: number;
+};
+
 type NormalizedVideo = {
   title: string;
   titleOriginal: string | null;
@@ -375,21 +390,9 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
   return { status: "imported" as const };
 }
 
-export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixSyncResult> {
-  if (vibixSyncState.__redfilmVibixSyncRunning) throw new VibixSyncAlreadyRunningError();
-  vibixSyncState.__redfilmVibixSyncRunning = true;
-
+function emptySyncResult(): VibixSyncResult {
   const startedAt = new Date().toISOString();
-  const mode = options.mode ?? "quick";
-  const quickPages = Math.max(1, Math.min(options.pages ?? 5, 1000));
-  const limit = normalizeVibixLimit(options.limit);
-  const pageDelayMs = Math.max(250, Math.min(options.pageDelayMs ?? 2_000, 60_000));
-  const detailDelayMs = Math.max(500, Math.min(options.detailDelayMs ?? 750, 10_000));
-  const maxPagesPerRun = Math.max(1, Math.min(options.maxPagesPerRun ?? (mode === "quick" ? quickPages : 20), 10_000));
-  const defaultTypes: VibixCatalogType[] = ["movie", "serial"];
-  const types: VibixCatalogType[] = Array.from(new Set(options.types?.length ? options.types : defaultTypes));
-  const pagesPerType = mode === "quick" ? quickPages : Math.max(1, Math.floor(maxPagesPerRun / types.length));
-  const result: VibixSyncResult = {
+  return {
     imported: 0,
     updated: 0,
     skipped: 0,
@@ -418,6 +421,88 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
     },
     skippedSamples: [],
   };
+}
+
+export async function syncVibixPage(options: VibixPageSyncOptions): Promise<VibixPageSyncResult> {
+  const page = Math.max(1, Math.min(Math.trunc(options.page), 10_000));
+  const limit = normalizeVibixLimit(options.limit);
+  const detailDelayMs = Math.max(500, Math.min(options.detailDelayMs ?? 500, 10_000));
+  const result = emptySyncResult();
+  const response = await getVibixVideoLinks({ page, limit, type: options.type, existKpId: null });
+
+  if (response.rateLimited) {
+    result.rateLimited = true;
+    result.message = "Vibix API rate limit reached";
+  } else if (response.requestFailed) {
+    result.errors = 1;
+    result.httpStatus = response.error?.status ?? null;
+    result.httpStatusText = response.error?.statusText ?? null;
+    result.httpBodyPreview = response.error?.bodyPreview ?? null;
+    result.message = response.error
+      ? `HTTP ${response.error.status} ${response.error.statusText}`
+      : "Vibix API request failed";
+  } else {
+    result.pagesProcessed = 1;
+    result.totalFromVibix = response.meta?.total ?? response.data.length + response.invalidItems;
+    if (response.invalidItems) registerSkip(result, "invalid_response", undefined, response.invalidItems);
+
+    let lastDetailRequestAt = 0;
+    const waitForDetailRequest = async () => {
+      const remainingDelay = detailDelayMs - (Date.now() - lastDetailRequestAt);
+      if (remainingDelay > 0) await sleep(remainingDelay);
+      lastDetailRequestAt = Date.now();
+    };
+
+    for (const video of response.data) {
+      try {
+        const enrichment = await enrichVibixVideo(video, result, waitForDetailRequest);
+        if (enrichment.rateLimited) {
+          result.rateLimited = true;
+          result.message = "Vibix API rate limit reached during enrichment";
+          break;
+        }
+        const saved = await saveVibixVideo(enrichment.video);
+        if (saved.status === "skipped") registerSkip(result, saved.reason, enrichment.video, 1, video);
+        else {
+          result[saved.status] += 1;
+          if (stringValue(enrichment.video.iframe_url)) result.playerSourceByIframeUrl += 1;
+          else result.playerSourceByEmbedCode += 1;
+        }
+      } catch (error) {
+        result.errors += 1;
+        console.warn("[Vibix] Failed to save video:", error instanceof Error ? error.message : error);
+      }
+    }
+  }
+
+  result.finishedAt = new Date().toISOString();
+  return {
+    ...result,
+    page,
+    type: options.type,
+    lastPage: response.meta?.lastPage ?? null,
+    total: response.meta?.total ?? null,
+    itemsReceived: response.data.length + response.invalidItems,
+  };
+}
+
+export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixSyncResult> {
+  if (vibixSyncState.__redfilmVibixSyncRunning) throw new VibixSyncAlreadyRunningError();
+  vibixSyncState.__redfilmVibixSyncRunning = true;
+
+  const startedAt = new Date().toISOString();
+  const mode = options.mode ?? "quick";
+  const quickPages = Math.max(1, Math.min(options.pages ?? 5, 1000));
+  const limit = normalizeVibixLimit(options.limit);
+  const pageDelayMs = Math.max(250, Math.min(options.pageDelayMs ?? 2_000, 60_000));
+  const detailDelayMs = Math.max(500, Math.min(options.detailDelayMs ?? 750, 10_000));
+  const maxPagesPerRun = Math.max(1, Math.min(options.maxPagesPerRun ?? (mode === "quick" ? quickPages : 20), 10_000));
+  const defaultTypes: VibixCatalogType[] = ["movie", "serial"];
+  const types: VibixCatalogType[] = Array.from(new Set(options.types?.length ? options.types : defaultTypes));
+  const pagesPerType = mode === "quick" ? quickPages : Math.max(1, Math.floor(maxPagesPerRun / types.length));
+  const result = emptySyncResult();
+  result.startedAt = startedAt;
+  result.finishedAt = startedAt;
 
   try {
     let stopSync = false;

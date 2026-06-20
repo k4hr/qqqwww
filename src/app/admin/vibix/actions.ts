@@ -71,17 +71,3 @@ export async function syncVibixQuickAction(formData: FormData) {
     lgbt: booleanField(formData, "lgbt"),
   });
 }
-
-export async function syncVibixAllAction(formData: FormData) {
-  await runSync({
-    mode: "all",
-    limit: 20,
-    pageDelayMs: 2_000,
-    detailDelayMs: 750,
-    maxPagesPerRun: 20,
-    types: ["movie", "serial"],
-    existKpId: null,
-    noAds: booleanField(formData, "noAds"),
-    lgbt: booleanField(formData, "lgbt"),
-  });
-}
