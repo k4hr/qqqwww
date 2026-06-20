@@ -4,11 +4,12 @@ type RankableMovie = Pick<Movie, "kpRating" | "imdbRating" | "quality" | "poster
 
 export function getMoviePopularityScore(movie: RankableMovie) {
   let score = (movie.kpRating ?? 0) * 10 + (movie.imdbRating ?? 0) * 10;
+  if (movie.posterUrl) score += 15;
+  if (movie.backdropUrl) score += 8;
   if (/full\s*hd|1080|\bhd\b/i.test(movie.quality)) score += 10;
-  score += movie.posterUrl ? 8 : -20;
-  if (movie.backdropUrl) score += 5;
-  if (movie.year >= 2020) score += 5;
-  if (movie.year >= 2024) score += 10;
+  if (movie.year >= 2024) score += 8;
+  else if (movie.year >= 2020) score += 4;
+  if (!movie.posterUrl) score -= 30;
   return score;
 }
 

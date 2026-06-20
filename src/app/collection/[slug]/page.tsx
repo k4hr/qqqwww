@@ -5,7 +5,7 @@ import { JsonLd } from "@/components/json-ld";
 import { MovieCard } from "@/components/movie-card";
 import { findFranchiseByCollectionSlug } from "@/lib/seo-pages";
 import { collectionSeoIntro } from "@/lib/seo-text";
-import { filmPath, franchisePath, genrePath, similarPath, siteUrl, watchPath } from "@/lib/seo-links";
+import { franchisePath, genrePath, similarPath, siteUrl, watchPath } from "@/lib/seo-links";
 import { normalizeMovieBaseTitle } from "@/lib/seo-slugs";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export default async function FranchisePage({ params }: Props) {
   if (parts.length < 2) notFound();
   const baseTitle = normalizeMovieBaseTitle(parts[0].titleRu);
   return <div className="container py-6">
-    <JsonLd data={{ "@context": "https://schema.org", "@type": "ItemList", name: `${baseTitle} все части по порядку`, itemListElement: parts.map((movie, index) => ({ "@type": "ListItem", position: index + 1, name: movie.titleRu, url: siteUrl(filmPath(movie)), image: movie.posterUrl || undefined })) }} />
+    <JsonLd data={{ "@context": "https://schema.org", "@type": "ItemList", name: `${baseTitle} все части по порядку`, itemListElement: parts.map((movie, index) => ({ "@type": "ListItem", position: index + 1, name: movie.titleRu, url: siteUrl(watchPath(movie)), image: movie.posterUrl || undefined })) }} />
     <nav className="mb-5 text-sm text-[#85858f]"><Link href="/">REDFILM</Link> / Все части</nav>
     <section className="mf-panel p-5 sm:p-7"><h1 className="text-[clamp(1.8rem,5vw,3rem)] font-black text-white">{baseTitle} все части по порядку</h1><p className="mt-4 max-w-4xl leading-relaxed text-[#b7b7c0]">{collectionSeoIntro(baseTitle, parts.length)}</p></section>
     <section className="mt-7"><h2 className="mb-5 text-2xl font-black text-white">Порядок просмотра</h2><div className="movie-grid">{parts.map((movie) => <MovieCard key={movie.id} movie={movie} />)}</div></section>

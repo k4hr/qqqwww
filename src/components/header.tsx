@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, Menu, Search, X } from "lucide-react";
 import { NAV_COUNTRIES, NAV_GENRES, NAV_YEARS, catalogHref } from "@/lib/navigation-data";
@@ -38,8 +38,25 @@ function MegaMenu({ base, kind }: { base: CatalogBase; kind: "movies" | "series"
 
 function DesktopCatalogMenu({ label, base, kind, open, setOpen }: { label: string; base: CatalogBase; kind: "movies" | "series"; open: boolean; setOpen: (value: boolean) => void }) {
   const id = `${kind}-mega-menu`;
-  return <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  };
+  const openMenu = () => {
+    cancelClose();
+    setOpen(true);
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setOpen(false), 140);
+  };
+
+  useEffect(() => () => cancelClose(), []);
+
+  return <div className="relative" onMouseEnter={openMenu} onMouseLeave={scheduleClose} onFocus={openMenu} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
     <button type="button" aria-expanded={open} aria-controls={id} aria-haspopup="true" onClick={() => setOpen(!open)} className="inline-flex min-h-11 items-center gap-1 rounded-full px-3.5 py-2 text-[13px] font-bold text-[#d4d4d8] hover:bg-white/[.07] hover:text-white">{label}<ChevronDown size={14} className={open ? "rotate-180" : ""} /></button>
+    {open ? <span aria-hidden className="absolute inset-x-0 top-full h-[18px]" /> : null}
     <div id={id} className={open ? "block" : "hidden"}><MegaMenu base={base} kind={kind} /></div>
   </div>;
 }

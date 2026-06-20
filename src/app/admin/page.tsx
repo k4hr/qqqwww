@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { toggleMoviePublished } from "./actions";
+import { refreshMissingPosters, toggleMoviePublished } from "./actions";
 import { getContentTypeLabel } from "@/lib/content";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+type Props = { searchParams: Promise<{ posterUpdated?: string; posterSkipped?: string; posterFailed?: string; posterError?: string }> };
+
+export default async function AdminPage({ searchParams }: Props) {
+  const posterResult = await searchParams;
   const [total, published, withVibix, latest] = await Promise.all([
     prisma.movie.count(),
     prisma.movie.count({ where: { isPublished: true } }),
@@ -35,6 +38,19 @@ export default async function AdminPage() {
         <Stat title="Доступно в Vibix" value={withVibix} />
         <Stat title="Без Vibix-плеера" value={total - withVibix} />
       </div>
+
+      <section className="admin-panel mb-6 p-5">
+        <h2 className="text-xl font-bold text-[#222]">Постеры Vibix</h2>
+        <p className="mt-2 text-sm text-neutral-600">Ручная последовательная подкачка только по точным KP/IMDb ID. Публичные страницы и sync worker её не запускают.</p>
+        {posterResult.posterError === "missing_key" ? <p className="mt-3 font-semibold text-red-700">VIBIX_API_KEY не настроен.</p> : null}
+        {posterResult.posterUpdated !== undefined ? <p className="mt-3 text-sm text-neutral-700">Обновлено: {posterResult.posterUpdated}; пропущено: {posterResult.posterSkipped ?? 0}; ошибок: {posterResult.posterFailed ?? 0}.</p> : null}
+        <form action={refreshMissingPosters} className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-sm font-semibold text-[#333]">Записей за запуск
+            <input name="limit" type="number" min="1" max="50" defaultValue="20" className="h-11 w-28 rounded-lg border border-[#d4d4d4] bg-white px-3 text-[#222]" />
+          </label>
+          <button type="submit" className="min-h-11 rounded-lg bg-[#e50914] px-5 py-2 font-bold text-white">Докачать постеры</button>
+        </form>
+      </section>
 
       <div className="admin-panel p-5">
         <h2 className="text-xl font-bold mb-4 text-[#222]">Последние карточки</h2>

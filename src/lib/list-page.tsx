@@ -8,7 +8,7 @@ import { buildCountryFilterWhere, normalizeCatalogCountry } from "@/lib/catalog-
 import { CountryFilter } from "@/components/country-filter";
 import { timedMovieQuery } from "@/lib/query-performance";
 import { JsonLd } from "@/components/json-ld";
-import { filmPath, siteUrl } from "@/lib/seo-links";
+import { siteUrl, watchPath } from "@/lib/seo-links";
 
 type Props = {
   title: string;
@@ -67,7 +67,7 @@ export async function ListPage({ title, type, year, yearFilter, genreSlug, sort,
 
   return (
     <div className="container py-6">
-      <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: title, mainEntity: { "@type": "ItemList", itemListElement: movies.map((movie, index) => ({ "@type": "ListItem", position: (safePage - 1) * 48 + index + 1, name: movie.titleRu, url: siteUrl(filmPath(movie)), image: movie.posterUrl || undefined })) } }} />
+      <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: title, mainEntity: { "@type": "ItemList", itemListElement: movies.map((movie, index) => ({ "@type": "ListItem", position: (safePage - 1) * 48 + index + 1, name: movie.titleRu, url: siteUrl(watchPath(movie)), image: movie.posterUrl || undefined })) } }} />
       <div className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
         <h1 className="text-[clamp(1.75rem,5vw,3.5rem)] font-black tracking-[-.035em] text-white">{title}</h1>
         {description ? <p className="mt-3 max-w-4xl leading-relaxed text-[#a9a9b2]">{description}</p> : null}

@@ -9,6 +9,7 @@ import { getTmdbDetails } from "@/lib/tmdb";
 import { getKinopoiskCollectionIds, getKinopoiskDetails } from "@/lib/kinopoisk";
 import { parseContentType } from "@/lib/content";
 import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
+import { refreshMoviePoster } from "@/lib/poster-lookup";
 
 type MovieInput = {
   titleRu: string;
@@ -258,4 +259,33 @@ export async function toggleMoviePublished(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/admin");
   redirect("/admin");
+}
+
+export async function refreshMissingPosters(formData: FormData) {
+  if (!process.env.VIBIX_API_KEY) redirect("/admin?posterError=missing_key");
+  const limit = Math.max(1, Math.min(Number(text(formData, "limit")) || 20, 50));
+  const movies = await prisma.movie.findMany({
+    where: { OR: [{ posterUrl: null }, { posterUrl: "" }] },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  let updated = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const [index, movie] of movies.entries()) {
+    try {
+      const result = await refreshMoviePoster(movie.id);
+      if (result.status === "updated") updated += 1;
+      else skipped += 1;
+    } catch {
+      failed += 1;
+    }
+    if (index < movies.length - 1) await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+
+  revalidatePath("/");
+  revalidatePath("/admin");
+  redirect(`/admin?posterUpdated=${updated}&posterSkipped=${skipped}&posterFailed=${failed}`);
 }

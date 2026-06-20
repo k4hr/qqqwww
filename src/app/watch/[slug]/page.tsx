@@ -1,72 +1,118 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Film } from "lucide-react";
 import { notFound } from "next/navigation";
+import { JsonLd } from "@/components/json-ld";
+import { MovieCard } from "@/components/movie-card";
 import { PlayerBlock } from "@/components/player-block";
 import { VibixBanner } from "@/components/vibix-banner";
-import { findFranchiseParts, findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
-import { countryPath, filmPath, franchisePath, genrePath, likePath, similarPath, watchPath, yearPath } from "@/lib/seo-links";
 import { extractCountries } from "@/lib/catalog-filters";
-import { MovieCard } from "@/components/movie-card";
+import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
+import { countryPath, genrePath, personPath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }> };
 
-export async function generateMetadata({ params }: Props) {
-  const { slug } = await params;
-  const movie = await getSeoMovieBySlug(slug);
+function shortDescription(description: string) {
+  const normalized = description.trim();
+  return normalized.length > 180 ? `${normalized.slice(0, 177).trimEnd()}...` : normalized;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const movie = await getSeoMovieBySlug((await params).slug);
   if (!movie) return {};
-  const title = `Смотреть ${movie.titleRu} (${movie.year}) онлайн — REDFILM`;
-  return { title, description: `Онлайн-просмотр ${movie.titleRu} (${movie.year}) в плеере REDFILM.`, alternates: { canonical: watchPath(movie) }, openGraph: { title, description: movie.description, url: watchPath(movie) } };
+  const title = `${movie.titleRu} (${movie.year}) смотреть онлайн бесплатно — REDFILM`;
+  const description = `Смотрите ${movie.titleRu} (${movie.year}) онлайн в хорошем качестве на REDFILM. ${shortDescription(movie.description)}`;
+  const canonical = watchPath(movie);
+  const image = movie.backdropUrl || movie.posterUrl;
+
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: "video.movie",
+      images: image ? [{ url: image }] : undefined,
+    },
+  };
 }
 
 export default async function WatchPage({ params }: Props) {
-  const { slug } = await params;
-  const movie = await getSeoMovieBySlug(slug);
+  const movie = await getSeoMovieBySlug((await params).slug);
   if (!movie) notFound();
-  const [similar, parts] = await Promise.all([findSimilarSeoMovies(movie, 6), findFranchiseParts(movie)]);
+  const similar = await findSimilarSeoMovies(movie, 6);
   const countries = extractCountries(movie.country);
+  const description = movie.description.trim() || "Описание скоро появится";
+  const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
 
   return (
     <div className="container py-5 sm:py-7">
-      <div className="mb-5 flex min-w-0 flex-wrap items-center gap-2 break-words text-sm text-[#7d7d87]">
-        <Link href="/" className="hover:text-white">REDFILM</Link><span>/</span>
-        <Link href={filmPath(movie)} className="hover:text-white">{movie.titleRu}</Link><span>/</span>
-        <span className="text-[#b5b5bd]">Просмотр</span>
-      </div>
+      <JsonLd data={{
+        "@context": "https://schema.org",
+        "@type": "Movie",
+        name: movie.titleRu,
+        alternateName: movie.titleOriginal || undefined,
+        datePublished: String(movie.year),
+        image: movie.posterUrl || movie.backdropUrl || undefined,
+        description,
+        genre: movie.genres.map((item) => item.genre.name),
+        countryOfOrigin: countries.map((name) => ({ "@type": "Country", name })),
+        aggregateRating: rating ? { "@type": "AggregateRating", ratingValue: rating, bestRating: 10, worstRating: 0 } : undefined,
+        potentialAction: { "@type": "WatchAction", target: siteUrl(watchPath(movie)) },
+        url: siteUrl(watchPath(movie)),
+      }} />
 
-      <section className="glass-panel section-glow relative overflow-hidden rounded-[26px] p-4 sm:p-6">
+      <nav className="mb-5 flex min-w-0 flex-wrap items-center gap-2 break-words text-sm text-[#7d7d87]" aria-label="Хлебные крошки">
+        <Link href="/" className="hover:text-white">REDFILM</Link><span>/</span>
+        <Link href={movie.type === "SERIES" ? "/series" : "/movies"} className="hover:text-white">{movie.type === "SERIES" ? "Сериалы" : "Фильмы"}</Link><span>/</span>
+        <span className="text-[#b5b5bd]">{movie.titleRu}</span>
+      </nav>
+
+      <article className="glass-panel section-glow relative overflow-hidden rounded-[26px] p-4 sm:p-6 lg:p-8">
         {movie.backdropUrl ? <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: `url(${movie.backdropUrl})` }} /> : null}
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(6,6,9,.98),rgba(6,6,9,.82),rgba(65,0,6,.36))]" />
-        <div className="relative grid items-center gap-5 sm:grid-cols-[110px_1fr]">
-          <div className="poster-fallback relative hidden aspect-[2/3] overflow-hidden rounded-2xl border border-white/10 sm:block">
-            {movie.posterUrl ? <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="110px" unoptimized /> : <div className="absolute inset-0 flex items-center justify-center text-[#666670]"><Film /></div>}
+        <div className="relative grid items-center gap-5 sm:grid-cols-[150px_minmax(0,1fr)] lg:grid-cols-[190px_minmax(0,1fr)] lg:gap-8">
+          <div className="poster-fallback relative mx-auto aspect-[2/3] w-full max-w-[150px] overflow-hidden rounded-2xl border border-white/10 lg:max-w-[190px]">
+            {movie.posterUrl ? <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="(max-width: 640px) 150px, 190px" unoptimized priority /> : <div className="absolute inset-0 flex items-center justify-center text-[#666670]"><Film size={42} /></div>}
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="mf-badge">{movie.quality || "HD"}</span>
-            <h1 className="mt-3 break-words text-[clamp(1.5rem,6vw,2.5rem)] font-black tracking-[-.03em] text-white">{movie.titleRu} <span className="font-medium text-[#777781]">({movie.year})</span></h1>
-            <p className="line-clamp-2 mt-3 max-w-3xl text-sm leading-relaxed text-[#b9b9c0]">{movie.description}</p>
-            <Link href={filmPath(movie)} className="mt-4 inline-flex text-sm font-bold text-[#ff4d55] hover:text-white">Описание фильма</Link>
+            <h1 className="mt-3 break-words text-[clamp(1.55rem,6vw,3rem)] font-black tracking-[-.03em] text-white">Смотреть онлайн {movie.titleRu} ({movie.year})</h1>
+            <p className="line-clamp-3 mt-3 max-w-3xl text-sm leading-relaxed text-[#b9b9c0] sm:text-base">{description}</p>
+            <dl className="mt-5 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
+              <Fact label="Год"><Link href={yearPath(movie)}>{movie.year}</Link></Fact>
+              <Fact label="КП">{movie.kpRating?.toFixed(1) ?? "—"}</Fact>
+              <Fact label="IMDb">{movie.imdbRating?.toFixed(1) ?? "—"}</Fact>
+              <Fact label="Длительность">{movie.duration ? `${movie.duration} мин.` : "—"}</Fact>
+              <Fact label="Страна">{countries[0] ? <Link href={countryPath(countries[0])}>{countries[0]}</Link> : "—"}</Fact>
+              <Fact label="Жанр">{movie.genres[0] ? <Link href={genrePath(movie.genres[0].genre)}>{movie.genres[0].genre.name}</Link> : "—"}</Fact>
+            </dl>
           </div>
         </div>
-      </section>
+      </article>
 
       <PlayerBlock movie={movie} />
-      <section className="mf-panel mt-6 p-5 sm:p-6">
-        <h2 className="text-xl font-black text-white">Продолжить знакомство</h2>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link href={filmPath(movie)} className="mf-btn">Описание фильма</Link>
-          <Link href={similarPath(movie)} className="mf-btn">Все похожие</Link>
-          <Link href={likePath(movie)} className="mf-btn">Что посмотреть после</Link>
-          {parts.length >= 2 ? <Link href={franchisePath(movie)} className="mf-btn">Все части</Link> : null}
-          <Link href={yearPath(movie)} className="mf-btn">{movie.year} год</Link>
-          {movie.genres.slice(0, 4).map((item) => <Link key={item.genreId} href={genrePath(item.genre)} className="mf-btn">{item.genre.name}</Link>)}
-          {countries.slice(0, 2).map((country) => <Link key={country} href={countryPath(country)} className="mf-btn">{country}</Link>)}
-        </div>
+
+      <section id="description" className="mf-panel mt-6 scroll-mt-24 p-5 sm:p-6">
+        <h2 className="text-2xl font-black text-white">О фильме</h2>
+        <p className="mt-4 max-w-5xl leading-relaxed text-[#b7b7c0]">{description}</p>
+        {movie.cast.length ? <p className="mt-4 text-sm text-[#a1a1aa]"><b className="text-white">В ролях:</b> {movie.cast.slice(0, 8).map((item, index) => <span key={item.personId}>{index ? ", " : ""}<Link href={personPath(item.person.nameRu)} className="hover:text-[#ff4d55]">{item.person.nameRu}</Link></span>)}</p> : null}
       </section>
-      <section className="mt-8"><div className="mb-5 flex items-center justify-between"><h2 className="text-2xl font-black text-white">Похожие фильмы</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div><div className="movie-grid">{similar.map((item) => <MovieCard key={item.id} movie={item} />)}</div></section>
+
+      <section className="mt-8">
+        <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">Похожие фильмы</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>
+        {similar.length ? <div className="movie-grid">{similar.map((item) => <MovieCard key={item.id} movie={item} />)}</div> : <div className="mf-panel p-5 text-[#a1a1aa]">Похожие фильмы скоро появятся.</div>}
+      </section>
       <VibixBanner size="680x200" />
     </div>
   );
+}
+
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="min-w-0 rounded-xl border border-white/10 bg-black/25 p-2.5"><dt className="text-[10px] uppercase tracking-wider text-[#71717a]">{label}</dt><dd className="mt-1 truncate text-white">{children}</dd></div>;
 }

@@ -7,7 +7,7 @@ import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 import { timedMovieQuery } from "@/lib/query-performance";
 import { getSeoTopic, topicWhere } from "@/lib/seo-pages";
 import { JsonLd } from "@/components/json-ld";
-import { filmPath, siteUrl } from "@/lib/seo-links";
+import { siteUrl, watchPath } from "@/lib/seo-links";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,7 @@ export default async function CollectionPage({ params }: Props) {
 
   return (
     <div className="container py-6">
-      <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: h1, url: siteUrl(`/collections/${slug}`), mainEntity: { "@type": "ItemList", itemListElement: movies.map((movie, index) => ({ "@type": "ListItem", position: index + 1, name: movie.titleRu, url: siteUrl(filmPath(movie)), image: movie.posterUrl || undefined })) } }} />
+      <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: h1, url: siteUrl(`/collections/${slug}`), mainEntity: { "@type": "ItemList", itemListElement: movies.map((movie, index) => ({ "@type": "ListItem", position: index + 1, name: movie.titleRu, url: siteUrl(watchPath(movie)), image: movie.posterUrl || undefined })) } }} />
       <section className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
         <h1 className="text-3xl font-black tracking-[-.035em] text-white">{h1}</h1>
         <p className="mt-3 max-w-4xl leading-relaxed text-[#a1a1aa]">{description}</p>
