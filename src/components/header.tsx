@@ -1,71 +1,75 @@
-import Link from "next/link";
-import { Search } from "lucide-react";
+"use client";
 
-const nav = [
-  ["Фильмы", "/movies"],
-  ["Сериалы", "/series"],
-  ["Последнее", "/latest"],
-  ["ТОП", "/top"],
-] as const;
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ChevronDown, Menu, Search, X } from "lucide-react";
+import { NAV_COUNTRIES, NAV_GENRES, NAV_YEARS, catalogHref } from "@/lib/navigation-data";
+
+type CatalogBase = "/movies" | "/series";
 
 function SearchForm({ mobile = false }: { mobile?: boolean }) {
-  return (
-    <form
-      action="/search"
-      className={
-        mobile
-          ? "flex h-11 w-full items-center rounded-2xl border border-white/10 bg-white/[.045] px-4 shadow-inner shadow-black/30"
-          : "ml-auto flex h-11 w-[310px] shrink-0 items-center rounded-2xl border border-white/10 bg-white/[.045] px-4 shadow-inner shadow-black/30 transition-all focus-within:border-[#e50914]/80 focus-within:bg-white/[.07] max-lg:w-[240px] max-md:hidden"
-      }
-    >
-      <input
-        name="q"
-        aria-label="Поиск по сайту"
-        placeholder="Фильм или сериал"
-        className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#71717a]"
-      />
-      <Search size={18} className="shrink-0 text-[#e50914]" />
-    </form>
-  );
+  return <form action="/search" className={mobile ? "flex h-11 w-full items-center rounded-2xl border border-white/10 bg-white/[.05] px-4" : "ml-auto flex h-11 w-[clamp(190px,22vw,310px)] shrink-0 items-center rounded-2xl border border-white/10 bg-white/[.045] px-4 transition focus-within:border-[#e50914]/80 max-[899px]:hidden"}>
+    <input name="q" aria-label="Поиск по сайту" placeholder="Поиск по сайту..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#71717a]" />
+    <Search size={18} className="shrink-0 text-[#e50914]" />
+  </form>;
+}
+
+function MenuColumn({ title, children }: { title: string; children: React.ReactNode }) {
+  return <div><div className="mb-3 text-xs font-black uppercase tracking-[.14em] text-[#e50914]">{title}</div><div className="grid gap-1">{children}</div></div>;
+}
+
+function MenuLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return <Link href={href} className="rounded-lg px-2 py-2 text-sm font-semibold text-[#d4d4d8] transition hover:bg-white/[.06] hover:text-white">{children}</Link>;
+}
+
+function MegaMenu({ base, kind }: { base: CatalogBase; kind: "movies" | "series" }) {
+  const isSeries = kind === "series";
+  const genres = isSeries ? NAV_GENRES.filter((item) => ["drama", "komediya", "detektiv", "kriminal", "triller", "fantastika", "melodrama", "priklyucheniya"].includes(item.value)) : NAV_GENRES.slice(0, 10);
+  const countries = NAV_COUNTRIES.filter((item) => !isSeries || item.value !== "italiya").slice(0, isSeries ? 9 : 8);
+  return <div className="mega-menu fixed left-1/2 top-[72px] z-[70] w-[min(calc(100vw_-_32px),1100px)] -translate-x-1/2 rounded-[18px] border border-white/10 bg-[rgba(10,10,14,.97)] p-6 shadow-[0_28px_90px_rgba(0,0,0,.72)] backdrop-blur-xl">
+    <div className="grid grid-cols-4 gap-7">
+      <MenuColumn title={isSeries ? "Сериалы" : "Фильмы"}><MenuLink href={base}>Все {isSeries ? "сериалы" : "фильмы"}</MenuLink><MenuLink href={catalogHref(base, "sort", "popular")}>Популярные</MenuLink><MenuLink href={catalogHref(base, "sort", "new")}>Новинки</MenuLink>{!isSeries ? <MenuLink href={catalogHref(base, "sort", "rating")}>ТОП 100</MenuLink> : null}<MenuLink href={catalogHref(base, "year", "2026")}>{isSeries ? "Сериалы" : "Фильмы"} 2026</MenuLink></MenuColumn>
+      <MenuColumn title="По году">{NAV_YEARS.slice(0, isSeries ? 7 : 9).map((item) => <MenuLink key={item.value} href={catalogHref(base, "year", item.value)}>{item.label}</MenuLink>)}</MenuColumn>
+      <MenuColumn title="По жанрам">{genres.map((item) => <MenuLink key={item.value} href={catalogHref(base, "genre", item.value)}>{item.label}</MenuLink>)}</MenuColumn>
+      <MenuColumn title="По странам">{countries.map((item) => <MenuLink key={item.value} href={catalogHref(base, "country", item.value)}>{item.label}</MenuLink>)}</MenuColumn>
+    </div>
+  </div>;
+}
+
+function DesktopCatalogMenu({ label, base, kind, open, setOpen }: { label: string; base: CatalogBase; kind: "movies" | "series"; open: boolean; setOpen: (value: boolean) => void }) {
+  const id = `${kind}-mega-menu`;
+  return <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+    <button type="button" aria-expanded={open} aria-controls={id} aria-haspopup="true" onClick={() => setOpen(!open)} className="inline-flex min-h-11 items-center gap-1 rounded-full px-3.5 py-2 text-[13px] font-bold text-[#d4d4d8] hover:bg-white/[.07] hover:text-white">{label}<ChevronDown size={14} className={open ? "rotate-180" : ""} /></button>
+    <div id={id} className={open ? "block" : "hidden"}><MegaMenu base={base} kind={kind} /></div>
+  </div>;
+}
+
+function MobileAccordion({ label, base, kind, close }: { label: string; base: CatalogBase; kind: "movies" | "series"; close: () => void }) {
+  const genres = kind === "series" ? NAV_GENRES.slice(1, 10) : NAV_GENRES.slice(0, 10);
+  return <details className="border-b border-white/10"><summary className="flex min-h-12 cursor-pointer list-none items-center justify-between py-2 text-base font-black text-white">{label}<ChevronDown size={18} /></summary><div className="pb-4"><Link onClick={close} href={base} className="mobile-menu-link">Все {label.toLowerCase()}</Link><div className="mt-3 text-xs font-black uppercase tracking-wider text-[#e50914]">По году</div><div className="mt-2 flex gap-2 overflow-x-auto pb-1">{NAV_YEARS.slice(0, 7).map((item) => <Link onClick={close} key={item.value} href={catalogHref(base, "year", item.value)} className="mf-pill min-h-11 shrink-0">{item.label}</Link>)}</div><div className="mt-3 text-xs font-black uppercase tracking-wider text-[#e50914]">По жанрам</div><div className="mt-2 grid grid-cols-2 gap-1">{genres.map((item) => <Link onClick={close} key={item.value} href={catalogHref(base, "genre", item.value)} className="mobile-menu-link">{item.label}</Link>)}</div><div className="mt-3 text-xs font-black uppercase tracking-wider text-[#e50914]">По странам</div><div className="mt-2 grid grid-cols-2 gap-1">{NAV_COUNTRIES.slice(0, 10).map((item) => <Link onClick={close} key={item.value} href={catalogHref(base, "country", item.value)} className="mobile-menu-link">{item.label}</Link>)}</div></div></details>;
 }
 
 export function Header() {
-  return (
-    <header className="sticky top-0 z-50 border-b border-[#e50914]/25 bg-[rgba(5,5,8,.72)] shadow-[0_18px_60px_rgba(0,0,0,.28)] backdrop-blur-[18px]">
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-[#e50914]/70 to-transparent" />
-
-      <div className="container flex min-h-[76px] items-center gap-5 py-3 max-md:min-h-0 max-md:flex-wrap max-md:gap-2 max-md:py-2.5">
-        <Link
-          href="/"
-          className="group flex min-w-0 shrink-0 items-center text-[clamp(22px,6vw,28px)] font-black tracking-[-0.06em] text-white transition-transform duration-300 hover:scale-[1.02]"
-          aria-label="REDFILM"
-        >
-          <span className="text-[#e50914] drop-shadow-[0_0_18px_rgba(229,9,20,.55)]">
-            RED
-          </span>
-          <span className="drop-shadow-[0_0_14px_rgba(255,255,255,.18)]">
-            FILM
-          </span>
-        </Link>
-
-        <nav className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-full border border-white/[.07] bg-white/[.035] p-1 text-[13px] font-bold text-[#a1a1aa] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-md:order-3 max-md:w-full max-xl:gap-1">
-          {nav.map(([label, href]) => (
-            <Link
-              key={href}
-              className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3.5 py-2 transition-all hover:bg-white/[.07] hover:text-white max-md:min-h-9 max-md:px-3 max-md:py-1.5"
-              href={href}
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
-
-        <SearchForm />
-      </div>
-
-      <div className="container pb-2.5 md:hidden">
-        <SearchForm mobile />
-      </div>
-    </header>
-  );
+  const [openMenu, setOpenMenu] = useState<"movies" | "series" | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") { setOpenMenu(null); setMobileOpen(false); } };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, []);
+  const closeMobile = () => setMobileOpen(false);
+  return <header className="sticky top-0 z-50 border-b border-[#e50914]/25 bg-[rgba(5,5,8,.82)] shadow-[0_18px_60px_rgba(0,0,0,.28)] backdrop-blur-[18px]">
+    <div className="container relative flex min-h-[72px] items-center gap-4 py-2.5">
+      <Link href="/" className="shrink-0 text-[clamp(22px,5vw,28px)] font-black tracking-[-.06em] text-white" aria-label="REDFILM"><span className="text-[#e50914]">RED</span>FILM</Link>
+      <nav className="hidden items-center gap-1 min-[900px]:flex" aria-label="Основная навигация">
+        <DesktopCatalogMenu label="Фильмы" base="/movies" kind="movies" open={openMenu === "movies"} setOpen={(value) => setOpenMenu(value ? "movies" : null)} />
+        <DesktopCatalogMenu label="Сериалы" base="/series" kind="series" open={openMenu === "series"} setOpen={(value) => setOpenMenu(value ? "series" : null)} />
+        <MenuLink href="/latest">Новинки</MenuLink><MenuLink href="/top">Популярное</MenuLink><MenuLink href="/collections">Подборки</MenuLink>
+      </nav>
+      <SearchForm />
+      <button type="button" aria-label={mobileOpen ? "Закрыть меню" : "Открыть меню"} aria-expanded={mobileOpen} aria-controls="mobile-navigation" onClick={() => setMobileOpen(!mobileOpen)} className="ml-auto flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[.05] text-white min-[900px]:hidden">{mobileOpen ? <X /> : <Menu />}</button>
+    </div>
+    <div className="container pb-2.5 min-[900px]:hidden"><SearchForm mobile /></div>
+    {mobileOpen ? <div id="mobile-navigation" className="container max-h-[calc(100svh-116px)] overflow-y-auto border-t border-white/10 bg-[rgba(5,5,8,.98)] pb-5 min-[900px]:hidden"><MobileAccordion label="Фильмы" base="/movies" kind="movies" close={closeMobile} /><MobileAccordion label="Сериалы" base="/series" kind="series" close={closeMobile} /><div className="grid grid-cols-2 gap-2 pt-4"><Link onClick={closeMobile} className="mobile-menu-link" href="/latest">Новинки</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/top">Популярное</Link><Link onClick={closeMobile} className="mobile-menu-link col-span-2" href="/collections">Подборки</Link></div></div> : null}
+  </header>;
 }

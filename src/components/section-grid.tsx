@@ -7,9 +7,12 @@ type Props = {
   title: string;
   href: string;
   movies: Pick<Movie, "slug" | "titleRu" | "year" | "posterUrl" | "quality" | "kpRating" | "imdbRating">[];
+  showSorts?: boolean;
+  mobileCarousel?: boolean;
 };
 
-export function SectionGrid({ title, href, movies }: Props) {
+export function SectionGrid({ title, href, movies, showSorts = true, mobileCarousel = false }: Props) {
+  if (!movies.length) return null;
   return (
     <section className="mf-panel mt-8 overflow-hidden p-4 sm:p-5 lg:p-6">
       <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-[#e50914]/10 blur-3xl" />
@@ -20,22 +23,16 @@ export function SectionGrid({ title, href, movies }: Props) {
           </span>
           <span>{title}</span>
         </Link>
-        <div className="flex gap-2 overflow-x-auto rounded-full border border-white/[.07] bg-black/20 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {showSorts ? <div className="flex gap-2 overflow-x-auto rounded-full border border-white/[.07] bg-black/20 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Link href={`${href}?sort=latest`} className="mf-pill">Последние</Link>
           <Link href={`${href}?sort=popular`} className="mf-pill">Популярные</Link>
           <Link href={`${href}?sort=rating`} className="mf-pill">По рейтингу</Link>
-        </div>
+        </div> : <Link href={href} className="mf-btn shrink-0">Смотреть все <ArrowRight size={16} /></Link>}
       </div>
 
-      {movies.length ? (
-        <div className="movie-grid relative">
+        <div className={`movie-grid relative ${mobileCarousel ? "home-movie-strip" : ""}`}>
           {movies.map((movie) => <MovieCard key={movie.slug} movie={movie} />)}
         </div>
-      ) : (
-        <div className="poster-fallback relative rounded-2xl border border-white/10 px-5 py-12 text-center text-sm text-[#a1a1aa]">
-          Каталог обновляется. Фильмы скоро появятся.
-        </div>
-      )}
     </section>
   );
 }

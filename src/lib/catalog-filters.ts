@@ -101,8 +101,14 @@ export function evaluateMovieCatalogVisibility(movie: Pick<Movie, "country"> | {
 }
 
 export function normalizeCatalogCountry(value?: string | null): CatalogCountry {
-  return COUNTRY_FILTER_OPTIONS.some((option) => option.value === value)
-    ? value as CatalogCountry
+  const aliases: Record<string, CatalogCountry> = {
+    ssha: "usa", velikobritaniya: "uk", frantsiya: "france", germaniya: "germany",
+    ispaniya: "spain", italiya: "italy", rossiya: "russia", kitay: "china",
+    yaponiya: "japan", indiya: "india", "yuzhnaya-koreya": "south-korea",
+  };
+  const normalized = value ? aliases[value] ?? value : value;
+  return COUNTRY_FILTER_OPTIONS.some((option) => option.value === normalized)
+    ? normalized as CatalogCountry
     : "main";
 }
 

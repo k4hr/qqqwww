@@ -282,6 +282,19 @@ button, input, select, textarea { font: inherit; }
 .rating-imdb { color: #facc15; font-weight: 800; }
 .text-muted { color: var(--muted); }
 
+.mobile-menu-link {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: #e4e4e7;
+  font-size: 14px;
+  font-weight: 700;
+  transition: background-color .2s ease, color .2s ease;
+}
+.mobile-menu-link:hover { background: rgba(255,255,255,.07); color: #fff; }
+
 /* Admin forms intentionally retain their light surfaces. */
 .admin-panel {
   background: #fff;
@@ -312,7 +325,7 @@ button, input, select, textarea { font: inherit; }
   .brand-emblem { width: 42px; height: 42px; }
   .brand-text { font-size: 18px; }
   .mf-panel { border-radius: 18px; }
-  .mf-btn { min-height: 40px; padding: 0 16px; }
+  .mf-btn { min-height: 44px; padding: 0 16px; }
   .admin-shell { padding-left: 14px; padding-right: 14px; border-radius: 0; }
   .admin-panel { padding-left: 14px; padding-right: 14px; }
   .hero-slider {
@@ -426,17 +439,47 @@ button, input, select, textarea { font: inherit; }
 }
 
 @media (max-width: 640px) {
-  .hero-slider { min-height: 0 !important; }
+  .hero-slider {
+    min-height: 400px !important;
+    height: min(72svh, 500px);
+    max-height: 500px;
+  }
+  .hero-slider .hero-layout { height: 100%; padding: 16px 12px 48px; }
+  .hero-slider .hero-kicker { display: none; }
+  .hero-slider .hero-description { -webkit-line-clamp: 2; font-size: 14px; }
+  .hero-slider .hero-meta > span:nth-child(n+3) { display: none; }
+  .hero-slider .hero-primary-action { min-height: 52px; }
+  .hero-slider .hero-secondary-actions { grid-template-columns: 1fr; }
+  .hero-slider .hero-secondary-actions a:first-child { display: none; }
   .hero-slider .hero-arrow {
-    bottom: 14px;
-    width: 38px;
-    height: 38px;
-    min-height: 38px;
+    display: none;
   }
   .hero-slider .hero-arrow-prev { left: 14px; }
   .hero-slider .hero-arrow-next { right: 14px; }
   .hero-slider .hero-dots {
-    bottom: 17px;
-    padding: 7px 10px;
+    bottom: 14px;
+    padding: 5px 8px;
+    gap: 5px;
   }
+  .hero-slider .hero-dots button { height: 3px; }
+  .home-movie-strip {
+    display: flex;
+    max-width: 100%;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 6px;
+    scrollbar-width: none;
+  }
+  .home-movie-strip::-webkit-scrollbar { display: none; }
+  .home-movie-strip .mf-card {
+    flex: 0 0 min(43vw, 160px);
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 768px) {
+  #vibix_union,
+  [data-pm-b],
+  .home-catalog-ad { display: none !important; }
 }

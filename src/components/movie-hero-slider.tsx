@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Info, Play, Sparkles } from "lucide-react";
@@ -21,6 +21,7 @@ export type HeroMovie = {
 export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const touchStartX = useRef<number | null>(null);
   const slideCount = movies.length;
 
   const showSlide = useCallback((index: number) => {
@@ -55,6 +56,13 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
       className="hero-slider relative overflow-hidden rounded-[30px] border border-white/10 bg-[#08080c]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
+      onTouchStart={(event) => { touchStartX.current = event.touches[0]?.clientX ?? null; }}
+      onTouchEnd={(event) => {
+        if (touchStartX.current === null) return;
+        const delta = (event.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+        if (Math.abs(delta) >= 45) showSlide(activeIndex + (delta < 0 ? 1 : -1));
+        touchStartX.current = null;
+      }}
       aria-roledescription="carousel"
       aria-label="Избранные фильмы"
     >

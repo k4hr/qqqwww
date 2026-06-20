@@ -42,7 +42,8 @@ export function parseContentType(value: string | null | undefined): ContentType 
 
 export function parseSort(value: string | null | undefined) {
   if (value === "rating") return [{ kpRating: "desc" as const }, { imdbRating: "desc" as const }, { createdAt: "desc" as const }];
-  if (value === "popular") return [{ views: "desc" as const }, { likes: "desc" as const }, { createdAt: "desc" as const }];
+  if (value === "popular") return [{ kpRating: "desc" as const }, { imdbRating: "desc" as const }, { views: "desc" as const }, { createdAt: "desc" as const }];
+  if (value === "new") return [{ vibixUploadedAt: "desc" as const }, { createdAt: "desc" as const }];
   if (value === "year") return [{ year: "desc" as const }, { createdAt: "desc" as const }];
   return [{ createdAt: "desc" as const }];
 }

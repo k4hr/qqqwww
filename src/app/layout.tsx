@@ -43,8 +43,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             });
           `}
         </Script>
-        <Script id="vibix-union-script" src="https://v-js-menu.run/public/lib.en.min.js" strategy="afterInteractive" />
-
         <noscript>
           <div>
             <img
