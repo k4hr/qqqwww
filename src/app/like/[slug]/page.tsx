@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!movie) return {};
   const title = `Что посмотреть если понравился ${movie.titleRu} — REDFILM`;
   const description = `Что посмотреть после фильма ${movie.titleRu}: подборка картин с близкой атмосферой, жанрами и рейтингами.`;
-  return { title, description, alternates: { canonical: likePath(movie) }, openGraph: { title, description, url: likePath(movie) } };
+  return { title, description, alternates: { canonical: similarPath(movie) }, openGraph: { title, description, url: likePath(movie) }, robots: { index: false, follow: true } };
 }
 
 export default async function LikePage({ params }: Props) {

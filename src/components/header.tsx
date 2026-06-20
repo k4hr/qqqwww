@@ -2,17 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Menu, Search, X } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import { NAV_COUNTRIES, NAV_GENRES, NAV_YEARS, catalogHref } from "@/lib/navigation-data";
+import { SearchAutocomplete } from "@/components/search-autocomplete";
 
 type CatalogBase = "/movies" | "/series";
-
-function SearchForm({ mobile = false }: { mobile?: boolean }) {
-  return <form action="/search" className={mobile ? "flex h-11 w-full items-center rounded-2xl border border-white/10 bg-white/[.05] px-4" : "ml-auto flex h-11 w-[clamp(190px,22vw,310px)] shrink-0 items-center rounded-2xl border border-white/10 bg-white/[.045] px-4 transition focus-within:border-[#e50914]/80 max-[899px]:hidden"}>
-    <input name="q" aria-label="Поиск по сайту" placeholder="Поиск по сайту..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#71717a]" />
-    <Search size={18} className="shrink-0 text-[#e50914]" />
-  </form>;
-}
 
 function MenuColumn({ title, children }: { title: string; children: React.ReactNode }) {
   return <div><div className="mb-3 text-xs font-black uppercase tracking-[.14em] text-[#e50914]">{title}</div><div className="grid gap-1">{children}</div></div>;
@@ -83,10 +77,10 @@ export function Header() {
         <DesktopCatalogMenu label="Сериалы" base="/series" kind="series" open={openMenu === "series"} setOpen={(value) => setOpenMenu(value ? "series" : null)} />
         <MenuLink href="/latest">Новинки</MenuLink><MenuLink href="/top">Популярное</MenuLink><MenuLink href="/collections">Подборки</MenuLink>
       </nav>
-      <SearchForm />
+      <SearchAutocomplete />
       <button type="button" aria-label={mobileOpen ? "Закрыть меню" : "Открыть меню"} aria-expanded={mobileOpen} aria-controls="mobile-navigation" onClick={() => setMobileOpen(!mobileOpen)} className="ml-auto flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[.05] text-white min-[900px]:hidden">{mobileOpen ? <X /> : <Menu />}</button>
     </div>
-    <div className="container pb-2.5 min-[900px]:hidden"><SearchForm mobile /></div>
+    <div className="container pb-2.5 min-[900px]:hidden"><SearchAutocomplete mobile /></div>
     {mobileOpen ? <div id="mobile-navigation" className="container max-h-[calc(100svh-116px)] overflow-y-auto border-t border-white/10 bg-[rgba(5,5,8,.98)] pb-5 min-[900px]:hidden"><MobileAccordion label="Фильмы" base="/movies" kind="movies" close={closeMobile} /><MobileAccordion label="Сериалы" base="/series" kind="series" close={closeMobile} /><div className="grid grid-cols-2 gap-2 pt-4"><Link onClick={closeMobile} className="mobile-menu-link" href="/latest">Новинки</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/top">Популярное</Link><Link onClick={closeMobile} className="mobile-menu-link col-span-2" href="/collections">Подборки</Link></div></div> : null}
   </header>;
 }

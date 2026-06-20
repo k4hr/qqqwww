@@ -156,3 +156,28 @@ model VibixSyncJob {
 
   @@index([status, createdAt])
 }
+
+model MovieEvent {
+  id        String   @id @default(cuid())
+  movieId   String?
+  type      String
+  path      String?
+  referrer  String?
+  query     String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([movieId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model SearchEvent {
+  id        String   @id @default(cuid())
+  query     String
+  results   Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([query])
+  @@index([createdAt])
+}

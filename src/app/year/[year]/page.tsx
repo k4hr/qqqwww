@@ -7,7 +7,7 @@ import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 
 export const dynamic = "force-dynamic";
-type Props = { params: Promise<{ year: string }>; searchParams: Promise<{ sort?: string; country?: string; type?: string; page?: string }> };
+type Props = { params: Promise<{ year: string }>; searchParams: Promise<{ sort?: string; country?: string; type?: string; genre?: string; page?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const year = (await params).year;
@@ -19,9 +19,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function YearPage({ params, searchParams }: Props) {
   const parsedYear = Number((await params).year);
   if (!Number.isFinite(parsedYear) || parsedYear < 1900 || parsedYear > 2100) notFound();
-  const { sort, country, type, page } = await searchParams;
+  const { sort, country, type, genre, page } = await searchParams;
   const count = await prisma.movie.count({ where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { year: parsedYear }] } });
   if (count < 5) notFound();
   const contentType = type === "SERIES" ? ContentType.SERIES : type === "MOVIE" ? ContentType.MOVIE : undefined;
-  return <ListPage title={`Фильмы ${parsedYear} года`} description={`Доступные фильмы и сериалы ${parsedYear} года. В каталоге ${count} карточек с описаниями, рейтингами и ссылками на просмотр.`} year={parsedYear} sort={sort} country={country} type={contentType} showCountryFilter showTypeFilter page={Number(page) || 1} />;
+  return <ListPage title={`Фильмы ${parsedYear} года`} description={`Доступные фильмы и сериалы ${parsedYear} года. В каталоге ${count} карточек с описаниями, рейтингами и ссылками на просмотр.`} year={parsedYear} filterGenreSlug={genre} sort={sort} country={country} type={contentType} showCountryFilter showTypeFilter showGenreFilter page={Number(page) || 1} />;
 }

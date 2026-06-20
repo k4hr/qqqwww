@@ -28,6 +28,7 @@ export default async function FranchisePage({ params }: Props) {
     <nav className="mb-5 text-sm text-[#85858f]"><Link href="/">REDFILM</Link> / Все части</nav>
     <section className="mf-panel p-5 sm:p-7"><h1 className="text-[clamp(1.8rem,5vw,3rem)] font-black text-white">{baseTitle} все части по порядку</h1><p className="mt-4 max-w-4xl leading-relaxed text-[#b7b7c0]">{collectionSeoIntro(baseTitle, parts.length)}</p></section>
     <section className="mt-7"><h2 className="mb-5 text-2xl font-black text-white">Порядок просмотра</h2><div className="movie-grid">{parts.map((movie) => <MovieCard key={movie.id} movie={movie} />)}</div></section>
+    <ol className="mf-panel mt-6 space-y-4 p-5 sm:p-6">{parts.map((movie, index) => <li key={movie.id} className="border-b border-white/10 pb-4 last:border-0 last:pb-0"><h3 className="text-lg font-black text-white">{index + 1}. {movie.titleRu} ({movie.year})</h3><p className="line-clamp-3 mt-2 text-sm leading-relaxed text-[#a9a9b2]">{movie.description || "Описание скоро появится"}</p><Link href={watchPath(movie)} className="mf-btn mf-btn-primary mt-3">Смотреть</Link></li>)}</ol>
     <div className="mt-6 flex flex-wrap gap-3">{parts.map((movie, index) => <Link key={movie.id} href={watchPath(movie)} className="mf-btn">{index + 1}. Смотреть {movie.titleRu}</Link>)}<Link href={similarPath(parts[0])} className="mf-btn">Похожие фильмы</Link>{parts[0].genres.slice(0, 4).map((item) => <Link key={item.genreId} href={genrePath(item.genre)} className="mf-btn">{item.genre.name}</Link>)}</div>
   </div>;
 }

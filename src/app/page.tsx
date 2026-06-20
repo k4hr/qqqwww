@@ -3,7 +3,8 @@ import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
 import { VibixBanner } from "@/components/vibix-banner";
 import { buildHomeCatalogWhere, isSafeForHome } from "@/lib/catalog-safety";
-import { getMovieFreshnessScore, rankPopularMovies } from "@/lib/catalog-rank";
+import { getMovieFreshnessScore } from "@/lib/catalog-rank";
+import { getPopularMovies, getRecentPopularityStats } from "@/lib/popularity";
 import { prisma } from "@/lib/prisma";
 import { timedMovieQuery } from "@/lib/query-performance";
 
@@ -22,7 +23,7 @@ function newestSafe<T extends Movie>(movies: T[], limit = 12) {
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
-  const [movieCandidates, seriesCandidates, yearCandidates, newMovieCandidates, newSeriesCandidates, ratedCandidates] = await Promise.all([
+  const [movieCandidates, seriesCandidates, yearCandidates, newMovieCandidates, newSeriesCandidates, ratedCandidates, popularityStats] = await Promise.all([
     timedMovieQuery("home popular movie candidates", () => prisma.movie.findMany({ where: { AND: [homeWhere, { type: ContentType.MOVIE }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 240 })),
     timedMovieQuery("home popular series candidates", () => prisma.movie.findMany({ where: { AND: [homeWhere, { type: ContentType.SERIES }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 240 })),
     timedMovieQuery("home year new candidates", () => prisma.movie.findMany({ where: { AND: [homeWhere, { year: currentYear, type: { in: [ContentType.MOVIE, ContentType.SERIES] } }] }, orderBy: [{ vibixUploadedAt: "desc" }, { createdAt: "desc" }], take: 120 })),
@@ -33,10 +34,11 @@ export default async function HomePage() {
       orderBy: [{ kpRating: "desc" }, { imdbRating: "desc" }, { year: "desc" }],
       take: 180,
     })),
+    getRecentPopularityStats(7),
   ]);
 
-  const popularMovies = rankPopularMovies(movieCandidates.filter(isSafeForHome), 12);
-  const popularSeries = rankPopularMovies(seriesCandidates.filter(isSafeForHome), 12);
+  const popularMovies = getPopularMovies(movieCandidates.filter(isSafeForHome), popularityStats, 12);
+  const popularSeries = getPopularMovies(seriesCandidates.filter(isSafeForHome), popularityStats, 12);
   const yearNew = newestSafe(yearCandidates);
   const newMovies = newestSafe(newMovieCandidates);
   const newSeries = newestSafe(newSeriesCandidates);
@@ -47,6 +49,7 @@ export default async function HomePage() {
       || Number(/full\s*hd|1080|\bhd\b/i.test(b.quality)) - Number(/full\s*hd|1080|\bhd\b/i.test(a.quality)))
     .slice(0, 12);
   const heroMovies = [...popularMovies.slice(0, 4), ...popularSeries.slice(0, 4)].map((movie) => ({
+    id: movie.id,
     slug: movie.slug,
     titleRu: movie.titleRu,
     description: movie.description,

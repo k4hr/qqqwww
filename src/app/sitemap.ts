@@ -5,7 +5,7 @@ import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 import { buildCollectionSlug } from "@/lib/seo-slugs";
 import { countryPages, countryPageWhere, qualityPages, qualityPageWhere, seoTopics, topicWhere } from "@/lib/seo-pages";
-import { likePath, similarPath, siteUrl, watchPath } from "@/lib/seo-links";
+import { similarPath, siteUrl, watchPath } from "@/lib/seo-links";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +48,7 @@ async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPaths = ["", "/movies", "/series", "/latest", "/top", "/collections"];
   const paths = [
     ...staticPaths,
-    ...movies.flatMap((movie) => [watchPath(movie), similarPath(movie), likePath(movie)]),
+    ...movies.flatMap((movie) => [watchPath(movie), similarPath(movie)]),
     ...Array.from(franchiseCounts).filter(([, count]) => count >= 2).map(([slug]) => `/collection/${slug}`),
     ...Array.from(genreCounts).filter(([, count]) => count >= 5).map(([slug]) => `/genre/${slug}`),
     ...Array.from(yearCounts).filter(([, count]) => count >= 5).map(([year]) => `/year/${year}`),
@@ -59,12 +59,12 @@ async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
   const updatedBySlug = new Map(movies.map((movie) => [movie.slug, movie.updatedAt]));
 
   return Array.from(new Set(paths)).map((path) => {
-    const movieSlug = path.match(/^\/(?:watch|similar|like)\/(.+)$/)?.[1];
+    const movieSlug = path.match(/^\/(?:watch|similar)\/(.+)$/)?.[1];
     return { url: siteUrl(path), lastModified: movieSlug ? updatedBySlug.get(movieSlug) ?? new Date() : new Date() };
   });
 }
 
-const getCachedSitemap = unstable_cache(buildSitemap, ["redfilm-seo-sitemap-v2"], { revalidate: 3600 });
+const getCachedSitemap = unstable_cache(buildSitemap, ["redfilm-seo-sitemap-v3"], { revalidate: 3600 });
 
 export default function sitemap() {
   return getCachedSitemap();

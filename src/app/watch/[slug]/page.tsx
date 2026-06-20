@@ -7,6 +7,7 @@ import { JsonLd } from "@/components/json-ld";
 import { MovieCard } from "@/components/movie-card";
 import { PlayerBlock } from "@/components/player-block";
 import { VibixBanner } from "@/components/vibix-banner";
+import { AnalyticsEvent } from "@/components/analytics-event";
 import { extractCountries } from "@/lib/catalog-filters";
 import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
 import { countryPath, genrePath, personPath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
@@ -52,6 +53,7 @@ export default async function WatchPage({ params }: Props) {
 
   return (
     <div className="container py-5 sm:py-7">
+      <AnalyticsEvent type="page_view" movieId={movie.id} />
       <JsonLd data={{
         "@context": "https://schema.org",
         "@type": "Movie",

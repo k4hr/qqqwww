@@ -1,8 +1,9 @@
 import type { Movie } from "@prisma/client";
 import { VibixPlayer } from "@/components/vibix-player";
+import { AnalyticsEvent } from "@/components/analytics-event";
 
 type Props = {
-  movie: Pick<Movie, "titleRu" | "year" | "kinopoiskId" | "imdbId" | "vibixIframeUrl" | "vibixEmbedCode" | "posterUrl">;
+  movie: Pick<Movie, "id" | "titleRu" | "year" | "kinopoiskId" | "imdbId" | "vibixIframeUrl" | "vibixEmbedCode" | "posterUrl">;
 };
 
 export function PlayerBlock({ movie }: Props) {
@@ -14,6 +15,7 @@ export function PlayerBlock({ movie }: Props) {
       </div>
 
       <div className="relative bg-black text-white">
+        <AnalyticsEvent type="player_view" movieId={movie.id} />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-[#e50914]/80 to-transparent" />
         <VibixPlayer
           title={movie.titleRu}

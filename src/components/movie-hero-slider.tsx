@@ -5,8 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Play, Sparkles } from "lucide-react";
 import { similarPath, watchPath } from "@/lib/seo-links";
+import { trackWatchClick } from "@/lib/client-analytics";
 
 export type HeroMovie = {
+  id: string;
   slug: string;
   titleRu: string;
   description: string;
@@ -94,7 +96,7 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
           </div>
           <p className="hero-description line-clamp-3 mt-5 max-w-2xl text-base leading-relaxed text-[#d0d0d6] sm:text-lg">{movie.description}</p>
           <div className="hero-actions mt-7 flex flex-wrap gap-3">
-            <Link href={watchPath(movie)} className="hero-primary-action mf-btn mf-btn-primary gap-2"><Play size={16} fill="currentColor" /> Смотреть</Link>
+            <Link href={watchPath(movie)} onClick={() => trackWatchClick(movie.id)} className="hero-primary-action mf-btn mf-btn-primary gap-2"><Play size={16} fill="currentColor" /> Смотреть</Link>
             <div className="hero-secondary-actions contents">
               <Link href={similarPath(movie)} className="mf-btn">Похожие</Link>
             </div>
