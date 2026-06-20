@@ -84,8 +84,6 @@ export default async function FilmPage({ params }: Props) {
         <h2 className="text-2xl font-black text-white">О фильме</h2>
         <p className="mt-4 max-w-5xl leading-relaxed text-[#b7b7c0]">{movie.description}</p>
         {movie.cast.length ? <p className="mt-4 text-sm text-[#a1a1aa]"><b className="text-white">В ролях:</b> {movie.cast.slice(0, 8).map((item, index) => <span key={item.personId}>{index ? ", " : ""}<Link href={personPath(item.person.nameRu)} className="hover:text-[#ff4d55]">{item.person.nameRu}</Link></span>)}</p> : null}
-        <h2 className="mt-7 text-xl font-black text-white">Смотреть {movie.titleRu} в хорошем качестве</h2>
-        <p className="mt-3 text-[#a1a1aa]">Плеер открывается на отдельной странице просмотра и адаптируется под телефон, планшет и большой экран.</p>
       </section>
 
       <section className="mt-8">

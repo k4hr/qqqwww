@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Film, Play } from "lucide-react";
 import type { Movie } from "@prisma/client";
-import { filmPath, watchPath } from "@/lib/seo-links";
+import { watchPath } from "@/lib/seo-links";
 
 type Props = {
   movie: Pick<Movie, "slug" | "titleRu" | "year" | "posterUrl" | "quality" | "kpRating" | "imdbRating">;
@@ -11,7 +11,7 @@ type Props = {
 export function MovieCard({ movie }: Props) {
   return (
     <article className="mf-card group relative block">
-      <Link href={filmPath(movie)} aria-label={`Подробнее: ${movie.titleRu}`} className="absolute inset-0 z-10" />
+      <Link href={watchPath(movie)} aria-label={`Смотреть: ${movie.titleRu}`} className="absolute inset-0 z-10" />
       <div className="poster-fallback relative aspect-[2/3] overflow-hidden">
         {movie.posterUrl ? (
           <Image
