@@ -1,6 +1,7 @@
 import { ContentType, type Movie } from "@prisma/client";
 import { isAdultLikeTitle, isValidHomePoster } from "@/lib/catalog-safety";
 import { prisma } from "@/lib/prisma";
+import { classifyCatalogKind } from "@/lib/catalog-kind";
 
 export type CatalogScoreMovie = Pick<Movie,
   | "id" | "titleRu" | "titleOriginal" | "description" | "year" | "type" | "posterUrl" | "backdropUrl" | "country" | "duration"
@@ -204,9 +205,11 @@ export async function recalculateAllCatalogScores() {
     if (!movies.length) break;
     for (const movie of movies) {
       try {
-        const score = calculateCatalogScore(movie);
-        const reasons = getCatalogBlockReasons(movie, score);
-        await prisma.movie.update({ where: { id: movie.id }, data: { ...score, lastCatalogScoreAt: new Date() } });
+        const catalogKind = classifyCatalogKind(movie);
+        const typedMovie = { ...movie, type: catalogKind };
+        const score = calculateCatalogScore(typedMovie);
+        const reasons = getCatalogBlockReasons(typedMovie, score);
+        await prisma.movie.update({ where: { id: movie.id }, data: { type: catalogKind, ...score, lastCatalogScoreAt: new Date() } });
         result.processed += 1;
         if (score.isPublicVisible) result.publicVisible += 1;
         if (score.isPopularEligible) result.popularEligible += 1;

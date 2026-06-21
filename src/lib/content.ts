@@ -15,7 +15,7 @@ export const contentTypePluralLabels: Record<ContentType, string> = {
 };
 
 export const contentTypePaths: Record<ContentType, string> = {
-  MOVIE: "/movies",
+  MOVIE: "/films",
   SERIES: "/series",
   CARTOON: "/cartoons",
   ANIME: "/anime",

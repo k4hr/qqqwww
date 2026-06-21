@@ -18,11 +18,11 @@ type TrendAction = {
 const actions: TrendAction[] = [
   {
     step: "1",
-    label: "Починить витрину сейчас",
-    title: "Пересчитать scores + Quality Gate",
-    description: "Проходит по текущей базе REDFILM и заново выставляет home/hero/trending flags. Это первая кнопка, если главная пустая или после деплоя всё пропало.",
-    when: "Нажимать после деплоя, после импорта Vibix и после любых правок Quality Gate.",
-    url: "/api/admin/trends/recalculate-scores",
+    label: "Полный пересчёт каталога",
+    title: "Полный пересчёт каталога",
+    description: "Заменяет команду npm run catalog:recalculate: заново раскладывает базу по Фильмам, Сериалам, Мультфильмам и Аниме, пересчитывает catalog/popular/top/fresh/home/hero/trending scores и все eligibility flags.",
+    when: "Нажимать после деплоя, после импорта Vibix, после обогащения базы и после правок категорий. Это главная безопасная кнопка для обновления всей витрины.",
+    url: "/api/admin/catalog/recalculate",
     method: "POST",
     primary: true,
   },
@@ -103,7 +103,7 @@ export function TrendControls() {
 
   return <div className="space-y-5">
     <div className="rounded-2xl border border-[#f2c94c] bg-[#fff8df] p-4 text-sm leading-6 text-[#4b3b00]">
-      <b>Правильный порядок, если главная пустая:</b> сначала <b>1</b>, потом при missing_player/missing_votes у известных фильмов — <b>2</b>, затем снова <b>1</b>. Кнопка <b>3</b> ловит свежие обновления Vibix, <b>4</b> ищет новые сильные тайтлы, а <b>5</b> — только для уже созданных кандидатов.
+      <b>Правильный порядок:</b> после деплоя сначала <b>1</b> — это замена <code>npm run catalog:recalculate</code>. Если у известных фильмов missing_player/missing_votes — нажать <b>2</b>, потом снова <b>1</b>. Кнопка <b>3</b> ловит свежие обновления Vibix, <b>4</b> ищет новые сильные тайтлы, а <b>5</b> — только для уже созданных кандидатов.
     </div>
 
     <div className="grid gap-4 xl:grid-cols-2">
@@ -127,6 +127,10 @@ export function TrendControls() {
       <a href="/api/admin/trends/quality-problems?kind=breakdown" className="rounded-lg border border-[#ddd] px-3 py-2 text-sm font-bold">Причины блокировки JSON</a>
       <a href="/api/admin/trends/catalog-preview?target=popular" className="rounded-lg border border-[#ddd] px-3 py-2 text-sm font-bold">Диагностика /popular</a>
       <a href="/api/admin/trends/catalog-preview?target=top" className="rounded-lg border border-[#ddd] px-3 py-2 text-sm font-bold">Диагностика /top-100</a>
+      <a href="/api/admin/trends/catalog-preview?target=popular&type=movie" className="rounded-lg border border-[#ddd] px-3 py-2 text-sm font-bold">/films</a>
+      <a href="/api/admin/trends/catalog-preview?target=popular&type=series" className="rounded-lg border border-[#ddd] px-3 py-2 text-sm font-bold">/series</a>
+      <a href="/api/admin/trends/catalog-preview?target=popular&type=cartoons" className="rounded-lg border border-[#ddd] px-3 py-2 text-sm font-bold">/cartoons</a>
+      <a href="/api/admin/trends/catalog-preview?target=popular&type=anime" className="rounded-lg border border-[#ddd] px-3 py-2 text-sm font-bold">/anime</a>
       <button type="button" onClick={() => router.refresh()} className="rounded-lg border border-[#ddd] px-3 py-2 text-sm font-bold">Обновить страницу</button>
     </div>
 

@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const target = url.searchParams.get("target") === "top" ? "top" : url.searchParams.get("target") === "fresh" ? "fresh" : "popular";
   const typeParam = url.searchParams.get("type");
-  const type = typeParam === "series" || typeParam === "SERIES" ? ContentType.SERIES : typeParam === "movie" || typeParam === "MOVIE" ? ContentType.MOVIE : undefined;
+  const type = typeParam === "series" || typeParam === "SERIES" ? ContentType.SERIES : typeParam === "cartoon" || typeParam === "cartoons" || typeParam === "CARTOON" ? ContentType.CARTOON : typeParam === "anime" || typeParam === "ANIME" ? ContentType.ANIME : typeParam === "movie" || typeParam === "MOVIE" ? ContentType.MOVIE : undefined;
   const items = await getTopCatalogPreview(target, type, 50);
   const detailed = await prisma.movie.findMany({ where: { id: { in: items.map((item) => item.id) } }, include: { genres: { include: { genre: true } } } });
   const detailedById = new Map(detailed.map((item) => [item.id, item]));

@@ -1,5 +1,6 @@
 import { ContentType } from "@prisma/client";
 import { slugify } from "@/lib/slug";
+import { classifyCatalogKind } from "@/lib/catalog-kind";
 
 type TmdbGenre = { id: number; name: string };
 type TmdbPerson = { id: number; name: string; original_name?: string; character?: string; job?: string; popularity?: number };
@@ -166,16 +167,19 @@ export async function getTmdbDetails(tmdbId: string, type: ContentType): Promise
   const year = Number((details.release_date ?? details.first_air_date ?? "").slice(0, 4)) || new Date().getFullYear();
   const director = details.credits?.crew?.find((person) => person.job === "Director")?.name;
   const trailer = details.videos?.results?.find((video) => video.site === "YouTube" && (video.type === "Trailer" || video.official));
+  const genres = details.genres?.map((genre) => genre.name).filter(Boolean) ?? [];
+  const country = details.production_countries?.map((country) => country.name).filter(Boolean).join(", ") || details.origin_country?.join(", ");
+  const catalogKind = classifyCatalogKind({ type, titleRu, titleOriginal, description: details.overview, country, vibixTags: genres });
   return {
     titleRu,
     titleOriginal,
     description: details.overview || "Описание будет добавлено позже.",
     year,
-    type,
+    type: catalogKind,
     posterUrl: tmdbImage(details.poster_path),
     backdropUrl: tmdbImage(details.backdrop_path, "w1280"),
     trailerUrl: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : undefined,
-    country: details.production_countries?.map((country) => country.name).filter(Boolean).join(", ") || details.origin_country?.join(", "),
+    country,
     director,
     duration: details.runtime ?? details.episode_run_time?.[0],
     tmdbRating: details.vote_average ? Number(details.vote_average.toFixed(1)) : undefined,
@@ -184,7 +188,7 @@ export async function getTmdbDetails(tmdbId: string, type: ContentType): Promise
     collectionId: details.belongs_to_collection?.id,
     tmdbId: String(details.id),
     imdbId: details.imdb_id ?? details.external_ids?.imdb_id ?? undefined,
-    genres: details.genres?.map((genre) => genre.name).filter(Boolean) ?? [],
+    genres,
     cast: details.credits?.cast?.slice(0, 10).map((person) => person.name).filter(Boolean) ?? [],
     castPopularity: details.credits?.cast?.slice(0, 10).reduce((total, person) => total + Math.log10(1 + (person.popularity ?? 0)), 0),
     slug: `${slugify(titleRu)}-${year}`,

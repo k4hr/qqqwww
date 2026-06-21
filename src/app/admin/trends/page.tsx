@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Prisma } from "@prisma/client";
+import { ContentType, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { TrendControls } from "./trend-controls";
 
@@ -39,6 +39,7 @@ export default async function AdminTrendsPage() {
     freshEligibleCount,
     homeVisibleCount,
     heroVisibleCount,
+    typeGroups,
   ] = await Promise.all([
     prisma.trendSyncRun.findFirst({ orderBy: { createdAt: "desc" } }),
     prisma.catalogEngineRun.findFirst({ orderBy: { createdAt: "desc" } }),
@@ -67,9 +68,11 @@ export default async function AdminTrendsPage() {
     prisma.movie.count({ where: { isFreshEligible: true } }),
     prisma.movie.count({ where: { isPublished: true, isCatalogAllowed: true, isHomeEligible: true } }),
     prisma.movie.count({ where: { isPublished: true, isCatalogAllowed: true, isHeroEligible: true } }),
+    prisma.movie.groupBy({ by: ["type"], where: { isPublished: true, isCatalogAllowed: true }, _count: { _all: true } }),
   ]);
   const englishTitles = titleRows.filter((movie) => !/[а-яё]/iu.test(movie.titleRu)).length;
   const statusCount = new Map(statuses.map((item) => [item.status, item._count._all]));
+  const typeCount = new Map(typeGroups.map((item) => [item.type, item._count._all]));
 
   return <div className="container admin-shell py-6 text-[#222]">
     <div className="mb-5 flex items-center justify-between">
@@ -117,6 +120,10 @@ export default async function AdminTrendsPage() {
       <Stat title="Popular eligible" value={popularEligibleCount} good={popularEligibleCount > 0} />
       <Stat title="Top eligible" value={topEligibleCount} good={topEligibleCount > 0} />
       <Stat title="Fresh eligible" value={freshEligibleCount} good={freshEligibleCount > 0} />
+      <Stat title="Фильмы" value={typeCount.get(ContentType.MOVIE) ?? 0} good={(typeCount.get(ContentType.MOVIE) ?? 0) > 0} />
+      <Stat title="Сериалы" value={typeCount.get(ContentType.SERIES) ?? 0} good={(typeCount.get(ContentType.SERIES) ?? 0) > 0} />
+      <Stat title="Мультфильмы" value={typeCount.get(ContentType.CARTOON) ?? 0} good={(typeCount.get(ContentType.CARTOON) ?? 0) > 0} />
+      <Stat title="Аниме" value={typeCount.get(ContentType.ANIME) ?? 0} />
       <Stat title="AVAILABLE" value={statusCount.get("AVAILABLE") ?? 0} />
       <Stat title="NOT_IN_VIBIX" value={statusCount.get("NOT_IN_VIBIX") ?? 0} />
       <Stat title="NEEDS_ENRICHMENT" value={statusCount.get("NEEDS_ENRICHMENT") ?? 0} />
@@ -140,6 +147,8 @@ export default async function AdminTrendsPage() {
         <a href="/api/admin/trends/catalog-preview?target=popular" className="rounded-lg border border-[#ddd] px-3 py-2">/popular JSON</a>
         <a href="/api/admin/trends/catalog-preview?target=top" className="rounded-lg border border-[#ddd] px-3 py-2">/top-100 JSON</a>
         <a href="/api/admin/trends/catalog-preview?target=fresh" className="rounded-lg border border-[#ddd] px-3 py-2">Новинки JSON</a>
+        <a href="/api/admin/trends/catalog-preview?target=popular&type=CARTOON" className="rounded-lg border border-[#ddd] px-3 py-2">Мультфильмы JSON</a>
+        <a href="/api/admin/trends/catalog-preview?target=popular&type=ANIME" className="rounded-lg border border-[#ddd] px-3 py-2">Аниме JSON</a>
       </div>
     </section>
 

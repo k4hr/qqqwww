@@ -47,10 +47,12 @@ function compact<T extends { vibixIframeUrl: string | null; vibixEmbedCode: stri
 }
 
 export async function GET() {
-  const [hero, movies, series, fallback, counts] = await Promise.all([
+  const [hero, movies, series, cartoons, anime, fallback, counts] = await Promise.all([
     prisma.movie.findMany({ where: { ...baseWhere, isHeroEligible: true }, orderBy: [{ homeScore: "desc" }], take: 12, select }),
     prisma.movie.findMany({ where: { ...baseWhere, isHomeEligible: true, type: ContentType.MOVIE }, orderBy: [{ homeScore: "desc" }], take: 12, select }),
     prisma.movie.findMany({ where: { ...baseWhere, isHomeEligible: true, type: ContentType.SERIES }, orderBy: [{ homeScore: "desc" }], take: 12, select }),
+    prisma.movie.findMany({ where: { ...baseWhere, isHomeEligible: true, type: ContentType.CARTOON }, orderBy: [{ homeScore: "desc" }], take: 12, select }),
+    prisma.movie.findMany({ where: { ...baseWhere, isHomeEligible: true, type: ContentType.ANIME }, orderBy: [{ homeScore: "desc" }], take: 12, select }),
     prisma.movie.findMany({ where: { ...baseWhere, ...playableWhere, posterUrl: { not: null } }, orderBy: [{ homeScore: "desc" }, { kpVotes: "desc" }, { imdbVotes: "desc" }], take: 12, select }),
     Promise.all([
       prisma.movie.count({ where: baseWhere }),
@@ -72,6 +74,8 @@ export async function GET() {
     hero: hero.map(compact),
     popularMovies: movies.map(compact),
     popularSeries: series.map(compact),
+    popularCartoons: cartoons.map(compact),
+    popularAnime: anime.map(compact),
     fallback: fallback.map(compact),
   });
 }

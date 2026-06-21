@@ -1,5 +1,6 @@
 import { ContentType } from "@prisma/client";
 import { slugify } from "@/lib/slug";
+import { classifyCatalogKind } from "@/lib/catalog-kind";
 import type { NormalizedTmdbMovie } from "@/lib/tmdb";
 
 type KpCountry = { country?: string | null };
@@ -77,10 +78,9 @@ function compactStrings(values: Array<string | null | undefined>) {
   return values.filter((value): value is string => typeof value === "string" && value.trim().length > 0);
 }
 
-function mapKinopoiskType(type?: string | null): ContentType {
-  if (type === "TV_SERIES" || type === "MINI_SERIES" || type === "TV_SHOW") return ContentType.SERIES;
-  if (type === "ANIMATED_SERIES") return ContentType.SERIES;
-  return ContentType.MOVIE;
+function mapKinopoiskType(type?: string | null, genres: string[] = []): ContentType {
+  const baseType = type === "TV_SERIES" || type === "MINI_SERIES" || type === "TV_SHOW" || type === "ANIMATED_SERIES" ? ContentType.SERIES : ContentType.MOVIE;
+  return classifyCatalogKind({ type: baseType, vibixType: type, vibixTags: genres });
 }
 
 async function kinopoiskFetch<T>(path: string): Promise<T> {
@@ -209,7 +209,7 @@ export async function getKinopoiskDetails(
     titleOriginal: originalTitleOf(movie) || undefined,
     description: movie.description || movie.shortDescription || "Описание будет добавлено позже.",
     year,
-    type: mapKinopoiskType(movie.type),
+    type: mapKinopoiskType(movie.type, genres),
     posterUrl: movie.posterUrl || movie.posterUrlPreview || undefined,
     backdropUrl: movie.coverUrl || undefined,
     trailerUrl: youtubeTrailerUrl(videos),

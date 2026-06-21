@@ -10,6 +10,7 @@ import { getKinopoiskCollectionIds, getKinopoiskDetails } from "@/lib/kinopoisk"
 import { parseContentType } from "@/lib/content";
 import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
 import { refreshMoviePoster } from "@/lib/poster-lookup";
+import { classifyCatalogKind } from "@/lib/catalog-kind";
 
 type MovieInput = {
   titleRu: string;
@@ -90,6 +91,14 @@ async function createMovie(input: MovieInput) {
   const slug = await uniqueSlug(input.slug || `${slugify(input.titleRu)}-${input.year}`);
   const genres = uniqueStrings(input.genres);
   const cast = uniqueStrings(input.cast).slice(0, 12);
+  const catalogKind = classifyCatalogKind({
+    type: input.type,
+    titleRu: input.titleRu,
+    titleOriginal: input.titleOriginal,
+    description: input.description,
+    country: input.country,
+    vibixTags: genres,
+  });
   const catalogVisibility = evaluateMovieCatalogVisibility({ country: input.country });
 
   return prisma.movie.create({
@@ -99,7 +108,7 @@ async function createMovie(input: MovieInput) {
       titleOriginal: input.titleOriginal || null,
       description: input.description,
       year: input.year,
-      type: input.type,
+      type: catalogKind,
       posterUrl: input.posterUrl || null,
       backdropUrl: input.backdropUrl || null,
       trailerUrl: input.trailerUrl || null,

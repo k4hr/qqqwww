@@ -1,6 +1,7 @@
 import { ContentType, type Movie, type Prisma, type TrendCandidate } from "@prisma/client";
 import { calculateHomeQuality, getQualityBlockReasons, hasPlayableSource, type QualityBlockReason } from "@/lib/home-quality-score";
 import { calculateCatalogScore } from "@/lib/catalog-score";
+import { classifyCatalogKind } from "@/lib/catalog-kind";
 import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
 import { toTimestamp } from "@/lib/date-utils";
 import { getRecentPopularityStats } from "@/lib/popularity";
@@ -160,9 +161,11 @@ async function replaceMovieRelations(movieId: string, genres: string[], cast: st
 export async function recalculateMovieHomeScore(movieId: string, behaviorBonus = 0) {
   const movie = await prisma.movie.findUnique({ where: { id: movieId }, include: { genres: { include: { genre: true } } } });
   if (!movie) return null;
-  const score = calculateHomeQuality(movie, behaviorBonus);
-  const catalogScore = calculateCatalogScore(movie);
-  return prisma.movie.update({ where: { id: movieId }, data: { ...score, ...catalogScore, lastQualitySyncAt: new Date(), lastTrendSyncAt: new Date(), lastCatalogScoreAt: new Date() } });
+  const catalogKind = classifyCatalogKind(movie);
+  const typedMovie = { ...movie, type: catalogKind };
+  const score = calculateHomeQuality(typedMovie, behaviorBonus);
+  const catalogScore = calculateCatalogScore(typedMovie);
+  return prisma.movie.update({ where: { id: movieId }, data: { type: catalogKind, ...score, ...catalogScore, lastQualitySyncAt: new Date(), lastTrendSyncAt: new Date(), lastCatalogScoreAt: new Date() } });
 }
 
 export async function recalculateAllHomeScores() {
@@ -204,10 +207,12 @@ export async function recalculateAllHomeScores() {
     for (const movie of movies) {
       try {
         const behavior = Math.min(20, Math.log10(1 + (stats.get(movie.id)?.total ?? 0)) * 7);
-        const score = calculateHomeQuality(movie, behavior);
-        const catalogScore = calculateCatalogScore(movie);
-        const reasons = getQualityBlockReasons(movie, score);
-        await prisma.movie.update({ where: { id: movie.id }, data: { ...score, ...catalogScore, lastQualitySyncAt: new Date(), lastTrendSyncAt: new Date(), lastCatalogScoreAt: new Date() } });
+        const catalogKind = classifyCatalogKind(movie);
+        const typedMovie = { ...movie, type: catalogKind };
+        const score = calculateHomeQuality(typedMovie, behavior);
+        const catalogScore = calculateCatalogScore(typedMovie);
+        const reasons = getQualityBlockReasons(typedMovie, score);
+        await prisma.movie.update({ where: { id: movie.id }, data: { type: catalogKind, ...score, ...catalogScore, lastQualitySyncAt: new Date(), lastTrendSyncAt: new Date(), lastCatalogScoreAt: new Date() } });
         result.processed += 1;
         if (score.isHomeEligible) result.homeEligible += 1;
         if (score.isHeroEligible) result.heroEligible += 1;
@@ -422,7 +427,7 @@ function vibixNumber(value: unknown) {
 }
 
 async function upsertVibixFirstCandidate(video: VibixVideo, movie: Movie, sourceCategory: string, sourceRank: number) {
-  const type = movie.type === ContentType.SERIES ? ContentType.SERIES : ContentType.MOVIE;
+  const type = movie.type;
   const kpId = movie.kinopoiskId ?? (video.kp_id ? String(video.kp_id) : null);
   const sourceScore = Math.log10(1 + Math.max(vibixNumber(video.kp_votes), vibixNumber(video.imdb_votes))) * 10
     + Math.max(vibixNumber(video.kp_rating), vibixNumber(video.imdb_rating)) * 4;

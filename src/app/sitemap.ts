@@ -69,13 +69,13 @@ async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
       ...(eligible.filter((movie) => movie.type === ContentType.SERIES).length >= 5 ? [`/popular/series/${year}`, `/best/series/${year}`] : []),
     ];
   });
-  const staticPaths = ["", "/films", "/movies", "/series", "/popular", "/top-100", "/latest", "/top", "/collections", ...(mainMovies.filter((movie) => movie.isTrendingEligible).length >= 5 ? ["/trending"] : []), ...scoredPaths];
+  const staticPaths = ["", "/films", "/movies", "/series", "/cartoons", "/anime", "/popular", "/top-100", "/latest", "/top", "/collections", ...(mainMovies.filter((movie) => movie.isTrendingEligible).length >= 5 ? ["/trending"] : []), ...scoredPaths];
   const paths = [
     ...staticPaths,
     ...movies.flatMap((movie) => [watchPath(movie), similarPath(movie)]),
     ...Array.from(franchiseCounts).filter(([, count]) => count >= 2).map(([slug]) => `/collection/${slug}`),
-    ...Array.from(genreCounts).filter(([, count]) => count >= 5).flatMap(([slug]) => [`/genre/${slug}`, `/films/genre/${slug}`, `/series/genre/${slug}`]),
-    ...Array.from(yearCounts).filter(([, count]) => count >= 5).flatMap(([year]) => [`/year/${year}`, `/films/year/${year}`, `/series/year/${year}`]),
+    ...Array.from(genreCounts).filter(([, count]) => count >= 5).flatMap(([slug]) => [`/genre/${slug}`, `/films/genre/${slug}`, `/series/genre/${slug}`, `/cartoons/genre/${slug}`, `/anime/genre/${slug}`]),
+    ...Array.from(yearCounts).filter(([, count]) => count >= 5).flatMap(([year]) => [`/year/${year}`, `/films/year/${year}`, `/series/year/${year}`, `/cartoons/year/${year}`, `/anime/year/${year}`]),
     ...countryAvailability.flatMap((slug) => slug ? [`/country/${slug}`] : []),
     ...qualityAvailability.flatMap((slug) => slug ? [`/quality/${slug}`] : []),
     ...topicAvailability.flatMap((slug) => slug ? [`/collections/${slug}`] : []),

@@ -11,6 +11,8 @@ function normalize(value: string) {
 }
 
 export const CATALOG_GENRES: TaxonomyItem[] = [
+  { slug: "multfilmy", label: "Мультфильмы", aliases: ["мультфильм", "мультфильмы", "мультсериал", "мультсериалы", "анимация", "animation", "animated", "cartoon"] },
+  { slug: "anime", label: "Аниме", aliases: ["аниме", "anime", "manga", "манга"] },
   { slug: "boeviki", label: "Боевики", aliases: ["боевик", "боевики", "action", "ekshen"] },
   { slug: "komedii", label: "Комедии", aliases: ["комедия", "комедии", "comedy"] },
   { slug: "dramy", label: "Драмы", aliases: ["драма", "драмы", "drama"] },
@@ -43,6 +45,10 @@ export const CATALOG_COUNTRIES: TaxonomyItem[] = [
 ];
 
 const LEGACY_GENRE_SLUGS: Record<string, string> = {
+  multfilm: "multfilmy",
+  multfilmy: "multfilmy",
+  multiki: "multfilmy",
+  anime: "anime",
   boevik: "boeviki",
   komediya: "komedii",
   drama: "dramy",

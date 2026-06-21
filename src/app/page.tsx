@@ -63,7 +63,7 @@ async function getHomeMovies(currentYear: number) {
     ],
   };
 
-  const [heroMovies, eligibleMovies, eligibleSeries, eligibleTrending, eligibleNewest, eligibleBest, heroFallback, legacyCandidates] = await Promise.all([
+  const [heroMovies, eligibleMovies, eligibleSeries, eligibleCartoons, eligibleAnime, eligibleTrending, eligibleNewest, eligibleBest, heroFallback, legacyCandidates] = await Promise.all([
     prisma.movie.findMany({
       where: { ...publicWhere, isHeroEligible: true },
       orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }, { kpVotes: "desc" }, { imdbVotes: "desc" }],
@@ -76,6 +76,16 @@ async function getHomeMovies(currentYear: number) {
     }),
     prisma.movie.findMany({
       where: { ...publicWhere, isHomeEligible: true, type: ContentType.SERIES },
+      orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }, { kpVotes: "desc" }, { imdbVotes: "desc" }],
+      take: 24,
+    }),
+    prisma.movie.findMany({
+      where: { ...publicWhere, isHomeEligible: true, type: ContentType.CARTOON },
+      orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }, { kpVotes: "desc" }, { imdbVotes: "desc" }],
+      take: 24,
+    }),
+    prisma.movie.findMany({
+      where: { ...publicWhere, isHomeEligible: true, type: ContentType.ANIME },
       orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }, { kpVotes: "desc" }, { imdbVotes: "desc" }],
       take: 24,
     }),
@@ -118,16 +128,18 @@ async function getHomeMovies(currentYear: number) {
     }),
   ]);
 
-  return { heroMovies, eligibleMovies, eligibleSeries, eligibleTrending, eligibleNewest, eligibleBest, heroFallback, legacyCandidates };
+  return { heroMovies, eligibleMovies, eligibleSeries, eligibleCartoons, eligibleAnime, eligibleTrending, eligibleNewest, eligibleBest, heroFallback, legacyCandidates };
 }
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
-  const { heroMovies, eligibleMovies, eligibleSeries, eligibleTrending, eligibleNewest, eligibleBest, heroFallback, legacyCandidates } = await getHomeMovies(currentYear);
+  const { heroMovies, eligibleMovies, eligibleSeries, eligibleCartoons, eligibleAnime, eligibleTrending, eligibleNewest, eligibleBest, heroFallback, legacyCandidates } = await getHomeMovies(currentYear);
 
   const legacySafe = legacyCandidates.filter(isLegacyHomeSafe).sort((a, b) => legacyScore(b) - legacyScore(a));
   const popularMovies = fillMovies(eligibleMovies, legacySafe.filter((movie) => movie.type === ContentType.MOVIE));
   const popularSeries = fillMovies(eligibleSeries, legacySafe.filter((movie) => movie.type === ContentType.SERIES));
+  const popularCartoons = fillMovies(eligibleCartoons, legacySafe.filter((movie) => movie.type === ContentType.CARTOON));
+  const popularAnime = fillMovies(eligibleAnime, legacySafe.filter((movie) => movie.type === ContentType.ANIME));
   const trending = fillMovies(eligibleTrending, legacySafe);
   const newest = fillMovies(eligibleNewest, legacySafe.filter((movie) => [currentYear - 1, currentYear, currentYear + 1].includes(movie.year)));
   const best = fillMovies(eligibleBest, legacySafe);
@@ -143,7 +155,9 @@ export default async function HomePage() {
     <SectionGrid title="В тренде" href="/trending" movies={trending} showSorts={false} mobileCarousel />
     <SectionGrid title="Популярные фильмы" href="/films/popular" movies={popularMovies} showSorts={false} mobileCarousel />
     <ClientLibrary mode="recent-home" />
-    <SectionGrid title="Популярные сериалы" href="/series?sort=popular" movies={popularSeries} showSorts={false} mobileCarousel />
+    <SectionGrid title="Популярные сериалы" href="/series/popular" movies={popularSeries} showSorts={false} mobileCarousel />
+    <SectionGrid title="Популярные мультфильмы" href="/cartoons/popular" movies={popularCartoons} showSorts={false} mobileCarousel />
+    <SectionGrid title="Популярное аниме" href="/anime/popular" movies={popularAnime} showSorts={false} mobileCarousel />
     <SectionGrid title={`Новинки ${currentYear}`} href={`/year/${currentYear}`} movies={newest} showSorts={false} mobileCarousel />
     <div className="home-catalog-ad"><VibixBanner size="728x90" /></div>
     <SectionGrid title="Проверенная классика" href="/top" movies={best} showSorts={false} mobileCarousel />

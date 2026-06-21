@@ -32,6 +32,8 @@ export const NAV_TOPICS = [
   { label: "ТОП 100", href: "/top-100" },
   { label: "Новинки 2026", href: "/films/year/2026" },
   { label: "Популярные", href: "/popular" },
+  { label: "Мультфильмы", href: "/cartoons" },
+  { label: "Аниме", href: "/anime" },
   { label: "FullHD", href: "/quality/fullhd" },
   { label: "Супергерои", href: "/collections/supergeroi" },
   { label: "Фантастика", href: "/films/genre/fantastika" },
@@ -39,7 +41,7 @@ export const NAV_TOPICS = [
   { label: "Комиксы", href: "/collections/komiksy" },
 ] as const;
 
-export type CatalogBase = "/films" | "/movies" | "/series";
+export type CatalogBase = "/films" | "/movies" | "/series" | "/cartoons" | "/anime";
 
 export function catalogHref(base: CatalogBase, key?: "year" | "genre" | "country" | "sort", value?: string) {
   if (!key || !value) return base;

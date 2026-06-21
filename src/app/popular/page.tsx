@@ -1,6 +1,20 @@
 import { ContentType } from "@prisma/client";
 import { ListPage } from "@/lib/list-page";
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Популярные фильмы и сериалы смотреть онлайн — REDFILM", description: "Автоматическая подборка популярных фильмов и сериалов REDFILM по голосам, рейтингам и качеству карточек.", alternates: { canonical: "/popular" } };
+export const metadata = { title: "Популярные фильмы, сериалы, мультфильмы и аниме — REDFILM", description: "Автоматическая подборка популярных фильмов, сериалов, мультфильмов и аниме REDFILM по голосам, рейтингам и качеству карточек.", alternates: { canonical: "/popular" } };
 type Props = { searchParams: Promise<{ type?: string; page?: string }> };
-export default async function Page({ searchParams }: Props) { const { type, page } = await searchParams; const contentType = type === "series" || type === "SERIES" ? ContentType.SERIES : type === "movie" || type === "MOVIE" ? ContentType.MOVIE : undefined; return <ListPage title={contentType === ContentType.SERIES ? "Популярные сериалы" : contentType === ContentType.MOVIE ? "Популярные фильмы" : "Популярные фильмы и сериалы"} type={contentType} sort="popular" showTypeFilter page={Number(page) || 1} />; }
+function parseType(type?: string) {
+  if (type === "series" || type === "SERIES") return ContentType.SERIES;
+  if (type === "cartoon" || type === "cartoons" || type === "CARTOON") return ContentType.CARTOON;
+  if (type === "anime" || type === "ANIME") return ContentType.ANIME;
+  if (type === "movie" || type === "MOVIE") return ContentType.MOVIE;
+  return undefined;
+}
+function titleFor(type?: ContentType) {
+  if (type === ContentType.SERIES) return "Популярные сериалы";
+  if (type === ContentType.CARTOON) return "Популярные мультфильмы";
+  if (type === ContentType.ANIME) return "Популярное аниме";
+  if (type === ContentType.MOVIE) return "Популярные фильмы";
+  return "Популярное на REDFILM";
+}
+export default async function Page({ searchParams }: Props) { const { type, page } = await searchParams; const contentType = parseType(type); return <ListPage title={titleFor(contentType)} type={contentType} sort="popular" showTypeFilter page={Number(page) || 1} />; }

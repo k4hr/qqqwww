@@ -4,6 +4,7 @@ import { slugify } from "@/lib/slug";
 import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
 import { calculateHomeQuality } from "@/lib/home-quality-score";
 import { calculateCatalogScore } from "@/lib/catalog-score";
+import { classifyCatalogKindFromVibix } from "@/lib/catalog-kind";
 import {
   getVibixVideoByImdbId,
   getVibixVideoByImdbIdResult,
@@ -167,7 +168,7 @@ function textFromUnknown(value: unknown): string | null {
 function contentType(value: unknown) {
   const normalized = stringValue(value)?.toLowerCase() ?? "";
   if (["movie", "film"].includes(normalized)) return ContentType.MOVIE;
-  if (["serial", "series", "tv", "tv_series", "show"].includes(normalized)) return ContentType.SERIES;
+  if (["serial", "series", "tv", "tv_series", "tv series", "show"].includes(normalized)) return ContentType.SERIES;
   return null;
 }
 
@@ -184,8 +185,9 @@ function normalizeVideoData(video: VibixVideo): { data: NormalizedVideo } | { re
   const vibixId = intValue(video.id);
   if (!kinopoiskId && !imdbId && vibixId === null) return { reason: "missing_identifier" };
 
-  const type = contentType(video.type);
-  if (!type) return { reason: "unknown_type" };
+  const baseType = contentType(video.type);
+  if (!baseType) return { reason: "unknown_type" };
+  const type = classifyCatalogKindFromVibix(video as unknown as Record<string, unknown>, baseType);
 
   const year = intValue(video.year);
   if (!year || year < 1880 || year > 2200) return { reason: "other" };
@@ -379,12 +381,14 @@ async function syncVibixRelations(movieId: string, video: VibixVideo) {
   }
 }
 
-async function applyQualityGate(movieId: string) {
+async function applyQualityGate(movieId: string, sourceVideo?: VibixVideo) {
   const movie = await prisma.movie.findUnique({ where: { id: movieId }, include: { genres: { include: { genre: true } } } });
   if (!movie) return;
-  const score = calculateHomeQuality(movie);
-  const catalogScore = calculateCatalogScore(movie);
-  await prisma.movie.update({ where: { id: movie.id }, data: { ...score, ...catalogScore, lastQualitySyncAt: new Date(), lastCatalogScoreAt: new Date() } });
+  const catalogKind = sourceVideo ? classifyCatalogKindFromVibix({ ...sourceVideo } as unknown as Record<string, unknown>, movie.type) : movie.type;
+  const typedMovie = { ...movie, type: catalogKind };
+  const score = calculateHomeQuality(typedMovie);
+  const catalogScore = calculateCatalogScore(typedMovie);
+  await prisma.movie.update({ where: { id: movie.id }, data: { type: catalogKind, ...score, ...catalogScore, lastQualitySyncAt: new Date(), lastCatalogScoreAt: new Date() } });
 }
 
 export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
@@ -436,7 +440,7 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
       },
     });
     await syncVibixRelations(updated.id, video);
-    await applyQualityGate(updated.id);
+    await applyQualityGate(updated.id, video);
     return { status: "updated" as const, movieId: existing.id };
   }
 
@@ -479,7 +483,7 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
     },
   });
   await syncVibixRelations(created.id, video);
-  await applyQualityGate(created.id);
+  await applyQualityGate(created.id, video);
   return { status: "imported" as const, movieId: created.id };
 }
 
