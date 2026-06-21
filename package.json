@@ -14,7 +14,8 @@
     "trend:worker": "tsx src/scripts/trend-worker.ts",
     "trend:vibix": "tsx src/scripts/vibix-trend-sync.ts",
     "trend:recalculate": "tsx src/scripts/recalculate-trend-scores.ts",
-    "redfilm:recheck-catalog": "tsx scripts/recheck-movie-catalog-visibility.ts"
+    "redfilm:recheck-catalog": "tsx scripts/recheck-movie-catalog-visibility.ts",
+    "trend:enrich-existing": "tsx src/scripts/enrich-existing-vibix.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

@@ -557,24 +557,140 @@ export async function checkTrendCandidatesInVibix(batchSize = 25) {
   return result;
 }
 
+
+export async function enrichExistingVibixMovies(options: { batchSize?: number; detailDelayMs?: number } = {}) {
+  const batchSize = Math.min(200, Math.max(1, options.batchSize ?? Number(process.env.TREND_ENRICH_BATCH_SIZE || 50)));
+  const detailDelayMs = Math.max(0, options.detailDelayMs ?? Number(process.env.TREND_VIBIX_DETAIL_DELAY_MS || 750));
+  const result = {
+    checked: 0,
+    enriched: 0,
+    updated: 0,
+    skipped: 0,
+    failed: 0,
+    noIdentifier: 0,
+    notFound: 0,
+    rateLimited: false,
+    retryAfterMs: null as number | null,
+    samples: [] as { title: string; kpId: string | null; imdbId: string | null; status: string; message?: string }[],
+  };
+
+  const movies = await prisma.movie.findMany({
+    where: {
+      isPublished: true,
+      OR: [
+        { kinopoiskId: { not: null } },
+        { imdbId: { not: null } },
+      ],
+      AND: [
+        {
+          OR: [
+            { vibixEmbedCode: null },
+            { vibixEmbedCode: "" },
+            { kpVotes: null },
+            { imdbVotes: null },
+            { vibixAvailable: false },
+          ],
+        },
+      ],
+    },
+    orderBy: [
+      { isHeroEligible: "desc" },
+      { isHomeEligible: "desc" },
+      { homeScore: "desc" },
+      { kpRating: "desc" },
+      { imdbRating: "desc" },
+      { updatedAt: "asc" },
+    ],
+    take: batchSize,
+  });
+
+  for (const [index, movie] of movies.entries()) {
+    if (index > 0 && detailDelayMs) await sleep(detailDelayMs);
+    result.checked += 1;
+    const kpId = movie.kinopoiskId?.trim();
+    const imdbId = movie.imdbId?.trim();
+    if (!kpId && !imdbId) {
+      result.noIdentifier += 1;
+      if (result.samples.length < 10) result.samples.push({ title: movie.titleRu, kpId: null, imdbId: null, status: "NO_IDENTIFIER" });
+      continue;
+    }
+
+    let lookup: Awaited<ReturnType<typeof getVibixVideoByKpIdResult>> | Awaited<ReturnType<typeof getVibixVideoByImdbIdResult>> | null = null;
+    if (kpId) lookup = await getVibixVideoByKpIdResult(kpId);
+    if (lookup?.rateLimited) {
+      result.rateLimited = true;
+      result.retryAfterMs = lookup.retryAfterMs;
+      break;
+    }
+    if ((!lookup || !lookup.video) && imdbId) {
+      lookup = await getVibixVideoByImdbIdResult(imdbId);
+      if (lookup.rateLimited) {
+        result.rateLimited = true;
+        result.retryAfterMs = lookup.retryAfterMs;
+        break;
+      }
+    }
+    if (lookup?.requestFailed) {
+      result.failed += 1;
+      if (result.samples.length < 10) result.samples.push({ title: movie.titleRu, kpId: kpId ?? null, imdbId: imdbId ?? null, status: "FAILED", message: lookup.error ? `HTTP ${lookup.error.status}` : undefined });
+      continue;
+    }
+    if (!lookup?.video) {
+      result.notFound += 1;
+      if (result.samples.length < 10) result.samples.push({ title: movie.titleRu, kpId: kpId ?? null, imdbId: imdbId ?? null, status: "NOT_FOUND" });
+      continue;
+    }
+
+    const saved = await saveVibixVideo(lookup.video, movie.id);
+    if (saved.status === "skipped") {
+      result.skipped += 1;
+      if (result.samples.length < 10) result.samples.push({ title: movie.titleRu, kpId: kpId ?? null, imdbId: imdbId ?? null, status: "SKIPPED", message: saved.reason });
+      continue;
+    }
+    const recalculated = await recalculateMovieHomeScore(saved.movieId);
+    if (!recalculated) {
+      result.failed += 1;
+      continue;
+    }
+    result.enriched += 1;
+    if (saved.status === "updated") result.updated += 1;
+    if (result.samples.length < 10) {
+      result.samples.push({
+        title: recalculated.titleRu,
+        kpId: recalculated.kinopoiskId,
+        imdbId: recalculated.imdbId,
+        status: recalculated.isHeroEligible ? "HERO_READY" : recalculated.isHomeEligible ? "HOME_READY" : "UPDATED",
+      });
+    }
+  }
+
+  return result;
+}
+
 export async function runTrendSync(options: { batchSize?: number; collect?: boolean } = {}) {
   if (trendState.__redfilmTrendSyncRunning) throw new Error("Trend sync is already running");
   trendState.__redfilmTrendSyncRunning = true;
   const run = await prisma.trendSyncRun.create({ data: { status: "RUNNING" } });
   try {
     const tmdbEnabled = Boolean(process.env.TMDB_API_KEY?.trim());
-    const vibixFirst = !tmdbEnabled
-      ? await runVibixFirstTrendBatch({ batchSize: options.batchSize })
+    const requestedBatch = Math.min(100, Math.max(1, options.batchSize ?? Number(process.env.TREND_SYNC_BATCH_SIZE || 50)));
+    const existingEnrichment = !tmdbEnabled
+      ? await enrichExistingVibixMovies({ batchSize: requestedBatch })
       : null;
-    const candidatesFound = tmdbEnabled && options.collect !== false ? await collectCandidates() : vibixFirst?.candidatesFound ?? 0;
+    const vibixFirst = !tmdbEnabled && !existingEnrichment?.rateLimited
+      ? await runVibixFirstTrendBatch({ batchSize: requestedBatch })
+      : null;
+    const candidatesFound = tmdbEnabled && options.collect !== false
+      ? await collectCandidates()
+      : (existingEnrichment?.checked ?? 0) + (vibixFirst?.candidatesFound ?? 0);
     const checked = tmdbEnabled
-      ? await checkTrendCandidatesInVibix(options.batchSize ?? Number(process.env.TREND_SYNC_BATCH_SIZE || 20))
+      ? await checkTrendCandidatesInVibix(requestedBatch)
       : {
-        imported: (vibixFirst?.imported ?? 0) + (vibixFirst?.updated ?? 0),
-        notInVibix: vibixFirst?.skipped ?? 0,
-        failed: vibixFirst?.failed ?? 0,
-        rateLimited: vibixFirst?.rateLimited ?? false,
-        retryAfterMs: vibixFirst?.retryAfterMs ?? null,
+        imported: (existingEnrichment?.enriched ?? 0) + (vibixFirst?.imported ?? 0) + (vibixFirst?.updated ?? 0),
+        notInVibix: (existingEnrichment?.notFound ?? 0) + (vibixFirst?.skipped ?? 0),
+        failed: (existingEnrichment?.failed ?? 0) + (vibixFirst?.failed ?? 0),
+        rateLimited: (existingEnrichment?.rateLimited ?? false) || (vibixFirst?.rateLimited ?? false),
+        retryAfterMs: existingEnrichment?.retryAfterMs ?? vibixFirst?.retryAfterMs ?? null,
       };
     await recalculateAllHomeScores();
     const status = checked.rateLimited ? "RATE_LIMITED" : "COMPLETED";
@@ -589,7 +705,7 @@ export async function runTrendSync(options: { batchSize?: number; collect?: bool
         failed: checked.failed,
         message: checked.rateLimited
           ? `Vibix rate limit; retry after ${checked.retryAfterMs ?? 0} ms`
-          : tmdbEnabled ? null : "TMDB_API_KEY не указан, внешние TMDB-тренды отключены. Vibix-first режим выполнен.",
+          : tmdbEnabled ? null : `TMDB_API_KEY не указан, внешние TMDB-тренды отключены. Vibix-first режим выполнен. Enriched existing: ${existingEnrichment?.enriched ?? 0}, Vibix batch: ${(vibixFirst?.imported ?? 0) + (vibixFirst?.updated ?? 0)}.`,
       },
     });
   } catch (error) {
