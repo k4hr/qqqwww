@@ -5,6 +5,7 @@ import { TrendControls } from "./trend-controls";
 export const dynamic = "force-dynamic";
 
 export default async function AdminTrendsPage() {
+  const tmdbConfigured = Boolean(process.env.TMDB_API_KEY?.trim());
   const [run, statuses, candidates, hero, qualityProblems, missingPoster, missingBackdrop, blocked, titleRows, candidateTotal, homeCount, heroCount, trendingCount] = await Promise.all([
     prisma.trendSyncRun.findFirst({ orderBy: { createdAt: "desc" } }),
     prisma.trendCandidate.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -24,6 +25,7 @@ export default async function AdminTrendsPage() {
   const statusCount = new Map(statuses.map((item) => [item.status, item._count._all]));
   return <div className="container admin-shell py-6 text-[#222]">
     <div className="mb-5 flex items-center justify-between"><div><h1 className="text-3xl font-bold">Trend Engine</h1><p className="mt-1 text-neutral-600">Автоматические кандидаты TMDB, Smart Import Vibix и Quality Gate.</p></div><Link href="/admin" className="font-bold text-[#e50914]">Назад</Link></div>
+    {!tmdbConfigured ? <div className="admin-panel mb-5 border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-900">TMDB_API_KEY не указан, внешние TMDB-тренды отключены. Vibix-first режим доступен.</div> : null}
     <section className="admin-panel mb-5 p-5"><TrendControls /></section>
     <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Stat title="Последний запуск" value={run?.status ?? "нет"} />

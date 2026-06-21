@@ -8,6 +8,7 @@ export type QualityMovie = Pick<Movie,
   | "tmdbRating" | "tmdbVotes" | "tmdbPopularity" | "vibixAvailable" | "vibixIframeUrl"
   | "vibixEmbedCode" | "isPublished" | "isCatalogAllowed" | "articleMentionScore"
   | "franchiseScore" | "actorPowerScore" | "views" | "likes"
+  | "vibixTags" | "vibixLgbtContent"
 > & { genres?: { genre: { name: string } }[] };
 
 export type HomeQualityResult = {
@@ -53,11 +54,15 @@ export function calculateHomeQuality(movie: QualityMovie, behaviorBonus = 0): Ho
   const russianTitle = hasRussianText(movie.titleRu);
   const russianDescription = hasRussianText(movie.description);
   const player = movie.vibixAvailable && Boolean(movie.vibixIframeUrl || movie.vibixEmbedCode);
-  const safe = !isAdultLikeTitle(movie) && !isLowPriorityCountry(movie.country);
+  const safeTitleCountry = !isAdultLikeTitle(movie) && !isLowPriorityCountry(movie.country);
   const recent = movie.year >= currentYear - 2;
   const established = movie.year <= currentYear - 5 && rating >= 7 && votes >= 1_000;
   const genreText = movie.genres?.map((item) => item.genre.name).join(" ").toLocaleLowerCase("ru-RU") ?? "";
   const searchable = `${movie.titleRu} ${movie.titleOriginal ?? ""} ${movie.description} ${genreText}`.toLocaleLowerCase("ru-RU");
+  const vibixTags = movie.vibixTags.join(" ").toLocaleLowerCase("ru-RU");
+  const blockedVibix = (movie.vibixLgbtContent ?? 0) > 0
+    || includesAny(`${searchable} ${vibixTags}`, ["adult", "erotic", "эротик", "порно", "porn", "lgbt", "лгбт"]);
+  const safe = safeTitleCountry && !blockedVibix;
   const mainstreamGenre = includesAny(genreText, ["фантаст", "science fiction", "боевик", "action", "триллер", "thriller", "драма", "drama", "ужас", "horror", "приключ", "adventure", "фэнтези", "fantasy", "superhero", "катастроф", "disaster"]);
   const countryText = (movie.country ?? "").toLocaleLowerCase("ru-RU");
   const countryCodes = countryText.split(/[,;/|\s]+/).filter(Boolean);
@@ -91,6 +96,7 @@ export function calculateHomeQuality(movie: QualityMovie, behaviorBonus = 0): Ho
   const homeScore = clamp(qualityScore * 0.55 + trendScore * 0.3 + evergreenScore * 0.15 + movie.franchiseScore + movie.actorPowerScore);
   const complete = poster && backdrop && russianTitle && russianDescription && movie.description.length >= 80 && Boolean(movie.year) && rating > 0 && votes > 0 && player;
   const baseEligible = movie.isPublished && movie.isCatalogAllowed && safe && player && poster && russianTitle;
+  const heroVoteConfidence = votes >= 1_000 || evergreenScore >= 70;
 
   return {
     homeScore,
@@ -98,7 +104,7 @@ export function calculateHomeQuality(movie: QualityMovie, behaviorBonus = 0): Ho
     qualityScore,
     evergreenScore,
     isHomeEligible: baseEligible && !weakFormat && qualityScore >= 52 && votes >= 50,
-    isHeroEligible: baseEligible && backdrop && russianDescription && !weakFormat && !suspiciousRating && qualityScore >= 68 && homeScore >= 58 && rating >= 6 && votes >= 1_000,
+    isHeroEligible: baseEligible && backdrop && russianDescription && !weakFormat && !suspiciousRating && qualityScore >= 68 && homeScore >= 58 && rating >= 6 && heroVoteConfidence,
     isTrendingEligible: baseEligible && qualityScore >= 55 && trendScore >= 45,
     isEvergreenEligible: baseEligible && qualityScore >= 60 && evergreenScore >= 55,
     isQualityDataComplete: complete,

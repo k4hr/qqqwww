@@ -102,11 +102,18 @@ type NormalizedVideo = {
   duration: number | null;
   country: string | null;
   kpRating: number | null;
+  kpVotes: number | null;
   imdbRating: number | null;
+  imdbVotes: number | null;
+  tags: string[];
+  voiceovers: string[];
+  lgbtContent: number | null;
+  actorPowerScore: number;
   type: ContentType;
   vibixType: string;
   vibixId: number | null;
   vibixUploadedAt: Date | null;
+  vibixUpdatedAt: Date | null;
 };
 
 const vibixSyncState = globalThis as typeof globalThis & { __redfilmVibixSyncRunning?: boolean };
@@ -198,11 +205,18 @@ function normalizeVideoData(video: VibixVideo): { data: NormalizedVideo } | { re
       duration: intValue(video.duration),
       country: textFromUnknown(video.country),
       kpRating: floatValue(video.kp_rating),
+      kpVotes: intValue(video.kp_votes),
       imdbRating: floatValue(video.imdb_rating),
+      imdbVotes: intValue(video.imdb_votes),
+      tags: namesFromUnknown(video.tags),
+      voiceovers: namesFromUnknown(video.voiceovers),
+      lgbtContent: intValue(video.lgbt_content),
+      actorPowerScore: Math.min(10, namesFromUnknown(video.persons).length),
       type,
       vibixType: stringValue(video.type) || "movie",
       vibixId,
       vibixUploadedAt: dateValue(video.uploaded_at),
+      vibixUpdatedAt: dateValue(video.updated_at),
     },
   };
 }
@@ -267,13 +281,10 @@ async function enrichVibixVideo(
 ): Promise<EnrichmentResult> {
   const hasPlayer = Boolean(stringValue(base.iframe_url) || stringValue(base.embed_code));
   const hasDetailData = Boolean(
-    stringValue(base.backdrop_url)
-    || stringValue(base.description)
-    || stringValue(base.description_short)
-    || base.genre
-    || base.country
-    || base.tags
-    || base.voiceovers,
+    (base.kp_votes !== null && base.kp_votes !== undefined)
+    || (base.imdb_votes !== null && base.imdb_votes !== undefined)
+    || base.persons
+    || stringValue(base.embed_code),
   );
   if (hasPlayer && hasDetailData) return { video: base, rateLimited: false, retryAfterMs: null };
 
@@ -402,14 +413,21 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
         kinopoiskId: data.kinopoiskId || undefined,
         imdbId: data.imdbId || undefined,
         kpRating: data.kpRating ?? undefined,
+        kpVotes: data.kpVotes ?? undefined,
         imdbRating: data.imdbRating ?? undefined,
+        imdbVotes: data.imdbVotes ?? undefined,
         vibixId: data.vibixId,
         vibixIframeUrl: data.iframeUrl,
         vibixEmbedCode: data.embedCode,
         vibixAvailable: true,
         vibixType: data.vibixType,
         vibixUploadedAt: data.vibixUploadedAt,
+        vibixUpdatedAt: data.vibixUpdatedAt,
         vibixLastSyncAt: syncedAt,
+        vibixTags: data.tags,
+        vibixVoiceovers: data.voiceovers,
+        vibixLgbtContent: data.lgbtContent,
+        actorPowerScore: data.actorPowerScore,
         isPublished: true,
       },
     });
@@ -436,14 +454,21 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
       kinopoiskId: data.kinopoiskId,
       imdbId: data.imdbId,
       kpRating: data.kpRating,
+      kpVotes: data.kpVotes,
       imdbRating: data.imdbRating,
+      imdbVotes: data.imdbVotes,
       vibixId: data.vibixId,
       vibixIframeUrl: data.iframeUrl,
       vibixEmbedCode: data.embedCode,
       vibixAvailable: true,
       vibixType: data.vibixType,
       vibixUploadedAt: data.vibixUploadedAt,
+      vibixUpdatedAt: data.vibixUpdatedAt,
       vibixLastSyncAt: syncedAt,
+      vibixTags: data.tags,
+      vibixVoiceovers: data.voiceovers,
+      vibixLgbtContent: data.lgbtContent,
+      actorPowerScore: data.actorPowerScore,
       isPublished: true,
     },
   });

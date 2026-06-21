@@ -8,7 +8,8 @@ async function tick() {
     const run = await runTrendSync({ batchSize: Number(process.env.TREND_SYNC_BATCH_SIZE || 20) });
     console.log(`[trend-worker] ${run.status}: found=${run.candidatesFound}, imported=${run.imported}, missing=${run.notInVibix}, failed=${run.failed}`);
     if (run.status === "RATE_LIMITED") {
-      const retryDelay = Math.max(60_000, Number(process.env.TREND_VIBIX_RETRY_DELAY_MS || 60_000));
+      const retryAfterMs = Number(run.message?.match(/retry after (\d+) ms/i)?.[1] ?? 0);
+      const retryDelay = Math.max(60_000, retryAfterMs, Number(process.env.TREND_VIBIX_RETRY_DELAY_MS || 60_000));
       console.log(`[trend-worker] Vibix rate limited; retry in ${retryDelay}ms`);
       setTimeout(() => void tick(), retryDelay);
     }

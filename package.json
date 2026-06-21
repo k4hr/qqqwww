@@ -12,6 +12,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "vibix:worker": "tsx src/scripts/vibix-sync-worker.ts",
     "trend:worker": "tsx src/scripts/trend-worker.ts",
+    "trend:vibix": "tsx src/scripts/vibix-trend-sync.ts",
+    "trend:recalculate": "tsx src/scripts/recalculate-trend-scores.ts",
     "redfilm:recheck-catalog": "tsx scripts/recheck-movie-catalog-visibility.ts"
   },
   "dependencies": {

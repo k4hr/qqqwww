@@ -13,7 +13,9 @@ export type VibixVideo = {
   kinopoisk_id: number | string | null;
   imdb_id: number | string | null;
   kp_rating: number | string | null;
+  kp_votes: number | string | null;
   imdb_rating: number | string | null;
+  imdb_votes: number | string | null;
   iframe_url: string | null;
   embed_code: string | null;
   persons: unknown;
@@ -27,6 +29,7 @@ export type VibixVideo = {
   country: unknown;
   description: string | null;
   description_short: string | null;
+  lgbt_content: number | string | null;
   updated_at: string | null;
   uploaded_at: string | null;
 };
@@ -65,7 +68,7 @@ export type VibixVideoLookupResult = {
 export type VibixSerial = {
   id: number | null;
   name: string | null;
-  seasons: { name: string | null; series: { id: number | null; name: string | null }[] }[];
+  seasons: { name: string | number | null; series: { id: number | null; name: string | number | null }[] }[];
 };
 
 export type VibixSerialLookupResult = {
@@ -100,13 +103,26 @@ const VIBIX_LINK_FIELDS = [
   "name",
   "name_rus",
   "name_eng",
+  "name_original",
   "type",
   "year",
   "kp_id",
+  "kinopoisk_id",
   "imdb_id",
+  "kp_rating",
+  "imdb_rating",
   "iframe_url",
+  "voiceovers",
+  "tags",
   "poster_url",
+  "backdrop_url",
   "quality",
+  "duration",
+  "genre",
+  "country",
+  "description",
+  "description_short",
+  "updated_at",
   "uploaded_at",
 ] as const;
 
@@ -171,7 +187,9 @@ function normalizeVideo(value: unknown): VibixVideo | null {
     kinopoisk_id: firstValue(record, "kinopoisk_id", "kinopoiskId") as number | string | null,
     imdb_id: firstValue(record, "imdb_id", "imdbId") as number | string | null,
     kp_rating: firstValue(record, "kp_rating", "kpRating") as number | string | null,
+    kp_votes: firstValue(record, "kp_votes", "kpVotes") as number | string | null,
     imdb_rating: firstValue(record, "imdb_rating", "imdbRating") as number | string | null,
+    imdb_votes: firstValue(record, "imdb_votes", "imdbVotes") as number | string | null,
     iframe_url: firstValue(record, "iframe_url", "iframeUrl") as string | null,
     embed_code: firstValue(record, "embed_code", "embedCode") as string | null,
     persons: firstValue(record, "persons"),
@@ -185,6 +203,7 @@ function normalizeVideo(value: unknown): VibixVideo | null {
     country: firstValue(record, "country", "countries"),
     description: firstValue(record, "description") as string | null,
     description_short: firstValue(record, "description_short", "descriptionShort") as string | null,
+    lgbt_content: firstValue(record, "lgbt_content", "lgbtContent") as number | string | null,
     updated_at: firstValue(record, "updated_at", "updatedAt") as string | null,
     uploaded_at: firstValue(record, "uploaded_at", "uploadedAt") as string | null,
   };
@@ -268,7 +287,7 @@ async function httpError(response: Response, apiKey: string): Promise<VibixHttpE
   return { status: response.status, statusText: response.statusText || "Request failed", bodyPreview };
 }
 
-async function fetchVibixJson(url: URL): Promise<VibixFetchResult> {
+async function fetchVibixJson(url: URL, method: "GET" | "POST" = "GET"): Promise<VibixFetchResult> {
   const apiKey = getApiKey();
   if (!apiKey) return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error: null };
 
@@ -276,6 +295,7 @@ async function fetchVibixJson(url: URL): Promise<VibixFetchResult> {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       const response = await fetch(url, {
+        method,
         headers: {
           Authorization: `Bearer ${apiKey}`,
           Accept: "application/json",
@@ -329,10 +349,10 @@ async function fetchVibixJson(url: URL): Promise<VibixFetchResult> {
   return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error: null };
 }
 
-async function vibixRequest(path: string, searchParams?: URLSearchParams) {
+async function vibixRequest(path: string, searchParams?: URLSearchParams, method: "GET" | "POST" = "GET") {
   const url = new URL(`${VIBIX_API_URL}${path}`);
   if (searchParams) searchParams.forEach((value, key) => url.searchParams.set(key, value));
-  return fetchVibixJson(url);
+  return fetchVibixJson(url, method);
 }
 
 async function vibixRootRequest(path: string, searchParams?: URLSearchParams) {
@@ -353,9 +373,9 @@ function extractSerial(payload: unknown): VibixSerial | null {
       const series = Array.isArray(seriesValue) ? seriesValue.flatMap((episodeValue) => {
         const episode = asRecord(episodeValue);
         if (!episode) return [];
-        return [{ id: numberValue(episode.id), name: typeof episode.name === "string" ? episode.name : null }];
+        return [{ id: numberValue(episode.id), name: typeof episode.name === "string" || typeof episode.name === "number" ? episode.name : null }];
       }) : [];
-      return [{ name: typeof season.name === "string" ? season.name : null, series }];
+      return [{ name: typeof season.name === "string" || typeof season.name === "number" ? season.name : null, series }];
     }) : [];
     return { id: numberValue(record.id), name: typeof record.name === "string" ? record.name : null, seasons };
   }
@@ -444,6 +464,29 @@ export async function getVibixVideoByImdbIdResult(imdbId: string | number): Prom
   const response = await vibixRequest(`/imdb/${encodeURIComponent(String(imdbId))}`);
   return {
     video: extractSingle(response.data),
+    rateLimited: response.rateLimited,
+    retryAfterMs: response.retryAfterMs,
+    requestFailed: response.requestFailed,
+    error: response.error,
+  };
+}
+
+export async function searchVibixVideoResult(
+  name: string,
+  options: { year?: number; type?: VibixCatalogType } = {},
+): Promise<VibixVideoLookupResult> {
+  const query = new URLSearchParams({ name, page: "1", limit: "20" });
+  const response = await vibixRequest("/search", query, "POST");
+  const videos = extractItems(response.data).map(normalizeVideo).filter((item): item is VibixVideo => item !== null);
+  const normalizedName = name.trim().toLocaleLowerCase("ru-RU");
+  const video = videos.find((item) => {
+    const sameType = !options.type || item.type === options.type;
+    const sameYear = !options.year || numberValue(item.year) === options.year;
+    const names = [item.name_rus, item.name, item.name_eng, item.name_original].filter((value): value is string => typeof value === "string");
+    return sameType && sameYear && names.some((value) => value.trim().toLocaleLowerCase("ru-RU") === normalizedName);
+  }) ?? videos.find((item) => (!options.type || item.type === options.type) && (!options.year || numberValue(item.year) === options.year)) ?? null;
+  return {
+    video,
     rateLimited: response.rateLimited,
     retryAfterMs: response.retryAfterMs,
     requestFailed: response.requestFailed,

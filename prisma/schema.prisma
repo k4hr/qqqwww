@@ -46,7 +46,13 @@ model Movie {
   vibixAvailable  Boolean        @default(false)
   vibixType       String?
   vibixUploadedAt DateTime?
+  vibixUpdatedAt  DateTime?
   vibixLastSyncAt DateTime?
+  vibixTags       String[]       @default([])
+  vibixVoiceovers String[]       @default([])
+  vibixLgbtContent Int?
+  vibixSeasonCount Int?
+  vibixEpisodeCount Int?
   isCatalogAllowed Boolean        @default(true)
   catalogBlockReason String?
   normalizedCountries String[]    @default([])

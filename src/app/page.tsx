@@ -1,10 +1,11 @@
-import { ContentType } from "@prisma/client";
+import { ContentType, type Movie } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { ClientLibrary } from "@/components/client-library";
 import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
 import { VibixBanner } from "@/components/vibix-banner";
 import { isValidCinematicImage } from "@/lib/home-quality-score";
+import { isAdultLikeTitle } from "@/lib/catalog-safety";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -28,15 +29,57 @@ const getHomeMovies = unstable_cache(async (currentYear: number) => {
       orderBy: [{ homeScore: "desc" }, { qualityScore: "desc" }],
       take: 30,
     }),
+    prisma.movie.findMany({
+      where: {
+        isPublished: true,
+        isCatalogAllowed: true,
+        vibixAvailable: true,
+        posterUrl: { not: null },
+        OR: [{ vibixIframeUrl: { not: null } }, { vibixEmbedCode: { not: null } }],
+      },
+      orderBy: [{ kpRating: "desc" }, { imdbRating: "desc" }, { year: "desc" }],
+      take: 180,
+    }),
   ]);
 }, ["redfilm-home-scores-v1"], { revalidate: 600 });
 
+function legacyScore(movie: Movie) {
+  const votes = Math.max(movie.kpVotes ?? 0, movie.imdbVotes ?? 0);
+  const rating = Math.max(movie.kpRating ?? 0, movie.imdbRating ?? 0);
+  const recency = Math.max(0, movie.year - (new Date().getFullYear() - 5)) * 2;
+  return Math.log10(1 + votes) * 12 + rating * 5 + recency + (isValidCinematicImage(movie.backdropUrl) ? 8 : 0);
+}
+
+function isLegacyHomeSafe(movie: Movie) {
+  return /[а-яё]/iu.test(movie.titleRu)
+    && isValidCinematicImage(movie.posterUrl)
+    && Boolean(movie.vibixIframeUrl || movie.vibixEmbedCode)
+    && !isAdultLikeTitle(movie)
+    && (movie.vibixLgbtContent ?? 0) <= 0
+    && !movie.vibixTags.some((tag) => /adult|erotic|porn|lgbt|эрот|порно|лгбт/iu.test(tag));
+}
+
+function fillMovies<T extends Movie>(preferred: T[], fallback: T[], limit = 12) {
+  return [...preferred, ...fallback]
+    .filter((movie, index, all) => all.findIndex((item) => item.id === movie.id) === index)
+    .slice(0, limit);
+}
+
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
-  const [heroMovies, popularMovies, popularSeries, trending, newest, best, heroFallback] = await getHomeMovies(currentYear);
-  const featured = [...heroMovies, ...heroFallback.filter((movie) => /[а-яё]/iu.test(movie.titleRu) && isValidCinematicImage(movie.posterUrl) && isValidCinematicImage(movie.backdropUrl))]
-    .filter((movie, index, all) => all.findIndex((item) => item.id === movie.id) === index)
-    .slice(0, 8);
+  const [heroMovies, eligibleMovies, eligibleSeries, eligibleTrending, eligibleNewest, eligibleBest, heroFallback, legacyCandidates] = await getHomeMovies(currentYear);
+  const legacySafe = legacyCandidates.filter(isLegacyHomeSafe).sort((a, b) => legacyScore(b) - legacyScore(a));
+  const popularMovies = fillMovies(eligibleMovies, legacySafe.filter((movie) => movie.type === ContentType.MOVIE));
+  const popularSeries = fillMovies(eligibleSeries, legacySafe.filter((movie) => movie.type === ContentType.SERIES));
+  const trending = fillMovies(eligibleTrending, legacySafe);
+  const newest = fillMovies(eligibleNewest, legacySafe.filter((movie) => [currentYear - 1, currentYear, currentYear + 1].includes(movie.year)));
+  const best = fillMovies(eligibleBest, legacySafe);
+  const legacyHero = legacySafe.filter((movie) => isValidCinematicImage(movie.backdropUrl));
+  const featured = fillMovies(
+    heroMovies,
+    [...heroFallback.filter((movie) => /[а-яё]/iu.test(movie.titleRu) && isValidCinematicImage(movie.posterUrl) && isValidCinematicImage(movie.backdropUrl)), ...legacyHero],
+    8,
+  );
   return <div className="container py-4 sm:py-7">
     <MovieHeroSlider movies={featured} />
     <SectionGrid title="В тренде" href="/trending" movies={trending} showSorts={false} mobileCarousel />

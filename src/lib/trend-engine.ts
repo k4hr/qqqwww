@@ -1,4 +1,4 @@
-import { ContentType, type Prisma, type TrendCandidate } from "@prisma/client";
+import { ContentType, type Movie, type Prisma, type TrendCandidate } from "@prisma/client";
 import { calculateHomeQuality } from "@/lib/home-quality-score";
 import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
 import { toTimestamp } from "@/lib/date-utils";
@@ -22,8 +22,12 @@ import { TREND_SOURCE_RULES } from "@/lib/trend-sources";
 import {
   getVibixSerialByImdbIdResult,
   getVibixSerialByKpIdResult,
+  getVibixKpIds,
   getVibixVideoByImdbIdResult,
   getVibixVideoByKpIdResult,
+  searchVibixVideoResult,
+  sleep,
+  type VibixCatalogType,
   type VibixVideo,
 } from "@/lib/vibix";
 import { saveVibixVideo } from "@/lib/vibix-sync";
@@ -161,27 +165,47 @@ export async function recalculateMovieHomeScore(movieId: string, behaviorBonus =
 export async function recalculateAllHomeScores() {
   const stats = await getRecentPopularityStats(14);
   let cursor: string | undefined;
-  let processed = 0;
+  const result = { processed: 0, homeEligible: 0, heroEligible: 0, trendingEligible: 0, blocked: 0, errors: 0 };
   while (true) {
     const movies = await prisma.movie.findMany({ where: { isPublished: true }, include: { genres: { include: { genre: true } } }, orderBy: { id: "asc" }, take: 200, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
     if (!movies.length) break;
     for (const movie of movies) {
-      const behavior = Math.min(20, Math.log10(1 + (stats.get(movie.id)?.total ?? 0)) * 7);
-      const score = calculateHomeQuality(movie, behavior);
-      await prisma.movie.update({ where: { id: movie.id }, data: { ...score, lastQualitySyncAt: new Date(), lastTrendSyncAt: new Date() } });
-      processed += 1;
+      try {
+        const behavior = Math.min(20, Math.log10(1 + (stats.get(movie.id)?.total ?? 0)) * 7);
+        const score = calculateHomeQuality(movie, behavior);
+        await prisma.movie.update({ where: { id: movie.id }, data: { ...score, lastQualitySyncAt: new Date(), lastTrendSyncAt: new Date() } });
+        result.processed += 1;
+        if (score.isHomeEligible) result.homeEligible += 1;
+        if (score.isHeroEligible) result.heroEligible += 1;
+        if (score.isTrendingEligible) result.trendingEligible += 1;
+        if (!movie.isCatalogAllowed
+          || isAdultLikeTitle(movie)
+          || (movie.vibixLgbtContent ?? 0) > 0
+          || movie.vibixTags.some((tag) => /adult|erotic|porn|lgbt|эрот|порно|лгбт/iu.test(tag))) result.blocked += 1;
+      } catch (error) {
+        result.errors += 1;
+        console.error("Trend score recalculation failed", movie.id, error instanceof Error ? error.message : error);
+      }
     }
     cursor = movies.at(-1)!.id;
   }
-  return { processed };
+  return result;
 }
 
-async function findVibix(candidate: TrendCandidate, imdbId?: string, kpId?: string | null) {
-  if (imdbId || candidate.imdbId) {
-    const result = await getVibixVideoByImdbIdResult(imdbId ?? candidate.imdbId!);
+async function findVibix(
+  candidate: TrendCandidate,
+  options: { imdbId?: string; kpId?: string | null; title?: string; year?: number; type: ContentType },
+) {
+  if (options.imdbId || candidate.imdbId) {
+    const result = await getVibixVideoByImdbIdResult(options.imdbId ?? candidate.imdbId!);
     if (result.video || result.rateLimited) return result;
   }
-  if (kpId || candidate.kpId) return getVibixVideoByKpIdResult(kpId ?? candidate.kpId!);
+  if (options.kpId || candidate.kpId) {
+    const result = await getVibixVideoByKpIdResult(options.kpId ?? candidate.kpId!);
+    if (result.video || result.rateLimited) return result;
+  }
+  const title = options.title ?? candidate.titleRu ?? candidate.titleOriginal;
+  if (title) return searchVibixVideoResult(title, { year: options.year ?? candidate.year ?? undefined, type: options.type === ContentType.SERIES ? "serial" : "movie" });
   return { video: null, rateLimited: false, retryAfterMs: null, requestFailed: false, error: null };
 }
 
@@ -201,13 +225,77 @@ function updateCandidateGroup(candidate: TrendCandidate, data: Prisma.TrendCandi
   });
 }
 
+function candidateStatusForMovie(movie: Movie) {
+  if (!movie.isCatalogAllowed
+    || isAdultLikeTitle(movie)
+    || (movie.vibixLgbtContent ?? 0) > 0
+    || movie.vibixTags.some((tag) => /adult|erotic|porn|lgbt|эрот|порно|лгбт/iu.test(tag))) return "BLOCKED";
+  if (!movie.isQualityDataComplete) return "NEEDS_ENRICHMENT";
+  return movie.isHomeEligible ? "AVAILABLE" : "LOW_QUALITY";
+}
+
+function serialCounts(serial: Awaited<ReturnType<typeof verifyVibixSeries>>["serial"]) {
+  if (!serial) return null;
+  return {
+    vibixSeasonCount: serial.seasons.length,
+    vibixEpisodeCount: serial.seasons.reduce((total, season) => total + season.series.length, 0),
+  };
+}
+
+async function processCandidateWithoutTmdb(candidate: TrendCandidate) {
+  const existing = candidate.movieId
+    ? await prisma.movie.findUnique({ where: { id: candidate.movieId } })
+    : await prisma.movie.findFirst({ where: { OR: [
+      ...(candidate.kpId ? [{ kinopoiskId: candidate.kpId }] : []),
+      ...(candidate.imdbId ? [{ imdbId: candidate.imdbId }] : []),
+    ] } });
+  const lookup = await findVibix(candidate, {
+    imdbId: candidate.imdbId ?? existing?.imdbId ?? undefined,
+    kpId: candidate.kpId ?? existing?.kinopoiskId,
+    title: candidate.titleRu ?? candidate.titleOriginal,
+    year: candidate.year ?? existing?.year,
+    type: candidate.type,
+  });
+  if (lookup.rateLimited) return { status: "RATE_LIMITED", retryAfterMs: lookup.retryAfterMs } as const;
+  if (lookup.requestFailed) return { status: "FAILED" } as const;
+  if (!lookup.video) {
+    await updateCandidateGroup(candidate, { status: "NOT_IN_VIBIX", lastCheckedAt: new Date() });
+    return { status: "NOT_IN_VIBIX" } as const;
+  }
+  let serialData: ReturnType<typeof serialCounts> = null;
+  if (candidate.type === ContentType.SERIES) {
+    const serialLookup = await verifyVibixSeries(lookup.video.imdb_id, lookup.video.kp_id ?? lookup.video.kinopoisk_id);
+    if (serialLookup.rateLimited) return { status: "RATE_LIMITED", retryAfterMs: serialLookup.retryAfterMs } as const;
+    serialData = serialCounts(serialLookup.serial);
+  }
+  const saved = await saveVibixVideo(lookup.video, existing?.id);
+  if (saved.status === "skipped") {
+    await updateCandidateGroup(candidate, { status: "NEEDS_ENRICHMENT", lastCheckedAt: new Date() });
+    return { status: "FAILED" } as const;
+  }
+  if (serialData) await prisma.movie.update({ where: { id: saved.movieId }, data: serialData });
+  const movie = await recalculateMovieHomeScore(saved.movieId);
+  if (!movie) return { status: "FAILED" } as const;
+  await updateCandidateGroup(candidate, {
+    status: candidateStatusForMovie(movie),
+    movieId: movie.id,
+    kpId: movie.kinopoiskId,
+    imdbId: movie.imdbId,
+    lastCheckedAt: new Date(),
+  });
+  return { status: "IMPORTED" } as const;
+}
+
 async function processCandidate(candidate: TrendCandidate) {
+  if (!process.env.TMDB_API_KEY?.trim() || !candidate.tmdbId) return processCandidateWithoutTmdb(candidate);
   const details = await getTmdbDetails(candidate.tmdbId!, candidate.type);
   const existing = await prisma.movie.findFirst({ where: { OR: [{ tmdbId: details.tmdbId }, ...(details.imdbId ? [{ imdbId: details.imdbId }] : [])] } });
   let movieId = existing?.id;
+  let serialData: ReturnType<typeof serialCounts> = null;
   if (!existing?.vibixAvailable || (!existing.vibixIframeUrl && !existing.vibixEmbedCode)) {
-    const lookup = await findVibix(candidate, details.imdbId, existing?.kinopoiskId);
+    const lookup = await findVibix(candidate, { imdbId: details.imdbId, kpId: existing?.kinopoiskId, title: details.titleRu, year: details.year, type: candidate.type });
     if (lookup.rateLimited) return { status: "RATE_LIMITED", retryAfterMs: lookup.retryAfterMs } as const;
+    if (lookup.requestFailed) return { status: "FAILED" } as const;
     if (!lookup.video) {
       await updateCandidateGroup(candidate, { status: "NOT_IN_VIBIX", imdbId: details.imdbId, lastCheckedAt: new Date() });
       return { status: "NOT_IN_VIBIX" } as const;
@@ -215,6 +303,7 @@ async function processCandidate(candidate: TrendCandidate) {
     if (candidate.type === ContentType.SERIES) {
       const serialLookup = await verifyVibixSeries(lookup.video.imdb_id, lookup.video.kp_id ?? lookup.video.kinopoisk_id);
       if (serialLookup.rateLimited) return { status: "RATE_LIMITED", retryAfterMs: serialLookup.retryAfterMs } as const;
+      serialData = serialCounts(serialLookup.serial);
     }
     const enriched: VibixVideo = {
       ...lookup.video,
@@ -235,8 +324,10 @@ async function processCandidate(candidate: TrendCandidate) {
   } else if (candidate.type === ContentType.SERIES) {
     const serialLookup = await verifyVibixSeries(details.imdbId ?? existing.imdbId, existing.kinopoiskId);
     if (serialLookup.rateLimited) return { status: "RATE_LIMITED", retryAfterMs: serialLookup.retryAfterMs } as const;
+    serialData = serialCounts(serialLookup.serial);
   }
   if (!movieId) return { status: "FAILED" } as const;
+  if (serialData) await prisma.movie.update({ where: { id: movieId }, data: serialData });
   await prisma.movie.update({
     where: { id: movieId },
     data: {
@@ -263,17 +354,112 @@ async function processCandidate(candidate: TrendCandidate) {
   });
   await replaceMovieRelations(movieId, details.genres, details.cast);
   const scored = await recalculateMovieHomeScore(movieId);
-  const candidateStatus = !scored ? "FAILED"
-    : !scored.isCatalogAllowed || isAdultLikeTitle(scored) ? "BLOCKED"
-      : !scored.isQualityDataComplete ? "NEEDS_ENRICHMENT"
-        : scored.isHomeEligible ? "AVAILABLE" : "LOW_QUALITY";
+  const candidateStatus = scored ? candidateStatusForMovie(scored) : "FAILED";
   await updateCandidateGroup(candidate, { status: candidateStatus, movieId, imdbId: details.imdbId, lastCheckedAt: new Date() });
   return { status: "IMPORTED" } as const;
 }
 
+function vibixNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function upsertVibixFirstCandidate(video: VibixVideo, movie: Movie, sourceCategory: string, sourceRank: number) {
+  const type = movie.type === ContentType.SERIES ? ContentType.SERIES : ContentType.MOVIE;
+  const kpId = movie.kinopoiskId ?? (video.kp_id ? String(video.kp_id) : null);
+  const sourceScore = Math.log10(1 + Math.max(vibixNumber(video.kp_votes), vibixNumber(video.imdb_votes))) * 10
+    + Math.max(vibixNumber(video.kp_rating), vibixNumber(video.imdb_rating)) * 4;
+  const data = {
+    type,
+    titleRu: movie.titleRu,
+    titleOriginal: movie.titleOriginal ?? movie.titleRu,
+    year: movie.year,
+    imdbId: movie.imdbId,
+    kpId,
+    source: "VIBIX_KPIDS",
+    sourceCategory,
+    sourceRank,
+    sourceScore,
+    posterUrl: movie.posterUrl,
+    backdropUrl: movie.backdropUrl,
+    status: candidateStatusForMovie(movie),
+    movieId: movie.id,
+    lastCheckedAt: new Date(),
+  };
+  const existing = await prisma.trendCandidate.findFirst({ where: { type, kpId, source: "VIBIX_KPIDS", sourceCategory }, select: { id: true } });
+  if (existing) return prisma.trendCandidate.update({ where: { id: existing.id }, data });
+  return prisma.trendCandidate.create({ data });
+}
+
+export async function runVibixFirstTrendBatch(options: { batchSize?: number; detailDelayMs?: number } = {}) {
+  const batchSize = Math.min(100, Math.max(1, options.batchSize ?? Number(process.env.TREND_SYNC_BATCH_SIZE || 20)));
+  const detailDelayMs = Math.max(0, options.detailDelayMs ?? Number(process.env.TREND_VIBIX_DETAIL_DELAY_MS || 1_000));
+  const years = Array.from({ length: 7 }, (_, index) => 2026 - index);
+  const sources = years.flatMap((year) => ([{ year, type: "movie" as const }, { year, type: "serial" as const }]));
+  const dayIndex = Math.floor(Date.now() / 86_400_000);
+  const rotatedSources = sources.map((_, index) => sources[(dayIndex + index) % sources.length]);
+  const result = { candidatesFound: 0, imported: 0, updated: 0, skipped: 0, failed: 0, rateLimited: false, retryAfterMs: null as number | null, source: null as string | null };
+  let selected: { kpId: number; type: VibixCatalogType; year: number }[] = [];
+
+  for (const source of rotatedSources) {
+    const kpIdsResult = await getVibixKpIds({ type: source.type, year: source.year, page: 1, limit: 1_000 });
+    if (kpIdsResult.rateLimited) return { ...result, rateLimited: true, retryAfterMs: kpIdsResult.retryAfterMs };
+    if (kpIdsResult.requestFailed || !kpIdsResult.kpIds.length) continue;
+    const offset = (dayIndex * batchSize) % kpIdsResult.kpIds.length;
+    const ordered = [...kpIdsResult.kpIds.slice(offset), ...kpIdsResult.kpIds.slice(0, offset)];
+    selected = ordered.slice(0, batchSize).map((kpId) => ({ kpId, type: source.type, year: source.year }));
+    result.source = `${source.type}:${source.year}`;
+    break;
+  }
+
+  result.candidatesFound = selected.length;
+  for (const [index, candidate] of selected.entries()) {
+    if (index > 0 && detailDelayMs) await sleep(detailDelayMs);
+    const lookup = await getVibixVideoByKpIdResult(candidate.kpId);
+    if (lookup.rateLimited) {
+      result.rateLimited = true;
+      result.retryAfterMs = lookup.retryAfterMs;
+      break;
+    }
+    if (lookup.requestFailed) {
+      result.failed += 1;
+      continue;
+    }
+    if (!lookup.video) {
+      result.skipped += 1;
+      continue;
+    }
+    let serialData: ReturnType<typeof serialCounts> = null;
+    if (candidate.type === "serial") {
+      const serialLookup = await verifyVibixSeries(lookup.video.imdb_id, lookup.video.kp_id ?? lookup.video.kinopoisk_id);
+      if (serialLookup.rateLimited) {
+        result.rateLimited = true;
+        result.retryAfterMs = serialLookup.retryAfterMs;
+        break;
+      }
+      serialData = serialCounts(serialLookup.serial);
+    }
+    const saved = await saveVibixVideo(lookup.video);
+    if (saved.status === "skipped") {
+      result.skipped += 1;
+      continue;
+    }
+    if (serialData) await prisma.movie.update({ where: { id: saved.movieId }, data: serialData });
+    const movie = await recalculateMovieHomeScore(saved.movieId);
+    if (!movie) {
+      result.failed += 1;
+      continue;
+    }
+    await upsertVibixFirstCandidate(lookup.video, movie, `vibix_${candidate.type}_${candidate.year}`, index + 1);
+    if (saved.status === "imported") result.imported += 1;
+    else result.updated += 1;
+  }
+  return result;
+}
+
 export async function checkTrendCandidatesInVibix(batchSize = 25) {
-  const candidates = await prisma.trendCandidate.findMany({ where: { status: { in: CANDIDATE_STATUSES }, tmdbId: { not: null } }, orderBy: { sourceScore: "desc" }, take: batchSize });
-  const result = { checked: 0, imported: 0, notInVibix: 0, failed: 0, rateLimited: false, retryAfterMs: null as number | null };
+  const candidates = await prisma.trendCandidate.findMany({ where: { status: { in: CANDIDATE_STATUSES } }, orderBy: { sourceScore: "desc" }, take: batchSize });
+  const result = { checked: 0, imported: 0, notInVibix: 0, failed: 0, rateLimited: false, retryAfterMs: null as number | null, message: candidates.length ? null as string | null : "Нет кандидатов для проверки в Vibix." };
   for (const candidate of candidates) {
     try {
       const processed = await processCandidate(candidate);
@@ -300,13 +486,35 @@ export async function runTrendSync(options: { batchSize?: number; collect?: bool
   trendState.__redfilmTrendSyncRunning = true;
   const run = await prisma.trendSyncRun.create({ data: { status: "RUNNING" } });
   try {
-    const candidatesFound = options.collect === false ? 0 : await collectCandidates();
-    const checked = await checkTrendCandidatesInVibix(options.batchSize ?? Number(process.env.TREND_SYNC_BATCH_SIZE || 20));
+    const tmdbEnabled = Boolean(process.env.TMDB_API_KEY?.trim());
+    const vibixFirst = !tmdbEnabled
+      ? await runVibixFirstTrendBatch({ batchSize: options.batchSize })
+      : null;
+    const candidatesFound = tmdbEnabled && options.collect !== false ? await collectCandidates() : vibixFirst?.candidatesFound ?? 0;
+    const checked = tmdbEnabled
+      ? await checkTrendCandidatesInVibix(options.batchSize ?? Number(process.env.TREND_SYNC_BATCH_SIZE || 20))
+      : {
+        imported: (vibixFirst?.imported ?? 0) + (vibixFirst?.updated ?? 0),
+        notInVibix: vibixFirst?.skipped ?? 0,
+        failed: vibixFirst?.failed ?? 0,
+        rateLimited: vibixFirst?.rateLimited ?? false,
+        retryAfterMs: vibixFirst?.retryAfterMs ?? null,
+      };
     await recalculateAllHomeScores();
     const status = checked.rateLimited ? "RATE_LIMITED" : "COMPLETED";
     return await prisma.trendSyncRun.update({
       where: { id: run.id },
-      data: { status, finishedAt: new Date(), candidatesFound, imported: checked.imported, notInVibix: checked.notInVibix, failed: checked.failed, message: checked.rateLimited ? `Vibix rate limit; retry after ${checked.retryAfterMs ?? 0} ms` : null },
+      data: {
+        status,
+        finishedAt: new Date(),
+        candidatesFound,
+        imported: checked.imported,
+        notInVibix: checked.notInVibix,
+        failed: checked.failed,
+        message: checked.rateLimited
+          ? `Vibix rate limit; retry after ${checked.retryAfterMs ?? 0} ms`
+          : tmdbEnabled ? null : "TMDB_API_KEY не указан, внешние TMDB-тренды отключены. Vibix-first режим выполнен.",
+      },
     });
   } catch (error) {
     await prisma.trendSyncRun.update({ where: { id: run.id }, data: { status: "FAILED", finishedAt: new Date(), message: error instanceof Error ? error.message : "Unknown trend sync error" } });
