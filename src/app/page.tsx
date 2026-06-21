@@ -1,4 +1,4 @@
-import { ContentType, type Movie } from "@prisma/client";
+import { ContentType, type Movie, type Prisma } from "@prisma/client";
 import { ClientLibrary } from "@/components/client-library";
 import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
@@ -55,13 +55,13 @@ function fillMovies<T extends Movie>(preferred: T[], fallback: T[], limit = 12) 
 }
 
 async function getHomeMovies(currentYear: number) {
-  const publicWhere = { isPublished: true, isCatalogAllowed: true } as const;
-  const playableWhere = {
+  const publicWhere: Prisma.MovieWhereInput = { isPublished: true, isCatalogAllowed: true };
+  const playableWhere: Prisma.MovieWhereInput = {
     OR: [
       { AND: [{ vibixIframeUrl: { not: null } }, { vibixIframeUrl: { not: "" } }] },
       { AND: [{ vibixEmbedCode: { not: null } }, { vibixEmbedCode: { not: "" } }] },
     ],
-  } as const;
+  };
 
   const [heroMovies, eligibleMovies, eligibleSeries, eligibleTrending, eligibleNewest, eligibleBest, heroFallback, legacyCandidates] = await Promise.all([
     prisma.movie.findMany({

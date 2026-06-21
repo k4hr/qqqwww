@@ -1,15 +1,15 @@
-import { ContentType } from "@prisma/client";
+import { ContentType, type Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const playableWhere = {
+const playableWhere: Prisma.MovieWhereInput = {
   OR: [
     { AND: [{ vibixIframeUrl: { not: null } }, { vibixIframeUrl: { not: "" } }] },
     { AND: [{ vibixEmbedCode: { not: null } }, { vibixEmbedCode: { not: "" } }] },
   ],
-} as const;
+};
 
-const baseWhere = { isPublished: true, isCatalogAllowed: true } as const;
+const baseWhere: Prisma.MovieWhereInput = { isPublished: true, isCatalogAllowed: true };
 
 const select = {
   id: true,

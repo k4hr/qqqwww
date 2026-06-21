@@ -1,15 +1,16 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { TrendControls } from "./trend-controls";
 
 export const dynamic = "force-dynamic";
 
-const playableWhere = {
+const playableWhere: Prisma.MovieWhereInput = {
   OR: [
     { AND: [{ vibixIframeUrl: { not: null } }, { vibixIframeUrl: { not: "" } }] },
     { AND: [{ vibixEmbedCode: { not: null } }, { vibixEmbedCode: { not: "" } }] },
   ],
-} as const;
+};
 
 export default async function AdminTrendsPage() {
   const tmdbConfigured = Boolean(process.env.TMDB_API_KEY?.trim());
