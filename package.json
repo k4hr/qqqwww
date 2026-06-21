@@ -11,6 +11,7 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "vibix:worker": "tsx src/scripts/vibix-sync-worker.ts",
+    "trend:worker": "tsx src/scripts/trend-worker.ts",
     "redfilm:recheck-catalog": "tsx scripts/recheck-movie-catalog-visibility.ts"
   },
   "dependencies": {

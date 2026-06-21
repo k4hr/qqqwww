@@ -1,14 +1,11 @@
-import { ContentType, type Movie } from "@prisma/client";
+import { ContentType } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { ClientLibrary } from "@/components/client-library";
 import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
 import { VibixBanner } from "@/components/vibix-banner";
-import { buildHomeCatalogWhere, isSafeForHome } from "@/lib/catalog-safety";
-import { getMovieFreshnessScore } from "@/lib/catalog-rank";
-import { getPopularMovies, getRecentPopularityStats } from "@/lib/popularity";
+import { isValidCinematicImage } from "@/lib/home-quality-score";
 import { prisma } from "@/lib/prisma";
-import { timedMovieQuery } from "@/lib/query-performance";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -17,58 +14,37 @@ export const metadata = {
   alternates: { canonical: "/" },
 };
 
-const homeWhere = buildHomeCatalogWhere();
-
-function newestSafe<T extends Movie>(movies: T[], limit = 12) {
-  return movies.filter(isSafeForHome).sort((a, b) => getMovieFreshnessScore(b) - getMovieFreshnessScore(a)).slice(0, limit);
-}
-
-const getHomeCandidates = unstable_cache(async (currentYear: number) => Promise.all([
-  timedMovieQuery("home popular movie candidates", () => prisma.movie.findMany({ where: { AND: [homeWhere, { type: ContentType.MOVIE }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 240 })),
-  timedMovieQuery("home popular series candidates", () => prisma.movie.findMany({ where: { AND: [homeWhere, { type: ContentType.SERIES }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 240 })),
-  timedMovieQuery("home year new candidates", () => prisma.movie.findMany({ where: { AND: [homeWhere, { year: currentYear, type: { in: [ContentType.MOVIE, ContentType.SERIES] } }] }, orderBy: [{ vibixUploadedAt: "desc" }, { createdAt: "desc" }], take: 120 })),
-  timedMovieQuery("home new movie candidates", () => prisma.movie.findMany({ where: { AND: [homeWhere, { type: ContentType.MOVIE }] }, orderBy: [{ vibixUploadedAt: "desc" }, { createdAt: "desc" }], take: 120 })),
-  timedMovieQuery("home new series candidates", () => prisma.movie.findMany({ where: { AND: [homeWhere, { type: ContentType.SERIES }] }, orderBy: [{ vibixUploadedAt: "desc" }, { createdAt: "desc" }], take: 120 })),
-  timedMovieQuery("home top rated candidates", () => prisma.movie.findMany({ where: { AND: [homeWhere, { type: { in: [ContentType.MOVIE, ContentType.SERIES] } }, { OR: [{ kpRating: { gte: 6.5 } }, { imdbRating: { gte: 6.5 } }] }] }, orderBy: [{ kpRating: "desc" }, { imdbRating: "desc" }, { year: "desc" }], take: 180 })),
-]), ["redfilm-home-catalog-v1"], { revalidate: 600 });
+const getHomeMovies = unstable_cache(async (currentYear: number) => {
+  const publicWhere = { isPublished: true, isCatalogAllowed: true, vibixAvailable: true, isHomeEligible: true } as const;
+  return Promise.all([
+    prisma.movie.findMany({ where: { ...publicWhere, isHeroEligible: true }, orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }], take: 8 }),
+    prisma.movie.findMany({ where: { ...publicWhere, type: ContentType.MOVIE }, orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }], take: 12 }),
+    prisma.movie.findMany({ where: { ...publicWhere, type: ContentType.SERIES }, orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }], take: 12 }),
+    prisma.movie.findMany({ where: { ...publicWhere, isTrendingEligible: true }, orderBy: [{ trendScore: "desc" }, { homeScore: "desc" }], take: 12 }),
+    prisma.movie.findMany({ where: { ...publicWhere, year: { in: [currentYear - 1, currentYear, currentYear + 1] } }, orderBy: [{ trendScore: "desc" }, { homeScore: "desc" }], take: 12 }),
+    prisma.movie.findMany({ where: { ...publicWhere, isEvergreenEligible: true }, orderBy: [{ evergreenScore: "desc" }, { homeScore: "desc" }], take: 12 }),
+    prisma.movie.findMany({
+      where: { ...publicWhere, backdropUrl: { not: null }, OR: [{ kpVotes: { gte: 1_000 } }, { imdbVotes: { gte: 1_000 } }, { tmdbVotes: { gte: 1_000 } }] },
+      orderBy: [{ homeScore: "desc" }, { qualityScore: "desc" }],
+      take: 30,
+    }),
+  ]);
+}, ["redfilm-home-scores-v1"], { revalidate: 600 });
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
-  const [[movieCandidates, seriesCandidates, yearCandidates, newMovieCandidates, newSeriesCandidates, ratedCandidates], popularityStats] = await Promise.all([getHomeCandidates(currentYear), getRecentPopularityStats(7)]);
-
-  const popularMovies = getPopularMovies(movieCandidates.filter(isSafeForHome), popularityStats, 12);
-  const popularSeries = getPopularMovies(seriesCandidates.filter(isSafeForHome), popularityStats, 12);
-  const yearNew = newestSafe(yearCandidates);
-  const newMovies = newestSafe(newMovieCandidates);
-  const newSeries = newestSafe(newSeriesCandidates);
-  const topRated = ratedCandidates
-    .filter(isSafeForHome)
-    .sort((a, b) => Math.max(b.kpRating ?? 0, b.imdbRating ?? 0) - Math.max(a.kpRating ?? 0, a.imdbRating ?? 0)
-      || b.year - a.year
-      || Number(/full\s*hd|1080|\bhd\b/i.test(b.quality)) - Number(/full\s*hd|1080|\bhd\b/i.test(a.quality)))
-    .slice(0, 12);
-  const heroMovies = [...popularMovies.slice(0, 4), ...popularSeries.slice(0, 4)].map((movie) => ({
-    id: movie.id,
-    slug: movie.slug,
-    titleRu: movie.titleRu,
-    description: movie.description,
-    year: movie.year,
-    quality: movie.quality,
-    posterUrl: movie.posterUrl,
-    backdropUrl: movie.backdropUrl,
-    kpRating: movie.kpRating,
-    imdbRating: movie.imdbRating,
-  }));
-
+  const [heroMovies, popularMovies, popularSeries, trending, newest, best, heroFallback] = await getHomeMovies(currentYear);
+  const featured = [...heroMovies, ...heroFallback.filter((movie) => /[а-яё]/iu.test(movie.titleRu) && isValidCinematicImage(movie.posterUrl) && isValidCinematicImage(movie.backdropUrl))]
+    .filter((movie, index, all) => all.findIndex((item) => item.id === movie.id) === index)
+    .slice(0, 8);
   return <div className="container py-4 sm:py-7">
-    <MovieHeroSlider movies={heroMovies} />
+    <MovieHeroSlider movies={featured} />
+    <SectionGrid title="В тренде" href="/trending" movies={trending} showSorts={false} mobileCarousel />
     <SectionGrid title="Популярные фильмы" href="/movies?sort=popular" movies={popularMovies} showSorts={false} mobileCarousel />
     <ClientLibrary mode="recent-home" />
     <SectionGrid title="Популярные сериалы" href="/series?sort=popular" movies={popularSeries} showSorts={false} mobileCarousel />
-    <SectionGrid title={`Новинки ${currentYear}`} href={`/year/${currentYear}`} movies={yearNew} showSorts={false} mobileCarousel />
+    <SectionGrid title={`Новинки ${currentYear}`} href={`/year/${currentYear}`} movies={newest} showSorts={false} mobileCarousel />
     <div className="home-catalog-ad"><VibixBanner size="728x90" /></div>
-    <SectionGrid title="Новые фильмы" href="/movies?sort=new" movies={newMovies} showSorts={false} mobileCarousel />
-    <SectionGrid title="Новые сериалы" href="/series?sort=new" movies={newSeries} showSorts={false} mobileCarousel />
-    <SectionGrid title="ТОП по рейтингу" href="/top" movies={topRated} showSorts={false} mobileCarousel />
+    <SectionGrid title="Проверенная классика" href="/top" movies={best} showSorts={false} mobileCarousel />
   </div>;
 }

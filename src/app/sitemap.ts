@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { ContentType } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
@@ -6,13 +7,14 @@ import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 import { buildCollectionSlug } from "@/lib/seo-slugs";
 import { countryPages, countryPageWhere, qualityPages, qualityPageWhere, seoTopics, topicWhere } from "@/lib/seo-pages";
 import { similarPath, siteUrl, watchPath } from "@/lib/seo-links";
+import { trendCategorySlug } from "@/lib/trend-sources";
 
 export const dynamic = "force-dynamic";
 
 async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
   const movies = await prisma.movie.findMany({
     where: vibixPublicMovieWhere,
-    select: { id: true, slug: true, titleRu: true, updatedAt: true, year: true, isCatalogAllowed: true, genres: { select: { genre: { select: { slug: true } } } } },
+    select: { id: true, slug: true, titleRu: true, updatedAt: true, year: true, type: true, isCatalogAllowed: true, isHomeEligible: true, isTrendingEligible: true, genres: { select: { genre: { select: { slug: true } } } } },
     take: 5000,
   });
   const mainMovies = movies.filter((movie) => movie.isCatalogAllowed);
@@ -44,8 +46,30 @@ async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
     const rows = await prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), where] }, select: { id: true }, take: 8 });
     return rows.length >= 8 ? topic[0] : null;
   }));
+  const trendCategoryCandidates = await prisma.trendCandidate.findMany({
+    where: { status: "AVAILABLE", movieId: { not: null } },
+    select: { sourceCategory: true, movieId: true },
+    take: 5000,
+  });
+  const trendCategoryMovies = new Map<string, Set<string>>();
+  const eligibleHomeIds = new Set(mainMovies.filter((movie) => movie.isHomeEligible).map((movie) => movie.id));
+  for (const candidate of trendCategoryCandidates) {
+    if (!candidate.movieId || !eligibleHomeIds.has(candidate.movieId)) continue;
+    const ids = trendCategoryMovies.get(candidate.sourceCategory) ?? new Set<string>();
+    ids.add(candidate.movieId);
+    trendCategoryMovies.set(candidate.sourceCategory, ids);
+  }
 
-  const staticPaths = ["", "/movies", "/series", "/latest", "/top", "/collections"];
+  const currentYear = new Date().getFullYear();
+  const trendYears = [currentYear, currentYear - 1, currentYear - 2];
+  const scoredPaths = trendYears.flatMap((year) => {
+    const eligible = mainMovies.filter((movie) => movie.isHomeEligible && movie.year === year);
+    return [
+      ...(eligible.filter((movie) => movie.type === ContentType.MOVIE).length >= 5 ? [`/popular/movies/${year}`, `/best/movies/${year}`] : []),
+      ...(eligible.filter((movie) => movie.type === ContentType.SERIES).length >= 5 ? [`/popular/series/${year}`, `/best/series/${year}`] : []),
+    ];
+  });
+  const staticPaths = ["", "/movies", "/series", "/latest", "/top", "/collections", ...(mainMovies.filter((movie) => movie.isTrendingEligible).length >= 5 ? ["/trending"] : []), ...scoredPaths];
   const paths = [
     ...staticPaths,
     ...movies.flatMap((movie) => [watchPath(movie), similarPath(movie)]),
@@ -55,6 +79,7 @@ async function buildSitemap(): Promise<MetadataRoute.Sitemap> {
     ...countryAvailability.flatMap((slug) => slug ? [`/country/${slug}`] : []),
     ...qualityAvailability.flatMap((slug) => slug ? [`/quality/${slug}`] : []),
     ...topicAvailability.flatMap((slug) => slug ? [`/collections/${slug}`] : []),
+    ...Array.from(trendCategoryMovies).filter(([, movieIds]) => movieIds.size >= 5).map(([category]) => `/collections/${trendCategorySlug(category)}`),
   ];
   const updatedBySlug = new Map(movies.map((movie) => [movie.slug, movie.updatedAt]));
 

@@ -2,6 +2,7 @@ import { ContentType, type Movie } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
+import { calculateHomeQuality } from "@/lib/home-quality-score";
 import {
   getVibixVideoByImdbId,
   getVibixVideoByImdbIdResult,
@@ -264,7 +265,17 @@ async function enrichVibixVideo(
   result: VibixSyncResult,
   waitForDetailRequest: () => Promise<void>,
 ): Promise<EnrichmentResult> {
-  if (stringValue(base.iframe_url) || stringValue(base.embed_code)) return { video: base, rateLimited: false, retryAfterMs: null };
+  const hasPlayer = Boolean(stringValue(base.iframe_url) || stringValue(base.embed_code));
+  const hasDetailData = Boolean(
+    stringValue(base.backdrop_url)
+    || stringValue(base.description)
+    || stringValue(base.description_short)
+    || base.genre
+    || base.country
+    || base.tags
+    || base.voiceovers,
+  );
+  if (hasPlayer && hasDetailData) return { video: base, rateLimited: false, retryAfterMs: null };
 
   let enriched = { ...base };
   const kpId = stringValue(base.kp_id) || stringValue(base.kinopoisk_id);
@@ -323,7 +334,47 @@ async function findExisting(kinopoiskId: string | null, imdbId: string | null, v
   return null;
 }
 
-async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
+function namesFromUnknown(value: unknown): string[] {
+  if (!value) return [];
+  if (typeof value === "string") return value.split(/[,;|]/).map((item) => item.trim()).filter(Boolean);
+  if (Array.isArray(value)) return Array.from(new Set(value.flatMap(namesFromUnknown)));
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const ownName = stringValue(record.name_rus) || stringValue(record.name) || stringValue(record.title);
+    return ownName ? [ownName] : Object.values(record).flatMap(namesFromUnknown);
+  }
+  return [];
+}
+
+async function syncVibixRelations(movieId: string, video: VibixVideo) {
+  const genres = namesFromUnknown(video.genre).slice(0, 20);
+  if (genres.length) {
+    await prisma.movieGenre.deleteMany({ where: { movieId } });
+    for (const name of genres) {
+      const genreSlug = slugify(name);
+      const genre = await prisma.genre.findFirst({ where: { OR: [{ name }, { slug: genreSlug }] } })
+        ?? await prisma.genre.create({ data: { name, slug: genreSlug } });
+      await prisma.movieGenre.create({ data: { movieId, genreId: genre.id } });
+    }
+  }
+  const people = namesFromUnknown(video.persons).slice(0, 20);
+  if (people.length) {
+    await prisma.movieCast.deleteMany({ where: { movieId } });
+    for (const [sortOrder, name] of people.entries()) {
+      const person = await prisma.person.findFirst({ where: { nameRu: name } }) ?? await prisma.person.create({ data: { nameRu: name } });
+      await prisma.movieCast.create({ data: { movieId, personId: person.id, sortOrder } });
+    }
+  }
+}
+
+async function applyQualityGate(movieId: string) {
+  const movie = await prisma.movie.findUnique({ where: { id: movieId }, include: { genres: { include: { genre: true } } } });
+  if (!movie) return;
+  const score = calculateHomeQuality(movie);
+  await prisma.movie.update({ where: { id: movie.id }, data: { ...score, lastQualitySyncAt: new Date() } });
+}
+
+export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
   const normalized = normalizeVideoData(video);
   if ("reason" in normalized) return { status: "skipped" as const, reason: normalized.reason };
   const data = normalized.data;
@@ -334,7 +385,7 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
 
   if (existing) {
     const catalogVisibility = evaluateMovieCatalogVisibility({ country: data.country || existing.country });
-    await prisma.movie.update({
+    const updated = await prisma.movie.update({
       where: { id: existing.id },
       data: {
         titleRu: data.title,
@@ -362,11 +413,13 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
         isPublished: true,
       },
     });
-    return { status: "updated" as const };
+    await syncVibixRelations(updated.id, video);
+    await applyQualityGate(updated.id);
+    return { status: "updated" as const, movieId: existing.id };
   }
 
   const catalogVisibility = evaluateMovieCatalogVisibility({ country: data.country });
-  await prisma.movie.create({
+  const created = await prisma.movie.create({
     data: {
       slug: await uniqueSlug(data.title, data.year),
       titleRu: data.title,
@@ -394,7 +447,9 @@ async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
       isPublished: true,
     },
   });
-  return { status: "imported" as const };
+  await syncVibixRelations(created.id, video);
+  await applyQualityGate(created.id);
+  return { status: "imported" as const, movieId: created.id };
 }
 
 function emptySyncResult(): VibixSyncResult {

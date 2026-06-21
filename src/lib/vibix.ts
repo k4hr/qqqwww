@@ -1,4 +1,5 @@
-const VIBIX_API_URL = "https://vibix.org/api/v1/publisher/videos";
+const VIBIX_API_ROOT = "https://vibix.org/api/v1";
+const VIBIX_API_URL = `${VIBIX_API_ROOT}/publisher/videos`;
 
 export type VibixVideo = {
   id: number | string | null;
@@ -12,9 +13,7 @@ export type VibixVideo = {
   kinopoisk_id: number | string | null;
   imdb_id: number | string | null;
   kp_rating: number | string | null;
-  kp_votes: number | string | null;
   imdb_rating: number | string | null;
-  imdb_votes: number | string | null;
   iframe_url: string | null;
   embed_code: string | null;
   persons: unknown;
@@ -63,6 +62,28 @@ export type VibixVideoLookupResult = {
   error: VibixHttpError | null;
 };
 
+export type VibixSerial = {
+  id: number | null;
+  name: string | null;
+  seasons: { name: string | null; series: { id: number | null; name: string | null }[] }[];
+};
+
+export type VibixSerialLookupResult = {
+  serial: VibixSerial | null;
+  rateLimited: boolean;
+  retryAfterMs: number | null;
+  requestFailed: boolean;
+  error: VibixHttpError | null;
+};
+
+export type VibixKpIdsResult = {
+  kpIds: number[];
+  rateLimited: boolean;
+  retryAfterMs: number | null;
+  requestFailed: boolean;
+  error: VibixHttpError | null;
+};
+
 type VibixLinksParams = {
   page?: number;
   limit?: number;
@@ -79,26 +100,13 @@ const VIBIX_LINK_FIELDS = [
   "name",
   "name_rus",
   "name_eng",
-  "name_original",
   "type",
   "year",
   "kp_id",
-  "kinopoisk_id",
   "imdb_id",
-  "kp_rating",
-  "imdb_rating",
   "iframe_url",
-  "voiceovers",
-  "tags",
   "poster_url",
-  "backdrop_url",
   "quality",
-  "duration",
-  "genre",
-  "country",
-  "description",
-  "description_short",
-  "updated_at",
   "uploaded_at",
 ] as const;
 
@@ -163,9 +171,7 @@ function normalizeVideo(value: unknown): VibixVideo | null {
     kinopoisk_id: firstValue(record, "kinopoisk_id", "kinopoiskId") as number | string | null,
     imdb_id: firstValue(record, "imdb_id", "imdbId") as number | string | null,
     kp_rating: firstValue(record, "kp_rating", "kpRating") as number | string | null,
-    kp_votes: firstValue(record, "kp_votes", "kpVotes") as number | string | null,
     imdb_rating: firstValue(record, "imdb_rating", "imdbRating") as number | string | null,
-    imdb_votes: firstValue(record, "imdb_votes", "imdbVotes") as number | string | null,
     iframe_url: firstValue(record, "iframe_url", "iframeUrl") as string | null,
     embed_code: firstValue(record, "embed_code", "embedCode") as string | null,
     persons: firstValue(record, "persons"),
@@ -327,6 +333,76 @@ async function vibixRequest(path: string, searchParams?: URLSearchParams) {
   const url = new URL(`${VIBIX_API_URL}${path}`);
   if (searchParams) searchParams.forEach((value, key) => url.searchParams.set(key, value));
   return fetchVibixJson(url);
+}
+
+async function vibixRootRequest(path: string, searchParams?: URLSearchParams) {
+  const url = new URL(`${VIBIX_API_ROOT}${path}`);
+  if (searchParams) searchParams.forEach((value, key) => url.searchParams.set(key, value));
+  return fetchVibixJson(url);
+}
+
+function extractSerial(payload: unknown): VibixSerial | null {
+  const record = asRecord(payload);
+  if (!record) return null;
+  const seasonsValue = firstValue(record, "seasons");
+  if (record.id !== undefined || record.name !== undefined || Array.isArray(seasonsValue)) {
+    const seasons = Array.isArray(seasonsValue) ? seasonsValue.flatMap((seasonValue) => {
+      const season = asRecord(seasonValue);
+      if (!season) return [];
+      const seriesValue = firstValue(season, "series");
+      const series = Array.isArray(seriesValue) ? seriesValue.flatMap((episodeValue) => {
+        const episode = asRecord(episodeValue);
+        if (!episode) return [];
+        return [{ id: numberValue(episode.id), name: typeof episode.name === "string" ? episode.name : null }];
+      }) : [];
+      return [{ name: typeof season.name === "string" ? season.name : null, series }];
+    }) : [];
+    return { id: numberValue(record.id), name: typeof record.name === "string" ? record.name : null, seasons };
+  }
+  for (const key of ["data", "item", "result", "serial"]) {
+    const serial = extractSerial(record[key]);
+    if (serial) return serial;
+  }
+  return null;
+}
+
+async function getVibixSerialResult(path: string): Promise<VibixSerialLookupResult> {
+  const response = await vibixRootRequest(path);
+  return {
+    serial: extractSerial(response.data),
+    rateLimited: response.rateLimited,
+    retryAfterMs: response.retryAfterMs,
+    requestFailed: response.requestFailed,
+    error: response.error,
+  };
+}
+
+export function getVibixSerialByKpIdResult(kpId: string | number) {
+  return getVibixSerialResult(`/serials/kp/${encodeURIComponent(String(kpId))}`);
+}
+
+export function getVibixSerialByImdbIdResult(imdbId: string | number) {
+  return getVibixSerialResult(`/serials/imdb/${encodeURIComponent(String(imdbId))}`);
+}
+
+export async function getVibixKpIds(params: { type: VibixCatalogType; year?: number; page?: number; limit?: number }): Promise<VibixKpIdsResult> {
+  const query = new URLSearchParams({
+    type: params.type,
+    page: String(Math.max(1, params.page ?? 1)),
+    limit: String(Math.min(1_000, Math.max(1, params.limit ?? 1_000))),
+  });
+  if (params.year) query.set("year", String(params.year));
+  const response = await vibixRequest("/get_kpids", query);
+  const kpIds = extractItems(response.data)
+    .map(numberValue)
+    .filter((value): value is number => value !== null && Number.isSafeInteger(value) && value > 0);
+  return {
+    kpIds: Array.from(new Set(kpIds)),
+    rateLimited: response.rateLimited,
+    retryAfterMs: response.retryAfterMs,
+    requestFailed: response.requestFailed,
+    error: response.error,
+  };
 }
 
 export async function getVibixVideoLinks(params: VibixLinksParams = {}) {

@@ -9,6 +9,7 @@ import { timedMovieQuery } from "@/lib/query-performance";
 import { getSeoTopic, seoTopics, topicWhere } from "@/lib/seo-pages";
 import { JsonLd } from "@/components/json-ld";
 import { genrePath, siteUrl, watchPath } from "@/lib/seo-links";
+import { trendCategorySlug, trendCategoryTitle } from "@/lib/trend-sources";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,13 @@ export async function generateMetadata({ params }: Props) {
   const topic = getSeoTopic(slug);
   if (topic) return { title: `${topic[1]} смотреть онлайн — REDFILM`, description: `${topic[1]}: тематическая подборка доступных фильмов и сериалов с рейтингами и описаниями.`, alternates: { canonical: `/collections/${slug}` } };
   const collection = getCollection(slug);
-  if (!collection) return {};
+  if (!collection) {
+    const trendCategories = await prisma.trendCandidate.findMany({ where: { status: "AVAILABLE", movieId: { not: null } }, select: { sourceCategory: true }, distinct: ["sourceCategory"], take: 200 });
+    const category = trendCategories.find((item) => trendCategorySlug(item.sourceCategory) === slug)?.sourceCategory;
+    if (!category) return {};
+    const name = trendCategoryTitle(category);
+    return { title: `${name} смотреть онлайн — REDFILM`, description: `Автоматическая подборка REDFILM: ${name}.`, alternates: { canonical: `/collections/${slug}` } };
+  }
   return {
     title: collection.title,
     description: collection.description,
@@ -32,17 +39,23 @@ export default async function CollectionPage({ params }: Props) {
   const collection = getCollection(slug);
   const topic = getSeoTopic(slug);
   const topicFilter = topicWhere(slug);
-  if (!collection && (!topic || !topicFilter)) notFound();
+  const trendCategories = await prisma.trendCandidate.findMany({ where: { status: "AVAILABLE", movieId: { not: null } }, select: { sourceCategory: true }, distinct: ["sourceCategory"], take: 200 });
+  const trendCategory = trendCategories.find((item) => trendCategorySlug(item.sourceCategory) === slug)?.sourceCategory;
+  const trendCandidates = trendCategory ? await prisma.trendCandidate.findMany({ where: { status: "AVAILABLE", sourceCategory: trendCategory, movieId: { not: null } }, select: { movieId: true }, take: 100 }) : [];
+  const trendMovieIds = Array.from(new Set(trendCandidates.flatMap((item) => item.movieId ? [item.movieId] : [])));
+  if (!collection && (!topic || !topicFilter) && !trendMovieIds.length) notFound();
 
   const movies = await timedMovieQuery(`collection ${slug}`, () => prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), topicFilter ?? collection!.where] },
-    orderBy: collection?.orderBy ?? [{ kpRating: "desc" }, { createdAt: "desc" }],
+    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), trendMovieIds.length ? { id: { in: trendMovieIds }, isHomeEligible: true } : topicFilter ?? collection!.where] },
+    orderBy: collection?.orderBy ?? (trendCategory ? [{ homeScore: "desc" }, { trendScore: "desc" }] : [{ kpRating: "desc" }, { createdAt: "desc" }]),
     include: { genres: { include: { genre: true } } },
     take: 48,
   }));
-  if (topic && movies.length < 8) notFound();
-  const h1 = topic?.[1] ?? collection!.h1;
-  const description = topic ? `${topic[1]} собраны по названиям, описаниям и жанровым признакам. В подборку попадают только доступные для просмотра карточки REDFILM.` : collection!.description;
+  if (topic && !trendCategory && movies.length < 8) notFound();
+  if (trendCategory && !movies.length) notFound();
+  const trendName = trendCategory ? trendCategoryTitle(trendCategory) : undefined;
+  const h1 = topic?.[1] ?? collection?.h1 ?? `Подборка ${trendName}`;
+  const description = topic ? `${topic[1]} собраны по названиям, описаниям и жанровым признакам. В подборку попадают только доступные для просмотра карточки REDFILM.` : collection?.description ?? `Автоматическая подборка REDFILM по категории ${trendName}. Позиции прошли проверку качества и доступны для просмотра.`;
   const genres = [...new Map(movies.flatMap((movie) => movie.genres.map((item) => [item.genre.slug, item.genre] as const))).values()].slice(0, 8);
   const relatedTopics = seoTopics.filter((item) => item[0] !== slug).slice(0, 6);
 

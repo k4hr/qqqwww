@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { toTimestamp } from "@/lib/date-utils";
 import { normalizeVibixLimit, sleep, type VibixCatalogType } from "@/lib/vibix";
 import { syncVibixPage, type VibixPageSyncResult } from "@/lib/vibix-sync";
 
@@ -94,7 +95,7 @@ export async function processVibixSyncJob(jobId: string) {
       if (!current || !ACTIVE_STATUSES.includes(current.status)) return current;
 
       if (current.rateLimitUntil) {
-        const remainingMs = current.rateLimitUntil.getTime() - Date.now();
+        const remainingMs = toTimestamp(current.rateLimitUntil) - Date.now();
         if (remainingMs > 0) {
           await sleep(remainingMs);
           continue;
