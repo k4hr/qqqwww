@@ -1,5 +1,5 @@
 import { ContentType, type Movie, type Prisma, type TrendCandidate } from "@prisma/client";
-import { calculateHomeQuality } from "@/lib/home-quality-score";
+import { calculateHomeQuality, getQualityBlockReasons, hasPlayableSource, type QualityBlockReason } from "@/lib/home-quality-score";
 import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
 import { toTimestamp } from "@/lib/date-utils";
 import { getRecentPopularityStats } from "@/lib/popularity";
@@ -23,6 +23,7 @@ import {
   getVibixSerialByImdbIdResult,
   getVibixSerialByKpIdResult,
   getVibixKpIds,
+  getVibixVideoLinks,
   getVibixVideoByImdbIdResult,
   getVibixVideoByKpIdResult,
   searchVibixVideoResult,
@@ -165,7 +166,36 @@ export async function recalculateMovieHomeScore(movieId: string, behaviorBonus =
 export async function recalculateAllHomeScores() {
   const stats = await getRecentPopularityStats(14);
   let cursor: string | undefined;
-  const result = { processed: 0, homeEligible: 0, heroEligible: 0, trendingEligible: 0, blocked: 0, errors: 0 };
+  const blockReasons = {
+    missing_player: 0,
+    missing_poster: 0,
+    missing_backdrop: 0,
+    english_title: 0,
+    not_catalog_allowed: 0,
+    low_score: 0,
+    blocked_genre: 0,
+    lgbt_content: 0,
+    short_documentary_special: 0,
+    missing_votes: 0,
+    unknown_error: 0,
+  } satisfies Record<QualityBlockReason, number>;
+  const topBlocked: {
+    id: string;
+    title: string;
+    kpId: string | null;
+    imdbId: string | null;
+    poster: boolean;
+    backdrop: boolean;
+    iframe: boolean;
+    embedCode: boolean;
+    hasPlayer: boolean;
+    kpRating: number | null;
+    kpVotes: number | null;
+    imdbRating: number | null;
+    imdbVotes: number | null;
+    reasons: QualityBlockReason[];
+  }[] = [];
+  const result = { processed: 0, homeEligible: 0, heroEligible: 0, trendingEligible: 0, blocked: 0, errors: 0, blockReasons, topBlocked };
   while (true) {
     const movies = await prisma.movie.findMany({ where: { isPublished: true }, include: { genres: { include: { genre: true } } }, orderBy: { id: "asc" }, take: 200, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) });
     if (!movies.length) break;
@@ -173,17 +203,37 @@ export async function recalculateAllHomeScores() {
       try {
         const behavior = Math.min(20, Math.log10(1 + (stats.get(movie.id)?.total ?? 0)) * 7);
         const score = calculateHomeQuality(movie, behavior);
+        const reasons = getQualityBlockReasons(movie, score);
         await prisma.movie.update({ where: { id: movie.id }, data: { ...score, lastQualitySyncAt: new Date(), lastTrendSyncAt: new Date() } });
         result.processed += 1;
         if (score.isHomeEligible) result.homeEligible += 1;
         if (score.isHeroEligible) result.heroEligible += 1;
         if (score.isTrendingEligible) result.trendingEligible += 1;
-        if (!movie.isCatalogAllowed
-          || isAdultLikeTitle(movie)
-          || (movie.vibixLgbtContent ?? 0) > 0
-          || movie.vibixTags.some((tag) => /adult|erotic|porn|lgbt|эрот|порно|лгбт/iu.test(tag))) result.blocked += 1;
+        if (!score.isHomeEligible) {
+          result.blocked += 1;
+          for (const reason of reasons) result.blockReasons[reason] += 1;
+          if (result.topBlocked.length < 20) {
+            result.topBlocked.push({
+              id: movie.id,
+              title: movie.titleRu,
+              kpId: movie.kinopoiskId,
+              imdbId: movie.imdbId,
+              poster: Boolean(movie.posterUrl?.trim()),
+              backdrop: Boolean(movie.backdropUrl?.trim()),
+              iframe: Boolean(movie.vibixIframeUrl?.trim()),
+              embedCode: Boolean(movie.vibixEmbedCode?.trim()),
+              hasPlayer: hasPlayableSource(movie),
+              kpRating: movie.kpRating,
+              kpVotes: movie.kpVotes,
+              imdbRating: movie.imdbRating,
+              imdbVotes: movie.imdbVotes,
+              reasons,
+            });
+          }
+        }
       } catch (error) {
         result.errors += 1;
+        result.blockReasons.unknown_error += 1;
         console.error("Trend score recalculation failed", movie.id, error instanceof Error ? error.message : error);
       }
     }
@@ -230,8 +280,9 @@ function candidateStatusForMovie(movie: Movie) {
     || isAdultLikeTitle(movie)
     || (movie.vibixLgbtContent ?? 0) > 0
     || movie.vibixTags.some((tag) => /adult|erotic|porn|lgbt|эрот|порно|лгбт/iu.test(tag))) return "BLOCKED";
-  if (!movie.isQualityDataComplete) return "NEEDS_ENRICHMENT";
-  return movie.isHomeEligible ? "AVAILABLE" : "LOW_QUALITY";
+  if (movie.isHomeEligible) return "AVAILABLE";
+  if (!hasPlayableSource(movie) || !movie.posterUrl || !/[а-яё]/iu.test(movie.titleRu)) return "NEEDS_ENRICHMENT";
+  return "LOW_QUALITY";
 }
 
 function serialCounts(serial: Awaited<ReturnType<typeof verifyVibixSeries>>["serial"]) {
@@ -243,12 +294,15 @@ function serialCounts(serial: Awaited<ReturnType<typeof verifyVibixSeries>>["ser
 }
 
 async function processCandidateWithoutTmdb(candidate: TrendCandidate) {
+  const identifiers = [
+    ...(candidate.kpId ? [{ kinopoiskId: candidate.kpId }] : []),
+    ...(candidate.imdbId ? [{ imdbId: candidate.imdbId }] : []),
+  ];
   const existing = candidate.movieId
     ? await prisma.movie.findUnique({ where: { id: candidate.movieId } })
-    : await prisma.movie.findFirst({ where: { OR: [
-      ...(candidate.kpId ? [{ kinopoiskId: candidate.kpId }] : []),
-      ...(candidate.imdbId ? [{ imdbId: candidate.imdbId }] : []),
-    ] } });
+    : identifiers.length
+      ? await prisma.movie.findFirst({ where: { OR: identifiers } })
+      : null;
   const lookup = await findVibix(candidate, {
     imdbId: candidate.imdbId ?? existing?.imdbId ?? undefined,
     kpId: candidate.kpId ?? existing?.kinopoiskId,
@@ -292,7 +346,7 @@ async function processCandidate(candidate: TrendCandidate) {
   const existing = await prisma.movie.findFirst({ where: { OR: [{ tmdbId: details.tmdbId }, ...(details.imdbId ? [{ imdbId: details.imdbId }] : [])] } });
   let movieId = existing?.id;
   let serialData: ReturnType<typeof serialCounts> = null;
-  if (!existing?.vibixAvailable || (!existing.vibixIframeUrl && !existing.vibixEmbedCode)) {
+  if (!existing || !hasPlayableSource(existing)) {
     const lookup = await findVibix(candidate, { imdbId: details.imdbId, kpId: existing?.kinopoiskId, title: details.titleRu, year: details.year, type: candidate.type });
     if (lookup.rateLimited) return { status: "RATE_LIMITED", retryAfterMs: lookup.retryAfterMs } as const;
     if (lookup.requestFailed) return { status: "FAILED" } as const;
@@ -399,39 +453,61 @@ export async function runVibixFirstTrendBatch(options: { batchSize?: number; det
   const dayIndex = Math.floor(Date.now() / 86_400_000);
   const rotatedSources = sources.map((_, index) => sources[(dayIndex + index) % sources.length]);
   const result = { candidatesFound: 0, imported: 0, updated: 0, skipped: 0, failed: 0, rateLimited: false, retryAfterMs: null as number | null, source: null as string | null };
-  let selected: { kpId: number; type: VibixCatalogType; year: number }[] = [];
+  let selected: { kpId: number | null; type: VibixCatalogType; year: number; baseVideo: VibixVideo | null }[] = [];
 
   for (const source of rotatedSources) {
     const kpIdsResult = await getVibixKpIds({ type: source.type, year: source.year, page: 1, limit: 1_000 });
     if (kpIdsResult.rateLimited) return { ...result, rateLimited: true, retryAfterMs: kpIdsResult.retryAfterMs };
-    if (kpIdsResult.requestFailed || !kpIdsResult.kpIds.length) continue;
-    const offset = (dayIndex * batchSize) % kpIdsResult.kpIds.length;
-    const ordered = [...kpIdsResult.kpIds.slice(offset), ...kpIdsResult.kpIds.slice(0, offset)];
-    selected = ordered.slice(0, batchSize).map((kpId) => ({ kpId, type: source.type, year: source.year }));
-    result.source = `${source.type}:${source.year}`;
-    break;
+    if (kpIdsResult.requestFailed) continue;
+    if (kpIdsResult.kpIds.length) {
+      const offset = (dayIndex * batchSize) % kpIdsResult.kpIds.length;
+      const ordered = [...kpIdsResult.kpIds.slice(offset), ...kpIdsResult.kpIds.slice(0, offset)];
+      selected = ordered.slice(0, batchSize).map((kpId) => ({ kpId, type: source.type, year: source.year, baseVideo: null }));
+      result.source = `${source.type}:${source.year}:get_kpids`;
+      break;
+    }
+  }
+
+  if (!selected.length) {
+    for (const source of rotatedSources) {
+      const links = await getVibixVideoLinks({ type: source.type, year: source.year, page: 1, limit: batchSize, existKpId: true, noAds: true, lgbt: false });
+      if (links.rateLimited) return { ...result, rateLimited: true, retryAfterMs: links.retryAfterMs };
+      if (links.requestFailed || !links.data.length) continue;
+      selected = links.data.slice(0, batchSize).map((video) => ({
+        kpId: video.kp_id ? Number(video.kp_id) : video.kinopoisk_id ? Number(video.kinopoisk_id) : null,
+        type: source.type,
+        year: source.year,
+        baseVideo: video,
+      }));
+      result.source = `${source.type}:${source.year}:links`;
+      break;
+    }
   }
 
   result.candidatesFound = selected.length;
   for (const [index, candidate] of selected.entries()) {
     if (index > 0 && detailDelayMs) await sleep(detailDelayMs);
-    const lookup = await getVibixVideoByKpIdResult(candidate.kpId);
-    if (lookup.rateLimited) {
-      result.rateLimited = true;
-      result.retryAfterMs = lookup.retryAfterMs;
-      break;
+    let video = candidate.baseVideo;
+    if (candidate.kpId && Number.isSafeInteger(candidate.kpId) && candidate.kpId > 0) {
+      const lookup = await getVibixVideoByKpIdResult(candidate.kpId);
+      if (lookup.rateLimited) {
+        result.rateLimited = true;
+        result.retryAfterMs = lookup.retryAfterMs;
+        break;
+      }
+      if (lookup.requestFailed && !video) {
+        result.failed += 1;
+        continue;
+      }
+      video = lookup.video ?? video;
     }
-    if (lookup.requestFailed) {
-      result.failed += 1;
-      continue;
-    }
-    if (!lookup.video) {
+    if (!video) {
       result.skipped += 1;
       continue;
     }
     let serialData: ReturnType<typeof serialCounts> = null;
     if (candidate.type === "serial") {
-      const serialLookup = await verifyVibixSeries(lookup.video.imdb_id, lookup.video.kp_id ?? lookup.video.kinopoisk_id);
+      const serialLookup = await verifyVibixSeries(video.imdb_id, video.kp_id ?? video.kinopoisk_id);
       if (serialLookup.rateLimited) {
         result.rateLimited = true;
         result.retryAfterMs = serialLookup.retryAfterMs;
@@ -439,7 +515,7 @@ export async function runVibixFirstTrendBatch(options: { batchSize?: number; det
       }
       serialData = serialCounts(serialLookup.serial);
     }
-    const saved = await saveVibixVideo(lookup.video);
+    const saved = await saveVibixVideo(video);
     if (saved.status === "skipped") {
       result.skipped += 1;
       continue;
@@ -450,7 +526,7 @@ export async function runVibixFirstTrendBatch(options: { batchSize?: number; det
       result.failed += 1;
       continue;
     }
-    await upsertVibixFirstCandidate(lookup.video, movie, `vibix_${candidate.type}_${candidate.year}`, index + 1);
+    await upsertVibixFirstCandidate(video, movie, `vibix_${candidate.type}_${candidate.year}`, index + 1);
     if (saved.status === "imported") result.imported += 1;
     else result.updated += 1;
   }

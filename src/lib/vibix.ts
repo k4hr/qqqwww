@@ -91,6 +91,7 @@ type VibixLinksParams = {
   page?: number;
   limit?: number;
   type?: VibixCatalogType;
+  year?: number;
   existKpId?: boolean | null;
   noAds?: boolean;
   lgbt?: boolean;
@@ -143,7 +144,7 @@ export function sleep(ms: number) {
 export function normalizeVibixLimit(value: unknown) {
   const parsed = Number.parseInt(String(value ?? "20"), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return 20;
-  return Math.min(parsed, 20);
+  return Math.min(parsed, 100);
 }
 
 function getApiKey() {
@@ -430,8 +431,9 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
     type: params.type ?? "movie",
     page: String(Math.max(1, params.page ?? 1)),
     limit: String(normalizeVibixLimit(params.limit)),
-    fields: VIBIX_LINK_FIELDS.join(","),
   });
+  for (const field of VIBIX_LINK_FIELDS) query.append("fields[]", field);
+  if (params.year) query.append("year[]", String(params.year));
   if (params.existKpId !== null) query.set("exist_kp_id", String(params.existKpId ?? true));
   if (params.noAds === true) query.set("no_ads", "true");
   if (params.lgbt === true) query.set("lgbt", "true");

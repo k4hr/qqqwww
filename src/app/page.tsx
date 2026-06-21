@@ -4,7 +4,7 @@ import { ClientLibrary } from "@/components/client-library";
 import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
 import { VibixBanner } from "@/components/vibix-banner";
-import { isValidCinematicImage } from "@/lib/home-quality-score";
+import { hasPlayableSource, isValidCinematicImage } from "@/lib/home-quality-score";
 import { isAdultLikeTitle } from "@/lib/catalog-safety";
 import { prisma } from "@/lib/prisma";
 
@@ -16,7 +16,7 @@ export const metadata = {
 };
 
 const getHomeMovies = unstable_cache(async (currentYear: number) => {
-  const publicWhere = { isPublished: true, isCatalogAllowed: true, vibixAvailable: true, isHomeEligible: true } as const;
+  const publicWhere = { isPublished: true, isCatalogAllowed: true, isHomeEligible: true } as const;
   return Promise.all([
     prisma.movie.findMany({ where: { ...publicWhere, isHeroEligible: true }, orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }], take: 8 }),
     prisma.movie.findMany({ where: { ...publicWhere, type: ContentType.MOVIE }, orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }], take: 12 }),
@@ -33,15 +33,17 @@ const getHomeMovies = unstable_cache(async (currentYear: number) => {
       where: {
         isPublished: true,
         isCatalogAllowed: true,
-        vibixAvailable: true,
         posterUrl: { not: null },
-        OR: [{ vibixIframeUrl: { not: null } }, { vibixEmbedCode: { not: null } }],
+        OR: [
+          { AND: [{ vibixIframeUrl: { not: null } }, { vibixIframeUrl: { not: "" } }] },
+          { AND: [{ vibixEmbedCode: { not: null } }, { vibixEmbedCode: { not: "" } }] },
+        ],
       },
-      orderBy: [{ kpRating: "desc" }, { imdbRating: "desc" }, { year: "desc" }],
-      take: 180,
+      orderBy: [{ kpVotes: "desc" }, { imdbVotes: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { year: "desc" }],
+      take: 300,
     }),
   ]);
-}, ["redfilm-home-scores-v1"], { revalidate: 600 });
+}, ["redfilm-home-scores-v2"], { revalidate: 120 });
 
 function legacyScore(movie: Movie) {
   const votes = Math.max(movie.kpVotes ?? 0, movie.imdbVotes ?? 0);
@@ -53,7 +55,7 @@ function legacyScore(movie: Movie) {
 function isLegacyHomeSafe(movie: Movie) {
   return /[а-яё]/iu.test(movie.titleRu)
     && isValidCinematicImage(movie.posterUrl)
-    && Boolean(movie.vibixIframeUrl || movie.vibixEmbedCode)
+    && hasPlayableSource(movie)
     && !isAdultLikeTitle(movie)
     && (movie.vibixLgbtContent ?? 0) <= 0
     && !movie.vibixTags.some((tag) => /adult|erotic|porn|lgbt|эрот|порно|лгбт/iu.test(tag));

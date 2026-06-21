@@ -696,7 +696,7 @@ export async function syncVibixVideos(options: SyncOptions = {}): Promise<VibixS
 }
 
 export async function ensureVibixPlayback(movie: Movie) {
-  if (movie.vibixIframeUrl || movie.vibixEmbedCode) return movie;
+  if (movie.vibixIframeUrl?.trim() || movie.vibixEmbedCode?.trim()) return movie;
   let video = movie.kinopoiskId ? await getVibixVideoByKpId(movie.kinopoiskId) : null;
   if (!video && movie.imdbId) video = await getVibixVideoByImdbId(movie.imdbId);
   if (!video) return movie;
