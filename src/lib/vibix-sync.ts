@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
 import { calculateHomeQuality } from "@/lib/home-quality-score";
+import { calculateCatalogScore } from "@/lib/catalog-score";
 import {
   getVibixVideoByImdbId,
   getVibixVideoByImdbIdResult,
@@ -382,7 +383,8 @@ async function applyQualityGate(movieId: string) {
   const movie = await prisma.movie.findUnique({ where: { id: movieId }, include: { genres: { include: { genre: true } } } });
   if (!movie) return;
   const score = calculateHomeQuality(movie);
-  await prisma.movie.update({ where: { id: movie.id }, data: { ...score, lastQualitySyncAt: new Date() } });
+  const catalogScore = calculateCatalogScore(movie);
+  await prisma.movie.update({ where: { id: movie.id }, data: { ...score, ...catalogScore, lastQualitySyncAt: new Date(), lastCatalogScoreAt: new Date() } });
 }
 
 export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
@@ -424,6 +426,8 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
         vibixUploadedAt: data.vibixUploadedAt,
         vibixUpdatedAt: data.vibixUpdatedAt,
         vibixLastSyncAt: syncedAt,
+        lastVibixSeenAt: syncedAt,
+        lastVibixEnrichedAt: syncedAt,
         vibixTags: data.tags,
         vibixVoiceovers: data.voiceovers,
         vibixLgbtContent: data.lgbtContent,
@@ -465,6 +469,8 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
       vibixUploadedAt: data.vibixUploadedAt,
       vibixUpdatedAt: data.vibixUpdatedAt,
       vibixLastSyncAt: syncedAt,
+      lastVibixSeenAt: syncedAt,
+      lastVibixEnrichedAt: syncedAt,
       vibixTags: data.tags,
       vibixVoiceovers: data.voiceovers,
       vibixLgbtContent: data.lgbtContent,

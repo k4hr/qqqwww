@@ -31,7 +31,7 @@ export function ClientLibrary({ mode }: { mode: Mode }) {
   const shown = mode === "recent-home" ? movies.slice(0, 12) : movies;
   const emptyText = mode === "favorites" ? "Вы пока ничего не добавили в избранное." : "История просмотров пока пустая.";
 
-  if (!shown.length) return <div className="mf-panel p-8 text-center"><p className="text-[#a1a1aa]">{emptyText}</p><Link href="/movies" className="mf-btn mf-btn-primary mt-5">Перейти к фильмам</Link></div>;
+  if (!shown.length) return <div className="mf-panel p-8 text-center"><p className="text-[#a1a1aa]">{emptyText}</p><Link href="/films" className="mf-btn mf-btn-primary mt-5">Перейти к фильмам</Link></div>;
 
   if (mode === "recent-home") return <section className="mf-panel mt-8 overflow-hidden p-4 sm:p-6"><div className="mb-5 flex items-center justify-between gap-3"><h2 className="mf-section-title">Недавно смотрели</h2><Link href="/history" className="mf-btn">Все</Link></div><div className="movie-grid home-movie-strip">{shown.map((movie) => <LibraryMovieCard key={movie.id} movie={movie} />)}</div></section>;
 

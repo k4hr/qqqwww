@@ -6,5 +6,5 @@ type Props = { searchParams: Promise<{ sort?: string; year?: string; genre?: str
 export default async function Page({ searchParams }: Props) {
   const { sort, year, genre, country, page } = await searchParams;
   const yearLabel = year?.endsWith("s") ? `${year.slice(0, -1)}-е` : year;
-  return <ListPage title={yearLabel ? `Сериалы ${yearLabel}` : "Сериалы"} type={ContentType.SERIES} sort={sort} yearFilter={year} genreSlug={genre} country={country} showCountryFilter page={Number(page) || 1} />;
+  return <ListPage title={yearLabel ? `Сериалы ${yearLabel}` : "Сериалы"} type={ContentType.SERIES} sort={sort} yearFilter={year} genreSlug={genre} country={country} showCountryFilter showYearFilter showGenreFilter page={Number(page) || 1} />;
 }

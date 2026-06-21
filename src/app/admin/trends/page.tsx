@@ -16,6 +16,7 @@ export default async function AdminTrendsPage() {
   const tmdbConfigured = Boolean(process.env.TMDB_API_KEY?.trim());
   const [
     run,
+    catalogRun,
     statuses,
     candidates,
     hero,
@@ -32,10 +33,15 @@ export default async function AdminTrendsPage() {
     homeCount,
     heroCount,
     trendingCount,
+    publicVisibleCount,
+    popularEligibleCount,
+    topEligibleCount,
+    freshEligibleCount,
     homeVisibleCount,
     heroVisibleCount,
   ] = await Promise.all([
     prisma.trendSyncRun.findFirst({ orderBy: { createdAt: "desc" } }),
+    prisma.catalogEngineRun.findFirst({ orderBy: { createdAt: "desc" } }),
     prisma.trendCandidate.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.trendCandidate.findMany({ orderBy: { sourceScore: "desc" }, take: 40 }),
     prisma.movie.findMany({ where: { isPublished: true, isCatalogAllowed: true, isHeroEligible: true }, orderBy: { homeScore: "desc" }, take: 10 }),
@@ -55,6 +61,10 @@ export default async function AdminTrendsPage() {
     prisma.movie.count({ where: { isHomeEligible: true } }),
     prisma.movie.count({ where: { isHeroEligible: true } }),
     prisma.movie.count({ where: { isTrendingEligible: true } }),
+    prisma.movie.count({ where: { isPublicVisible: true } }),
+    prisma.movie.count({ where: { isPopularEligible: true } }),
+    prisma.movie.count({ where: { isTopEligible: true } }),
+    prisma.movie.count({ where: { isFreshEligible: true } }),
     prisma.movie.count({ where: { isPublished: true, isCatalogAllowed: true, isHomeEligible: true } }),
     prisma.movie.count({ where: { isPublished: true, isCatalogAllowed: true, isHeroEligible: true } }),
   ]);
@@ -65,7 +75,7 @@ export default async function AdminTrendsPage() {
     <div className="mb-5 flex items-center justify-between">
       <div>
         <h1 className="text-3xl font-bold">Trend Engine</h1>
-        <p className="mt-1 text-neutral-600">Vibix-first витрина, Smart Import, Quality Gate и диагностика главной.</p>
+        <p className="mt-1 text-neutral-600">Catalog Engine, Vibix Update Watcher, Smart Import, Quality Gate и диагностика выдачи.</p>
       </div>
       <Link href="/admin" className="font-bold text-[#e50914]">Назад</Link>
     </div>
@@ -103,13 +113,17 @@ export default async function AdminTrendsPage() {
       <Stat title="Home eligible total" value={homeCount} good={homeCount > 0} />
       <Stat title="Hero eligible total" value={heroCount} good={heroCount > 0} />
       <Stat title="Trending eligible" value={trendingCount} />
+      <Stat title="Public visible" value={publicVisibleCount} good={publicVisibleCount > 0} />
+      <Stat title="Popular eligible" value={popularEligibleCount} good={popularEligibleCount > 0} />
+      <Stat title="Top eligible" value={topEligibleCount} good={topEligibleCount > 0} />
+      <Stat title="Fresh eligible" value={freshEligibleCount} good={freshEligibleCount > 0} />
       <Stat title="AVAILABLE" value={statusCount.get("AVAILABLE") ?? 0} />
       <Stat title="NOT_IN_VIBIX" value={statusCount.get("NOT_IN_VIBIX") ?? 0} />
       <Stat title="NEEDS_ENRICHMENT" value={statusCount.get("NEEDS_ENRICHMENT") ?? 0} />
       <Stat title="FAILED" value={statusCount.get("FAILED") ?? 0} />
     </div>
 
-    {run?.message ? <section className="admin-panel mb-5 p-4"><h2 className="mb-2 text-lg font-black">Последнее сообщение</h2><pre className="whitespace-pre-wrap rounded-lg bg-[#f5f5f5] p-3 text-xs">{run.message}</pre></section> : null}
+    {run?.message || catalogRun?.message ? <section className="admin-panel mb-5 p-4"><h2 className="mb-2 text-lg font-black">Последние сообщения</h2>{run?.message ? <pre className="mb-2 whitespace-pre-wrap rounded-lg bg-[#f5f5f5] p-3 text-xs">Trend: {run.message}</pre> : null}{catalogRun?.message ? <pre className="whitespace-pre-wrap rounded-lg bg-[#f5f5f5] p-3 text-xs">Catalog: {catalogRun.message}</pre> : null}</section> : null}
 
     <section className="admin-panel mb-5 p-5">
       <h2 className="mb-3 text-xl font-bold">Диагностика</h2>
@@ -123,6 +137,9 @@ export default async function AdminTrendsPage() {
         <a href="/api/admin/trends/quality-problems?kind=english" className="rounded-lg border border-[#ddd] px-3 py-2">Английские названия</a>
         <a href="/api/admin/trends/quality-problems?kind=blocked" className="rounded-lg border border-[#ddd] px-3 py-2">Quality blocked</a>
         <a href="/api/admin/trends/quality-problems?kind=breakdown" className="rounded-lg border border-[#ddd] px-3 py-2">Block reasons</a>
+        <a href="/api/admin/trends/catalog-preview?target=popular" className="rounded-lg border border-[#ddd] px-3 py-2">/popular JSON</a>
+        <a href="/api/admin/trends/catalog-preview?target=top" className="rounded-lg border border-[#ddd] px-3 py-2">/top-100 JSON</a>
+        <a href="/api/admin/trends/catalog-preview?target=fresh" className="rounded-lg border border-[#ddd] px-3 py-2">Новинки JSON</a>
       </div>
     </section>
 

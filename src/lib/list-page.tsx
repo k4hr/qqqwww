@@ -1,14 +1,11 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { MovieCard } from "@/components/movie-card";
 import type { ContentType } from "@prisma/client";
-import { parseSort } from "@/lib/content";
-import { vibixPublicMovieWhere } from "@/lib/movie-access";
-import { buildCountryFilterWhere, normalizeCatalogCountry } from "@/lib/catalog-filters";
 import { CountryFilter } from "@/components/country-filter";
-import { timedMovieQuery } from "@/lib/query-performance";
 import { JsonLd } from "@/components/json-ld";
 import { siteUrl, watchPath } from "@/lib/seo-links";
+import { CATALOG_GENRES, genreLabel } from "@/lib/catalog-taxonomy";
+import { getCatalogMovies } from "@/lib/catalog-query";
 
 type Props = {
   title: string;
@@ -38,37 +35,13 @@ function filterHref({ sort, country, year, type, genre, page }: { sort?: string;
   return `?${params.toString()}`;
 }
 
-function yearWhere(year?: number, yearFilter?: string) {
-  if (year) return { year };
-  if (!yearFilter) return {};
-  if (/^\d{4}$/.test(yearFilter)) return { year: Number(yearFilter) };
-  const decade = yearFilter.match(/^(19|20)\d0s$/) ? Number(yearFilter.slice(0, 4)) : null;
-  return decade ? { year: { gte: decade, lte: decade + 9 } } : {};
-}
-
 export async function ListPage({ title, type, year, yearFilter, genreSlug, filterGenreSlug, sort, description, country, showCountryFilter = false, showTypeFilter = false, showYearFilter = false, showGenreFilter = false, page = 1 }: Props) {
-  const selectedCountry = normalizeCatalogCountry(country);
   const safePage = Math.max(1, Math.min(page, 100));
   const typeParam = showTypeFilter ? type : undefined;
   const yearParam = yearFilter ?? year;
   const selectedGenre = genreSlug ?? filterGenreSlug;
-  const genreOptions = showGenreFilter ? await prisma.genre.findMany({ orderBy: { name: "asc" }, take: 24 }) : [];
-  const movies = await timedMovieQuery(`catalog ${type ?? "all"}`, () => prisma.movie.findMany({
-    where: {
-      AND: [
-        vibixPublicMovieWhere,
-        buildCountryFilterWhere(selectedCountry),
-        {
-          ...(type ? { type } : {}),
-          ...yearWhere(year, yearFilter),
-          ...(selectedGenre ? { genres: { some: { genre: { slug: selectedGenre } } } } : {}),
-        },
-      ],
-    },
-    orderBy: parseSort(sort),
-    skip: (safePage - 1) * 48,
-    take: 48,
-  }));
+  const movies = await getCatalogMovies({ type, year, yearFilter, genreSlug: selectedGenre, countrySlug: country, sort, page: safePage, pageSize: 48 });
+  const genreOptions = CATALOG_GENRES.slice(0, 14);
 
   return (
     <div className="container py-6">
@@ -78,15 +51,15 @@ export async function ListPage({ title, type, year, yearFilter, genreSlug, filte
         {description ? (Array.isArray(description) ? description : [description]).map((text) => <p key={text} className="mt-3 max-w-4xl leading-relaxed text-[#a9a9b2]">{text}</p>) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <FilterLink href={filterHref({ sort: "new", country: selectedCountry, year: yearParam, type: typeParam, genre: selectedGenre })} label="Новинки" active={!sort || sort === "new" || sort === "latest"} />
-          <FilterLink href={filterHref({ sort: "popular", country: selectedCountry, year: yearParam, type: typeParam, genre: selectedGenre })} label="Популярные" active={sort === "popular"} />
-          <FilterLink href={filterHref({ sort: "rating", country: selectedCountry, year: yearParam, type: typeParam, genre: selectedGenre })} label="По рейтингу" active={sort === "rating"} />
-          <FilterLink href={filterHref({ sort: "year", country: selectedCountry, year: yearParam, type: typeParam, genre: selectedGenre })} label="По году" active={sort === "year"} />
+          <FilterLink href={filterHref({ sort: "fresh", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Новинки" active={!sort || sort === "new" || sort === "latest" || sort === "fresh"} />
+          <FilterLink href={filterHref({ sort: "popular", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Популярные" active={sort === "popular"} />
+          <FilterLink href={filterHref({ sort: "top", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="ТОП" active={sort === "top" || sort === "rating"} />
+          <FilterLink href={filterHref({ sort: "year", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="По году" active={sort === "year"} />
         </div>
-        {showTypeFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort, country: selectedCountry, year: yearParam, genre: selectedGenre })} label="Все типы" active={!type} /><FilterLink href={filterHref({ sort, country: selectedCountry, year: yearParam, type: "MOVIE", genre: selectedGenre })} label="Фильмы" active={type === "MOVIE"} /><FilterLink href={filterHref({ sort, country: selectedCountry, year: yearParam, type: "SERIES", genre: selectedGenre })} label="Сериалы" active={type === "SERIES"} /></div> : null}
-        {showYearFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort, country: selectedCountry, type: typeParam, genre: selectedGenre })} label="Все годы" active={!yearFilter} />{Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((item) => <FilterLink key={item} href={filterHref({ sort, country: selectedCountry, year: item, type: typeParam, genre: selectedGenre })} label={String(item)} active={yearFilter === String(item)} />)}</div> : null}
-        {showGenreFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort, country: selectedCountry, year: yearParam, type: typeParam })} label="Все жанры" active={!filterGenreSlug} />{genreOptions.map((item) => <FilterLink key={item.id} href={filterHref({ sort, country: selectedCountry, year: yearParam, type: typeParam, genre: item.slug })} label={item.name} active={filterGenreSlug === item.slug} />)}</div> : null}
-        {showCountryFilter ? <CountryFilter country={selectedCountry} preserve={{ sort, year: yearParam ? String(yearParam) : undefined, type: typeParam, genre: selectedGenre }} /> : null}
+        {showTypeFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort, country, year: yearParam, genre: selectedGenre })} label="Все типы" active={!type} /><FilterLink href={filterHref({ sort, country, year: yearParam, type: "MOVIE", genre: selectedGenre })} label="Фильмы" active={type === "MOVIE"} /><FilterLink href={filterHref({ sort, country, year: yearParam, type: "SERIES", genre: selectedGenre })} label="Сериалы" active={type === "SERIES"} /></div> : null}
+        {showYearFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort, country, type: typeParam, genre: selectedGenre })} label="Все годы" active={!yearFilter} />{Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((item) => <FilterLink key={item} href={filterHref({ sort, country, year: item, type: typeParam, genre: selectedGenre })} label={String(item)} active={yearFilter === String(item)} />)}</div> : null}
+        {showGenreFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort, country, year: yearParam, type: typeParam })} label="Все жанры" active={!filterGenreSlug} />{genreOptions.map((item) => <FilterLink key={item.slug} href={filterHref({ sort, country, year: yearParam, type: typeParam, genre: item.slug })} label={item.label} active={genreLabel(filterGenreSlug) === item.label} />)}</div> : null}
+        {showCountryFilter ? <CountryFilter country={country} preserve={{ sort, year: yearParam ? String(yearParam) : undefined, type: typeParam, genre: selectedGenre }} /> : null}
       </div>
 
       {movies.length ? (
@@ -100,7 +73,7 @@ export async function ListPage({ title, type, year, yearFilter, genreSlug, filte
           Каталог обновляется. Фильмы скоро появятся.
         </div>
       )}
-      {(safePage > 1 || movies.length === 48) ? <nav className="mt-7 flex items-center justify-center gap-3" aria-label="Пагинация">{safePage > 1 ? <Link href={filterHref({ sort, country: selectedCountry, year: yearParam, type: typeParam, genre: selectedGenre, page: safePage - 1 })} className="mf-btn">Назад</Link> : null}<span className="mf-pill min-h-11">Страница {safePage}</span>{movies.length === 48 ? <Link href={filterHref({ sort, country: selectedCountry, year: yearParam, type: typeParam, genre: selectedGenre, page: safePage + 1 })} className="mf-btn">Далее</Link> : null}</nav> : null}
+      {(safePage > 1 || movies.length === 48) ? <nav className="mt-7 flex items-center justify-center gap-3" aria-label="Пагинация">{safePage > 1 ? <Link href={filterHref({ sort, country, year: yearParam, type: typeParam, genre: selectedGenre, page: safePage - 1 })} className="mf-btn">Назад</Link> : null}<span className="mf-pill min-h-11">Страница {safePage}</span>{movies.length === 48 ? <Link href={filterHref({ sort, country, year: yearParam, type: typeParam, genre: selectedGenre, page: safePage + 1 })} className="mf-btn">Далее</Link> : null}</nav> : null}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { ChevronDown, Menu, X } from "lucide-react";
 import { NAV_COUNTRIES, NAV_GENRES, NAV_YEARS, catalogHref } from "@/lib/navigation-data";
 import { SearchAutocomplete } from "@/components/search-autocomplete";
 
-type CatalogBase = "/movies" | "/series";
+type CatalogBase = "/films" | "/movies" | "/series";
 
 function MenuColumn({ title, children }: { title: string; children: React.ReactNode }) {
   return <div><div className="mb-3 text-xs font-black uppercase tracking-[.14em] text-[#e50914]">{title}</div><div className="grid gap-1">{children}</div></div>;
@@ -22,7 +22,7 @@ function MegaMenu({ base, kind }: { base: CatalogBase; kind: "movies" | "series"
   const countries = NAV_COUNTRIES.filter((item) => !isSeries || item.value !== "italiya").slice(0, isSeries ? 9 : 8);
   return <div className="mega-menu fixed left-1/2 top-[72px] z-[70] w-[min(calc(100vw_-_32px),1100px)] -translate-x-1/2 rounded-[18px] border border-white/10 bg-[rgba(10,10,14,.97)] p-6 shadow-[0_28px_90px_rgba(0,0,0,.72)] backdrop-blur-xl">
     <div className="grid grid-cols-4 gap-7">
-      <MenuColumn title={isSeries ? "Сериалы" : "Фильмы"}><MenuLink href={base}>Все {isSeries ? "сериалы" : "фильмы"}</MenuLink><MenuLink href={catalogHref(base, "sort", "popular")}>Популярные</MenuLink><MenuLink href={catalogHref(base, "sort", "new")}>Новинки</MenuLink>{!isSeries ? <MenuLink href={catalogHref(base, "sort", "rating")}>ТОП 100</MenuLink> : null}<MenuLink href={catalogHref(base, "year", "2026")}>{isSeries ? "Сериалы" : "Фильмы"} 2026</MenuLink></MenuColumn>
+      <MenuColumn title={isSeries ? "Сериалы" : "Фильмы"}><MenuLink href={base}>Все {isSeries ? "сериалы" : "фильмы"}</MenuLink><MenuLink href={catalogHref(base, "sort", "popular")}>Популярные</MenuLink><MenuLink href={catalogHref(base, "sort", "new")}>Новинки</MenuLink><MenuLink href={catalogHref(base, "sort", "rating")}>{isSeries ? "ТОП сериалов" : "ТОП 100"}</MenuLink><MenuLink href={catalogHref(base, "year", "2026")}>{isSeries ? "Сериалы" : "Фильмы"} 2026</MenuLink></MenuColumn>
       <MenuColumn title="По году">{NAV_YEARS.slice(0, isSeries ? 7 : 9).map((item) => <MenuLink key={item.value} href={catalogHref(base, "year", item.value)}>{item.label}</MenuLink>)}</MenuColumn>
       <MenuColumn title="По жанрам">{genres.map((item) => <MenuLink key={item.value} href={catalogHref(base, "genre", item.value)}>{item.label}</MenuLink>)}</MenuColumn>
       <MenuColumn title="По странам">{countries.map((item) => <MenuLink key={item.value} href={catalogHref(base, "country", item.value)}>{item.label}</MenuLink>)}</MenuColumn>
@@ -73,14 +73,14 @@ export function Header() {
     <div className="container relative flex min-h-[72px] items-center gap-4 py-2.5">
       <Link href="/" className="shrink-0 text-[clamp(22px,5vw,28px)] font-black tracking-[-.06em] text-white" aria-label="REDFILM"><span className="text-[#e50914]">RED</span>FILM</Link>
       <nav className="hidden items-center gap-1 min-[900px]:flex" aria-label="Основная навигация">
-        <DesktopCatalogMenu label="Фильмы" base="/movies" kind="movies" open={openMenu === "movies"} setOpen={(value) => setOpenMenu(value ? "movies" : null)} />
+        <DesktopCatalogMenu label="Фильмы" base="/films" kind="movies" open={openMenu === "movies"} setOpen={(value) => setOpenMenu(value ? "movies" : null)} />
         <DesktopCatalogMenu label="Сериалы" base="/series" kind="series" open={openMenu === "series"} setOpen={(value) => setOpenMenu(value ? "series" : null)} />
-        <MenuLink href="/latest">Новинки</MenuLink><MenuLink href="/top">Популярное</MenuLink><MenuLink href="/collections">Подборки</MenuLink><span className="hidden min-[1180px]:contents"><MenuLink href="/favorites">Избранное</MenuLink></span>
+        <MenuLink href="/latest">Новинки</MenuLink><MenuLink href="/popular">Популярное</MenuLink><MenuLink href="/collections">Подборки</MenuLink><span className="hidden min-[1180px]:contents"><MenuLink href="/favorites">Избранное</MenuLink></span>
       </nav>
       <SearchAutocomplete />
       <button type="button" aria-label={mobileOpen ? "Закрыть меню" : "Открыть меню"} aria-expanded={mobileOpen} aria-controls="mobile-navigation" onClick={() => setMobileOpen(!mobileOpen)} className="ml-auto flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[.05] text-white min-[900px]:hidden">{mobileOpen ? <X /> : <Menu />}</button>
     </div>
     <div className="container pb-2.5 min-[900px]:hidden"><SearchAutocomplete mobile /></div>
-    {mobileOpen ? <div id="mobile-navigation" className="container max-h-[calc(100svh-116px)] overflow-y-auto border-t border-white/10 bg-[rgba(5,5,8,.98)] pb-5 min-[900px]:hidden"><MobileAccordion label="Фильмы" base="/movies" kind="movies" close={closeMobile} /><MobileAccordion label="Сериалы" base="/series" kind="series" close={closeMobile} /><div className="grid grid-cols-2 gap-2 pt-4"><Link onClick={closeMobile} className="mobile-menu-link" href="/latest">Новинки</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/top">Популярное</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/favorites">Избранное</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/history">Недавно смотрели</Link><Link onClick={closeMobile} className="mobile-menu-link col-span-2" href="/collections">Подборки</Link></div></div> : null}
+    {mobileOpen ? <div id="mobile-navigation" className="container max-h-[calc(100svh-116px)] overflow-y-auto border-t border-white/10 bg-[rgba(5,5,8,.98)] pb-5 min-[900px]:hidden"><MobileAccordion label="Фильмы" base="/films" kind="movies" close={closeMobile} /><MobileAccordion label="Сериалы" base="/series" kind="series" close={closeMobile} /><div className="grid grid-cols-2 gap-2 pt-4"><Link onClick={closeMobile} className="mobile-menu-link" href="/latest">Новинки</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/popular">Популярное</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/favorites">Избранное</Link><Link onClick={closeMobile} className="mobile-menu-link" href="/history">Недавно смотрели</Link><Link onClick={closeMobile} className="mobile-menu-link col-span-2" href="/collections">Подборки</Link></div></div> : null}
   </header>;
 }

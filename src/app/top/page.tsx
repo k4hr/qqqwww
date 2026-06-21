@@ -12,5 +12,5 @@ export const metadata = {
 
 export default async function TopPage({ searchParams }: Props) {
   const { sort } = await searchParams;
-  return <ListPage title="ТОП фильмов и сериалов" sort={sort || "rating"} />;
+  return <ListPage title="ТОП фильмов и сериалов" sort={sort || "top"} showTypeFilter />;
 }

@@ -141,7 +141,7 @@ export default async function HomePage() {
   return <div className="container py-4 sm:py-7">
     <MovieHeroSlider movies={featured} />
     <SectionGrid title="В тренде" href="/trending" movies={trending} showSorts={false} mobileCarousel />
-    <SectionGrid title="Популярные фильмы" href="/movies?sort=popular" movies={popularMovies} showSorts={false} mobileCarousel />
+    <SectionGrid title="Популярные фильмы" href="/films/popular" movies={popularMovies} showSorts={false} mobileCarousel />
     <ClientLibrary mode="recent-home" />
     <SectionGrid title="Популярные сериалы" href="/series?sort=popular" movies={popularSeries} showSorts={false} mobileCarousel />
     <SectionGrid title={`Новинки ${currentYear}`} href={`/year/${currentYear}`} movies={newest} showSorts={false} mobileCarousel />

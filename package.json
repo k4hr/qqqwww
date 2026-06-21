@@ -15,7 +15,10 @@
     "trend:vibix": "tsx src/scripts/vibix-trend-sync.ts",
     "trend:recalculate": "tsx src/scripts/recalculate-trend-scores.ts",
     "redfilm:recheck-catalog": "tsx scripts/recheck-movie-catalog-visibility.ts",
-    "trend:enrich-existing": "tsx src/scripts/enrich-existing-vibix.ts"
+    "trend:enrich-existing": "tsx src/scripts/enrich-existing-vibix.ts",
+    "catalog:recalculate": "tsx src/scripts/recalculate-catalog-scores.ts",
+    "vibix:update-worker": "tsx src/scripts/vibix-update-worker.ts",
+    "vibix:update-once": "tsx src/scripts/vibix-update-once.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

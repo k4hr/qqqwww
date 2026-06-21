@@ -18,7 +18,7 @@ export function Footer() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3 text-sm font-bold text-[#8b8b95] md:justify-end">
-          <Link className="hover:text-white" href="/movies">Фильмы</Link>
+          <Link className="hover:text-white" href="/films">Фильмы</Link>
           <Link className="hover:text-white" href="/series">Сериалы</Link>
           <Link className="hover:text-white" href="/latest">Последнее</Link>
           <Link className="hover:text-white" href="/top">ТОП</Link>

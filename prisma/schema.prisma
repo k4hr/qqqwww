@@ -67,6 +67,10 @@ model Movie {
   homeScore       Float          @default(0)
   trendScore      Float          @default(0)
   qualityScore    Float          @default(0)
+  catalogScore    Float          @default(0)
+  popularScore    Float          @default(0)
+  topScore        Float          @default(0)
+  freshScore      Float          @default(0)
   evergreenScore  Float          @default(0)
   articleMentionScore Float      @default(0)
   franchiseScore  Float          @default(0)
@@ -75,9 +79,16 @@ model Movie {
   isHeroEligible  Boolean        @default(false)
   isTrendingEligible Boolean     @default(false)
   isEvergreenEligible Boolean    @default(false)
+  isPublicVisible Boolean        @default(false)
+  isPopularEligible Boolean      @default(false)
+  isTopEligible Boolean          @default(false)
+  isFreshEligible Boolean        @default(false)
   isQualityDataComplete Boolean  @default(false)
   lastTrendSyncAt DateTime?
   lastQualitySyncAt DateTime?
+  lastCatalogScoreAt DateTime?
+  lastVibixEnrichedAt DateTime?
+  lastVibixSeenAt DateTime?
   lastExternalEnrichmentAt DateTime?
   isPublished     Boolean        @default(true)
   views           Int            @default(0)
@@ -104,6 +115,10 @@ model Movie {
   @@index([isHomeEligible, homeScore])
   @@index([isHeroEligible, homeScore])
   @@index([isTrendingEligible, trendScore])
+  @@index([isPublicVisible, catalogScore])
+  @@index([isPopularEligible, popularScore])
+  @@index([isTopEligible, topScore])
+  @@index([isFreshEligible, freshScore])
 }
 
 model Genre {
@@ -154,6 +169,43 @@ model ProviderLink {
   movie         Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
 
   @@index([provider, isAvailable])
+}
+
+model VibixUpdateCursor {
+  id String @id @default(cuid())
+  type ContentType
+  source String @default("vibix")
+  mode String @default("updates")
+  lastPage Int @default(1)
+  lastSeenUploadedAt DateTime?
+  lastSeenUpdatedAt DateTime?
+  lastRunAt DateTime?
+  lastSuccessAt DateTime?
+  lastError String? @db.Text
+  isRunning Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, source, mode])
+  @@index([lastRunAt])
+}
+
+model CatalogEngineRun {
+  id String @id @default(cuid())
+  status String
+  mode String
+  found Int @default(0)
+  imported Int @default(0)
+  updated Int @default(0)
+  enriched Int @default(0)
+  skipped Int @default(0)
+  failed Int @default(0)
+  message String? @db.Text
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([status, mode, createdAt])
 }
 
 model VibixSyncJob {

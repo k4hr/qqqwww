@@ -9,36 +9,45 @@ export const NAV_YEARS: NavigationItem[] = [
 ];
 
 export const NAV_GENRES: NavigationItem[] = [
-  { label: "Боевики", value: "boevik" }, { label: "Комедии", value: "komediya" },
-  { label: "Драмы", value: "drama" }, { label: "Ужасы", value: "uzhasy" },
-  { label: "Фантастика", value: "fantastika" }, { label: "Триллеры", value: "triller" },
-  { label: "Детективы", value: "detektiv" }, { label: "Криминал", value: "kriminal" },
-  { label: "Мелодрамы", value: "melodrama" }, { label: "Приключения", value: "priklyucheniya" },
-  { label: "Семейные", value: "semeynyy" }, { label: "Военные", value: "voennyy" },
-  { label: "Исторические", value: "istoriya" }, { label: "Биографии", value: "biografiya" },
+  { label: "Боевики", value: "boeviki" }, { label: "Комедии", value: "komedii" },
+  { label: "Драмы", value: "dramy" }, { label: "Ужасы", value: "uzhasy" },
+  { label: "Фантастика", value: "fantastika" }, { label: "Триллеры", value: "trillery" },
+  { label: "Детективы", value: "detektivy" }, { label: "Криминал", value: "kriminal" },
+  { label: "Мелодрамы", value: "melodramy" }, { label: "Приключения", value: "priklyucheniya" },
+  { label: "Семейные", value: "semeynye" }, { label: "Фэнтези", value: "fentezi" },
+  { label: "Военные", value: "voennye" }, { label: "Исторические", value: "istoricheskie" },
+  { label: "Биографии", value: "biografii" },
 ];
 
 export const NAV_COUNTRIES: NavigationItem[] = [
-  { label: "США", value: "ssha" }, { label: "Россия", value: "rossiya" },
-  { label: "Великобритания", value: "velikobritaniya" }, { label: "Франция", value: "frantsiya" },
-  { label: "Германия", value: "germaniya" }, { label: "Испания", value: "ispaniya" },
-  { label: "Италия", value: "italiya" }, { label: "Китай", value: "kitay" },
-  { label: "Япония", value: "yaponiya" }, { label: "Индия", value: "indiya" },
-  { label: "Южная Корея", value: "yuzhnaya-koreya" },
+  { label: "США", value: "usa" }, { label: "Россия", value: "russia" },
+  { label: "Великобритания", value: "uk" }, { label: "Франция", value: "france" },
+  { label: "Германия", value: "germany" }, { label: "Испания", value: "spain" },
+  { label: "Италия", value: "italy" }, { label: "Китай", value: "china" },
+  { label: "Япония", value: "japan" }, { label: "Индия", value: "india" },
+  { label: "Южная Корея", value: "korea" },
 ];
 
 export const NAV_TOPICS = [
-  { label: "ТОП 100", href: "/top" },
-  { label: "Новинки 2026", href: "/movies?year=2026&sort=new" },
-  { label: "Популярные", href: "/top" },
+  { label: "ТОП 100", href: "/top-100" },
+  { label: "Новинки 2026", href: "/films/year/2026" },
+  { label: "Популярные", href: "/popular" },
   { label: "FullHD", href: "/quality/fullhd" },
   { label: "Супергерои", href: "/collections/supergeroi" },
-  { label: "Фантастика", href: "/genre/fantastika" },
+  { label: "Фантастика", href: "/films/genre/fantastika" },
   { label: "Marvel", href: "/collections/marvel" },
   { label: "Комиксы", href: "/collections/komiksy" },
 ] as const;
 
-export function catalogHref(base: "/movies" | "/series", key?: "year" | "genre" | "country" | "sort", value?: string) {
+export type CatalogBase = "/films" | "/movies" | "/series";
+
+export function catalogHref(base: CatalogBase, key?: "year" | "genre" | "country" | "sort", value?: string) {
   if (!key || !value) return base;
+  if (key === "year" && /^\d{4}$/.test(value)) return `${base}/year/${value}`;
+  if (key === "genre") return `${base}/genre/${value}`;
+  if (key === "country") return `${base}/country/${value}`;
+  if (key === "sort" && value === "popular") return `${base}/popular`;
+  if (key === "sort" && (value === "rating" || value === "top")) return `${base}/top-100`;
+  if (key === "sort" && value === "new") return `${base}/year/${new Date().getFullYear()}`;
   return `${base}?${new URLSearchParams({ [key]: value }).toString()}`;
 }
