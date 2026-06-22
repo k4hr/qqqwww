@@ -45,19 +45,21 @@ async function getCachedSimilarSeoMovies(movie: SeoMovie, limit: number): Promis
     include: movieSeoInclude,
   });
   const byId = new Map(movies.map((item) => [item.id, item]));
-  return cached
-    .map((item) => {
-      const target = byId.get(item.targetMovieId);
-      if (!target) return null;
-      return {
-        ...target,
-        similarityScore: item.score,
-        similarityReasons: parseReasonsJson(item.reasonsJson),
-        similarityBucket: item.bucket || undefined,
-      } satisfies SimilarMovieResult;
-    })
-    .filter((item): item is SimilarMovieResult => Boolean(item))
-    .slice(0, limit);
+  const results: SimilarMovieResult[] = [];
+
+  for (const item of cached) {
+    const target = byId.get(item.targetMovieId);
+    if (!target) continue;
+
+    results.push({
+      ...target,
+      similarityScore: item.score,
+      similarityReasons: parseReasonsJson(item.reasonsJson),
+      similarityBucket: item.bucket || undefined,
+    });
+  }
+
+  return results.slice(0, limit);
 }
 
 export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
