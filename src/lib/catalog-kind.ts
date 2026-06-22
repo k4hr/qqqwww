@@ -1,4 +1,5 @@
 import { ContentType, type Movie } from "@prisma/client";
+import { VIBIX_CATEGORY_IDS, VIBIX_GENRE_IDS, VIBIX_TAG_IDS, VIBIX_COUNTRY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
 
 export type CatalogKindInput = Partial<Pick<Movie,
   | "type"
@@ -61,6 +62,28 @@ function stringValue(value: unknown) {
   return normalized || null;
 }
 
+function intValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function collectNumericIds(value: unknown): number[] {
+  if (value === null || value === undefined) return [];
+  const direct = intValue(value);
+  if (direct !== null) return [direct];
+  if (Array.isArray(value)) return Array.from(new Set(value.flatMap(collectNumericIds)));
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const own = [record.id, record.category_id, record.genre_id, record.country_id, record.tag_id].flatMap(collectNumericIds);
+    const nested = Object.entries(record)
+      .filter(([key]) => !["poster", "poster_url", "backdrop", "backdrop_url", "iframe_url", "embed_code", "description", "description_short"].includes(key))
+      .flatMap(([, item]) => collectNumericIds(item));
+    return Array.from(new Set([...own, ...nested]));
+  }
+  return [];
+}
+
 function collectUnknown(value: unknown): string[] {
   if (value === null || value === undefined) return [];
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -119,11 +142,20 @@ function buildTextParts(input: CatalogKindInput) {
   const descriptionText = [input.description, ...rawDescription].filter(Boolean).join(" ");
   const countryText = [input.country, ...collectUnknown(raw.country)].filter(Boolean).join(" ");
 
+  const categoryIds = collectNumericIds([raw.category_id, raw.categoryId, raw.category, raw.categories, raw.category_ids, raw.categoryIds]);
+  const genreIds = collectNumericIds([raw.genre_id, raw.genreId, raw.genre, raw.genres, raw.genre_ids, raw.genreIds]);
+  const countryIds = collectNumericIds([raw.country_id, raw.countryId, raw.country, raw.countries, raw.country_ids, raw.countryIds]);
+  const tagIds = collectNumericIds([raw.tag_id, raw.tagId, raw.tags, raw.tag, raw.tag_ids, raw.tagIds]);
+
   return {
     structuredText,
     titleText,
     descriptionText,
     countryText,
+    categoryIds,
+    genreIds,
+    countryIds,
+    tagIds,
     allText: [structuredText, titleText, descriptionText, countryText].filter(Boolean).join(" "),
   };
 }
@@ -132,6 +164,8 @@ export function hasStrictAnimeSignal(input: CatalogKindInput) {
   const parts = buildTextParts(input);
   const trustedText = [parts.structuredText, parts.titleText].join(" ");
 
+  if (parts.categoryIds.includes(VIBIX_CATEGORY_IDS.anime) || parts.genreIds.includes(VIBIX_GENRE_IDS.anime)) return true;
+  if (parts.tagIds.some((id) => [VIBIX_TAG_IDS.dorama].includes(id))) return false;
   if (textHasMarker(trustedText, EXPLICIT_ANIME_MARKERS)) return true;
 
   // OVA/ONA are real anime category markers, but as plain substrings they create huge false positives:
@@ -139,11 +173,12 @@ export function hasStrictAnimeSignal(input: CatalogKindInput) {
   if (textHasExactToken(parts.structuredText, ANIME_EXACT_TOKENS)) return true;
 
   // Japanese animation is anime. A normal Japanese/Korean/Chinese live-action title is not anime.
-  return isJapanCountry(parts.countryText) && textHasMarker(parts.structuredText, CARTOON_MARKERS);
+  return (isJapanCountry(parts.countryText) || parts.countryIds.includes(VIBIX_COUNTRY_IDS.japan)) && textHasMarker(parts.structuredText, CARTOON_MARKERS);
 }
 
 export function hasCartoonSignal(input: CatalogKindInput) {
   const parts = buildTextParts(input);
+  if (parts.categoryIds.includes(VIBIX_CATEGORY_IDS.cartoon) || parts.categoryIds.includes(VIBIX_CATEGORY_IDS.adultCartoon) || parts.genreIds.includes(VIBIX_GENRE_IDS.animation)) return true;
   return textHasMarker(parts.structuredText, CARTOON_MARKERS)
     || textHasMarker(parts.titleText, ["мультфильм", "мультсериал", "cartoon"])
     || textHasMarker(parts.descriptionText, ["мультфильм", "мультсериал"]);

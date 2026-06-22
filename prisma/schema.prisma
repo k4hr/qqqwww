@@ -309,6 +309,67 @@ model SimilarityJob {
   @@index([updatedAt])
 }
 
+
+model VibixReferenceItem {
+  id        String   @id @default(cuid())
+  kind      String
+  vibixId   Int
+  name      String?
+  nameEng   String?
+  code      String?
+  rawJson   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, vibixId])
+  @@index([kind])
+  @@index([kind, name])
+  @@index([code])
+}
+
+model VibixCatalogSnapshot {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  label         String
+  sourceType    String?
+  filterKind    String?
+  filterId      Int?
+  total         Int?
+  lastPage      Int?
+  perPage       Int?
+  lastCheckedAt DateTime?
+  lastError     String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([sourceType])
+  @@index([filterKind, filterId])
+  @@index([lastCheckedAt])
+}
+
+model VibixCatalogIndex {
+  id              String   @id @default(cuid())
+  sourceType      String
+  kpId            String
+  categoryId      Int?
+  categoryName    String?
+  sourcePage      Int?
+  importStatus    String   @default("UNKNOWN")
+  importedMovieId String?
+  lastImportError String?  @db.Text
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  importedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([sourceType, kpId])
+  @@index([sourceType])
+  @@index([sourceType, categoryId])
+  @@index([importStatus, sourceType])
+  @@index([kpId])
+}
+
 model MovieEvent {
   id        String   @id @default(cuid())
   movieId   String?

@@ -92,12 +92,33 @@ type VibixLinksParams = {
   limit?: number;
   type?: VibixCatalogType;
   year?: number;
+  categoryIds?: number[];
+  genreIds?: number[];
+  countryIds?: number[];
+  tagIds?: number[];
+  voiceoverIds?: number[];
   existKpId?: boolean | null;
   noAds?: boolean;
   lgbt?: boolean;
 };
 
 export type VibixCatalogType = "movie" | "serial";
+export type VibixReferenceKind = "categories" | "genres" | "countries" | "tags" | "voiceovers";
+export type VibixReferenceItem = {
+  id: number;
+  name: string | null;
+  name_eng?: string | null;
+  code?: string | null;
+  raw: Record<string, unknown>;
+};
+
+export type VibixReferenceResult = {
+  items: VibixReferenceItem[];
+  rateLimited: boolean;
+  retryAfterMs: number | null;
+  requestFailed: boolean;
+  error: VibixHttpError | null;
+};
 
 const VIBIX_LINK_FIELDS = [
   "id",
@@ -421,13 +442,14 @@ export function getVibixSerialByImdbIdResult(imdbId: string | number) {
   return getVibixSerialResult(`/serials/imdb/${encodeURIComponent(String(imdbId))}`);
 }
 
-export async function getVibixKpIds(params: { type: VibixCatalogType; year?: number; page?: number; limit?: number }): Promise<VibixKpIdsResult> {
+export async function getVibixKpIds(params: { type: VibixCatalogType; year?: number; page?: number; limit?: number; categoryIds?: number[] }): Promise<VibixKpIdsResult> {
   const query = new URLSearchParams({
     type: params.type,
     page: String(Math.max(1, params.page ?? 1)),
     limit: String(normalizeVibixKpIdsLimit(params.limit)),
   });
   if (params.year) query.set("year", String(params.year));
+  for (const categoryId of params.categoryIds ?? []) query.append("category[]", String(categoryId));
   const response = await vibixRequest("/get_kpids", query);
   const kpIds = extractItems(response.data)
     .map(numberValue)
@@ -441,6 +463,13 @@ export async function getVibixKpIds(params: { type: VibixCatalogType; year?: num
   };
 }
 
+
+function appendNumericArray(query: URLSearchParams, key: string, values?: number[]) {
+  for (const value of values ?? []) {
+    if (Number.isSafeInteger(value) && value > 0) query.append(key, String(value));
+  }
+}
+
 export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
   const query = new URLSearchParams({
     type: params.type ?? "movie",
@@ -452,6 +481,11 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
   // category[], year[], genre[], country[], tag[], voiceover[], page and limit.
   // Do not send fields[] or undocumented flags here: they can make Vibix return 500.
   if (params.year) query.append("year[]", String(params.year));
+  appendNumericArray(query, "category[]", params.categoryIds);
+  appendNumericArray(query, "genre[]", params.genreIds);
+  appendNumericArray(query, "country[]", params.countryIds);
+  appendNumericArray(query, "tag[]", params.tagIds);
+  appendNumericArray(query, "voiceover[]", params.voiceoverIds);
 
   const response = await vibixRequest("/links", query);
   const rawItems = extractItems(response.data);
@@ -482,6 +516,29 @@ export async function getVibixVideoByImdbIdResult(imdbId: string | number): Prom
   const response = await vibixRequest(`/imdb/${encodeURIComponent(String(imdbId))}`);
   return {
     video: extractSingle(response.data),
+    rateLimited: response.rateLimited,
+    retryAfterMs: response.retryAfterMs,
+    requestFailed: response.requestFailed,
+    error: response.error,
+  };
+}
+
+
+function normalizeReferenceItem(value: unknown): VibixReferenceItem | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const id = numberValue(record.id);
+  if (id === null) return null;
+  const name = typeof record.name === "string" ? record.name : null;
+  const nameEng = typeof record.name_eng === "string" ? record.name_eng : typeof record.nameEng === "string" ? record.nameEng : null;
+  const code = typeof record.code === "string" ? record.code : null;
+  return { id, name, name_eng: nameEng, code, raw: record };
+}
+
+export async function getVibixReferenceItems(kind: VibixReferenceKind): Promise<VibixReferenceResult> {
+  const response = await vibixRequest(`/${kind}`);
+  return {
+    items: extractItems(response.data).map(normalizeReferenceItem).filter((item): item is VibixReferenceItem => item !== null),
     rateLimited: response.rateLimited,
     retryAfterMs: response.retryAfterMs,
     requestFailed: response.requestFailed,
