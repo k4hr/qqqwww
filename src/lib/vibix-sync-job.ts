@@ -56,19 +56,27 @@ function pageFromCount(count: number, limit: number) {
   return Math.max(1, Math.floor(Math.max(0, count) / Math.max(1, limit)) + 1);
 }
 
-function movieLikeWhere(): Prisma.MovieWhereInput {
+function vibixVisibleWhere(): Prisma.MovieWhereInput {
   return {
     OR: [
-      { vibixType: "movie" },
-      { type: { in: [ContentType.MOVIE, ContentType.CARTOON, ContentType.ANIME] } },
+      { vibixId: { not: null } },
+      { vibixAvailable: true },
+      { vibixIframeUrl: { not: null } },
+      { vibixEmbedCode: { not: null } },
+      { kinopoiskId: { not: null } },
+      { imdbId: { not: null } },
     ],
+  };
+}
+
+function movieLikeWhere(): Prisma.MovieWhereInput {
+  return {
     AND: [
+      vibixVisibleWhere(),
       {
         OR: [
-          { vibixId: { not: null } },
-          { vibixAvailable: true },
-          { vibixIframeUrl: { not: null } },
-          { vibixEmbedCode: { not: null } },
+          { vibixType: "movie" },
+          { type: { in: [ContentType.MOVIE, ContentType.CARTOON, ContentType.ANIME] } },
         ],
       },
     ],
@@ -77,17 +85,12 @@ function movieLikeWhere(): Prisma.MovieWhereInput {
 
 function serialLikeWhere(): Prisma.MovieWhereInput {
   return {
-    OR: [
-      { vibixType: "serial" },
-      { type: ContentType.SERIES },
-    ],
     AND: [
+      vibixVisibleWhere(),
       {
         OR: [
-          { vibixId: { not: null } },
-          { vibixAvailable: true },
-          { vibixIframeUrl: { not: null } },
-          { vibixEmbedCode: { not: null } },
+          { vibixType: "serial" },
+          { type: ContentType.SERIES },
         ],
       },
     ],
@@ -96,8 +99,10 @@ function serialLikeWhere(): Prisma.MovieWhereInput {
 
 export type VibixFullSyncResumeEstimate = {
   limit: number;
+  totalCount: number;
   movieCount: number;
   serialCount: number;
+  combinedPage: number;
   moviePage: number;
   serialPage: number;
   recommendedType: VibixCatalogType;
@@ -107,23 +112,29 @@ export type VibixFullSyncResumeEstimate = {
 
 export async function getVibixFullSyncResumeEstimate(limitInput: unknown = 20): Promise<VibixFullSyncResumeEstimate> {
   const limit = normalizeVibixLimit(limitInput);
-  const [movieCount, serialCount] = await Promise.all([
+  const [totalCount, movieCount, serialCount] = await Promise.all([
+    prisma.movie.count({ where: vibixVisibleWhere() }),
     prisma.movie.count({ where: movieLikeWhere() }),
     prisma.movie.count({ where: serialLikeWhere() }),
   ]);
+  const combinedPage = pageFromCount(totalCount, limit);
   const moviePage = pageFromCount(movieCount, limit);
   const serialPage = pageFromCount(serialCount, limit);
-  const recommendedType: VibixCatalogType = movieCount > 0 ? "movie" : "serial";
-  const recommendedPage = recommendedType === "movie" ? moviePage : serialPage;
+
   return {
     limit,
+    totalCount,
     movieCount,
     serialCount,
+    combinedPage,
     moviePage,
     serialPage,
-    recommendedType,
-    recommendedPage,
-    note: `В базе уже примерно ${movieCount} movie-like и ${serialCount} serial-like Vibix-записей. При limit=${limit} безопасное продолжение: movie page ${moviePage}, serial page ${serialPage}.`,
+    // Старый UX “Фильмы + сериалы” качал общую ленту. Поэтому для режима both
+    // безопаснее продолжать по общему количеству уже сохранённых Vibix-записей,
+    // а не по отдельному serialCount, который после классификаций может быть низким.
+    recommendedType: "movie",
+    recommendedPage: combinedPage,
+    note: `В базе уже примерно ${totalCount} Vibix-записей всего (${movieCount} movie-like, ${serialCount} serial-like). Старый режим “Фильмы + сериалы” шёл общей лентой, поэтому продолжение для both считаем по общему количеству: page ${combinedPage} при limit=${limit}.`,
   };
 }
 
@@ -173,7 +184,7 @@ function uniqueLinkLimits(baseLimit: number) {
 
 async function processPageWithFallbacks(job: { nextPage: number; currentType: string; limit: number; detailDelayMs: number }) {
   let lastResult: VibixPageSyncResult | null = null;
-  const catalogType = job.currentType as VibixCatalogType;
+  const catalogType = normalizeStartType(job.currentType);
 
   for (const limit of uniqueLinkLimits(job.limit)) {
     lastResult = await syncVibixPage({
@@ -208,19 +219,35 @@ async function processPageWithFallbacks(job: { nextPage: number; currentType: st
   return { result: kpResult, note: lastResult ? `Fallback /get_kpids тоже упал. Последняя ошибка /links: ${pageError(lastResult)}` : null };
 }
 
+async function cancelRecoverableJobs(reason: string) {
+  await prisma.vibixSyncJob.updateMany({
+    where: { status: { in: RECOVERABLE_STATUSES } },
+    data: { status: "CANCELED", finishedAt: new Date(), safeResumeNote: reason },
+  });
+}
+
 export async function createVibixFullSyncJob(options: CreateJobOptions = {}) {
   const existing = await prisma.vibixSyncJob.findFirst({
     where: { status: { in: RECOVERABLE_STATUSES } },
     orderBy: { createdAt: "desc" },
   });
 
-  if (existing && !options.forceRestart) return { job: existing, created: false, reused: true };
+  const explicitResumeStart = options.resumeFromExisting === true || options.startPage !== undefined || options.forceRestart === true;
 
-  if (existing && options.forceRestart) {
-    await prisma.vibixSyncJob.updateMany({
-      where: { status: { in: RECOVERABLE_STATUSES } },
-      data: { status: "CANCELED", finishedAt: new Date(), safeResumeNote: "Canceled before forced full sync restart." },
-    });
+  if (existing && ACTIVE_STATUSES.includes(existing.status) && !options.forceRestart) {
+    return { job: existing, created: false, reused: true };
+  }
+
+  if (existing && !explicitResumeStart) {
+    return { job: existing, created: false, reused: true };
+  }
+
+  if (existing && explicitResumeStart) {
+    await cancelRecoverableJobs(
+      options.resumeFromExisting
+        ? "Canceled before creating a new resume-from-existing sync job."
+        : "Canceled before creating a new manual-start sync job.",
+    );
   }
 
   const contentType = normalizeContentType(options.contentType);
@@ -240,7 +267,7 @@ export async function createVibixFullSyncJob(options: CreateJobOptions = {}) {
         pageDelayMs: normalizeDelay(options.pageDelayMs, 10_000, 10_000, 60_000),
         detailDelayMs: normalizeDelay(options.detailDelayMs, 2_000, 2_000, 10_000),
         safeResumeNote: options.resumeFromExisting
-          ? `Created from existing database resume. ${estimate?.note ?? ""}`
+          ? `Created from existing database resume: ${startType} page ${startPage}. ${estimate?.note ?? ""}`
           : startPage > 1
             ? `Created from admin panel at ${startType} page ${startPage}.`
             : "Created from admin full sync panel.",
@@ -259,7 +286,7 @@ export async function processVibixSyncJob(jobId: string) {
       status: "RUNNING",
       startedAt: job.startedAt ?? new Date(),
       finishedAt: null,
-      limit: normalizeVibixLimit(job.limit || 50),
+      limit: normalizeVibixLimit(job.limit || 20),
       pageDelayMs: Math.max(job.pageDelayMs, 10_000),
       detailDelayMs: Math.max(job.detailDelayMs, 2_000),
     },
@@ -356,7 +383,7 @@ export async function processVibixSyncJob(jobId: string) {
       };
 
       if (reachedEnd) {
-        const switchToSerial = current.currentType === "movie" && current.contentType === "both";
+        const switchToSerial = current.currentType === "movie" && current.contentType === "both" && current.nextPage < 50;
         job = await prisma.vibixSyncJob.update({
           where: { id: jobId },
           data: switchToSerial
@@ -426,19 +453,28 @@ export async function skipCurrentVibixSyncJob(jobId: string) {
   });
 }
 
-
 export async function setVibixSyncJobStartPage(
   jobId: string,
   options: { startType?: VibixCatalogType; startPage?: number; contentType?: VibixJobContentType; resumeFromExisting?: boolean } = {},
 ) {
   const job = await prisma.vibixSyncJob.findUnique({ where: { id: jobId } });
-  if (!job || STOPPED_STATUSES.includes(job.status)) return job;
-
-  const contentType = normalizeContentType(options.contentType ?? job.contentType);
-  const limit = normalizeVibixLimit(job.limit || 20);
+  const contentType = normalizeContentType(options.contentType ?? job?.contentType ?? "both");
+  const limit = normalizeVibixLimit(job?.limit || 20);
   const estimate = options.resumeFromExisting ? await getVibixFullSyncResumeEstimate(limit) : null;
-  const startType = normalizeStartType(options.startType ?? estimate?.recommendedType ?? job.currentType);
-  const startPage = normalizeStartPage(options.startPage ?? estimate?.recommendedPage ?? job.nextPage);
+  const startType = normalizeStartType(options.startType ?? estimate?.recommendedType ?? job?.currentType ?? "movie");
+  const startPage = normalizeStartPage(options.startPage ?? estimate?.recommendedPage ?? job?.nextPage ?? 1);
+
+  if (!job || STOPPED_STATUSES.includes(job.status)) {
+    const created = await createVibixFullSyncJob({
+      contentType,
+      limit,
+      startType,
+      startPage,
+      resumeFromExisting: options.resumeFromExisting,
+      forceRestart: true,
+    });
+    return created.job;
+  }
 
   return prisma.vibixSyncJob.update({
     where: { id: jobId },

@@ -33,8 +33,10 @@ export type VibixJobView = {
 
 export type VibixResumeEstimateView = {
   limit: number;
+  totalCount: number;
   movieCount: number;
   serialCount: number;
+  combinedPage: number;
   moviePage: number;
   serialPage: number;
   recommendedType: "movie" | "serial";
@@ -98,11 +100,11 @@ export function VibixSyncJobPanel({ initialJob, configured, resumeEstimate }: Pr
 
   const start = async (options: { resumeFromExisting?: boolean; startType?: "movie" | "serial"; startPage?: number; forceRestart?: boolean } = {}) => {
     if (hasUnfinishedJob) {
-      setMessage("Уже есть незавершённая задача. Используй кнопки продолжения по базе или ручной страницы — они переставят текущую задачу, не создавая новую с page 1.");
+      setMessage("Уже есть активная незавершённая задача. Используй кнопки продолжения по базе или ручной страницы — они переставят текущую задачу, не создавая новую с page 1.");
       return;
     }
     if (!options.resumeFromExisting && !options.startPage) {
-      const confirmed = window.confirm("Запустить НОВУЮ полную синхронизацию Vibix с page 1? Обычно это НЕ нужно, если база уже заполнена. Лучше нажать “Продолжить по текущей базе”.");
+      const confirmed = window.confirm("Запустить НОВУЮ полную синхронизацию Vibix с page 1? Обычно это НЕ нужно, если база уже заполнена. Лучше нажать “Продолжить по общей текущей базе”.");
       if (!confirmed) return;
     }
     setBusy(true);
@@ -184,16 +186,16 @@ export function VibixSyncJobPanel({ initialJob, configured, resumeEstimate }: Pr
       <h2 className="text-xl font-bold text-[#222]">Полная фоновая синхронизация</h2>
       <p className="mt-1 text-sm text-neutral-500">Кнопка создаёт задачу в PostgreSQL. Отдельный worker продолжает её до конца и возобновляет после перезапуска.</p>
       <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        Если база уже частично высосана, не стартуй с page 1. Используй “Продолжить по текущей базе” или ручно укажи страницу.
+        Если база уже частично высосана, не стартуй с page 1. Используй “Продолжить по общей текущей базе” или вручную укажи страницу.
       </div>
 
       <div className="mt-4 grid gap-3 rounded-xl border border-[#ddd] bg-white p-4 lg:grid-cols-4">
+        <Metric label="В базе всего Vibix" value={resumeEstimate.totalCount} />
         <Metric label="В базе movie-like" value={resumeEstimate.movieCount} />
         <Metric label="В базе serial-like" value={resumeEstimate.serialCount} />
-        <Metric label="Рекомендуем movie page" value={resumeEstimate.moviePage} />
-        <Metric label="Рекомендуем serial page" value={resumeEstimate.serialPage} />
+        <Metric label="Рекомендуем общую page" value={resumeEstimate.combinedPage} />
         <div className="lg:col-span-4 rounded-lg bg-[#f5f5f5] px-4 py-3 text-sm text-[#333]">
-          Расчёт идёт по текущей базе и limit={resumeEstimate.limit}. Если уже высосано около 16К записей по 20 на страницу, продолжение будет около page 800, а не page 1.
+          Расчёт идёт по общей уже высосанной базе и limit={resumeEstimate.limit}. Старый режим “Фильмы + сериалы” качал одну общую ленту, поэтому продолжение для both считается по общему количеству Vibix-записей: page {resumeEstimate.combinedPage}, а не serial page {resumeEstimate.serialPage}.
         </div>
       </div>
 
@@ -204,7 +206,7 @@ export function VibixSyncJobPanel({ initialJob, configured, resumeEstimate }: Pr
           <option value="both">Фильмы + сериалы</option>
         </select>
         <button type="button" onClick={() => void setStartPage({ resumeFromExisting: true })} disabled={!configured || busy || (!job && !canStartNew)} className="min-h-12 break-words rounded-xl bg-[#e50914] px-5 font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400 max-sm:w-full">
-          Продолжить по текущей базе
+          Продолжить по общей текущей базе
         </button>
       </div>
 
