@@ -43,6 +43,11 @@ function categoryName(categoryId?: number | null) {
   return null;
 }
 
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue;
+}
+
 function filterParams(filterKind?: string | null, filterId?: number | null) {
   if (!filterKind || !filterId) return {};
   if (filterKind === "category") return { categoryIds: [filterId] };
@@ -121,8 +126,8 @@ export async function refreshVibixReferences(): Promise<CatalogAuditResult> {
     for (const item of response.items) {
       await prisma.vibixReferenceItem.upsert({
         where: { kind_vibixId: { kind, vibixId: item.id } },
-        create: { kind, vibixId: item.id, name: item.name, nameEng: item.name_eng ?? null, code: item.code ?? null, rawJson: item.raw },
-        update: { name: item.name, nameEng: item.name_eng ?? null, code: item.code ?? null, rawJson: item.raw },
+        create: { kind, vibixId: item.id, name: item.name, nameEng: item.name_eng ?? null, code: item.code ?? null, rawJson: toPrismaJson(item.raw) },
+        update: { name: item.name, nameEng: item.name_eng ?? null, code: item.code ?? null, rawJson: toPrismaJson(item.raw) },
       });
       result.updated += 1;
     }
