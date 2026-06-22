@@ -18,7 +18,8 @@
     "trend:enrich-existing": "tsx src/scripts/enrich-existing-vibix.ts",
     "catalog:recalculate": "tsx src/scripts/recalculate-catalog-scores.ts",
     "vibix:update-worker": "tsx src/scripts/vibix-update-worker.ts",
-    "vibix:update-once": "tsx src/scripts/vibix-update-once.ts"
+    "vibix:update-once": "tsx src/scripts/vibix-update-once.ts",
+    "similarity:recalculate": "tsx src/scripts/recalculate-similarities.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

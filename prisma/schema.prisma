@@ -262,6 +262,23 @@ model VibixSyncJob {
   @@index([status, createdAt])
 }
 
+model MovieSimilarity {
+  id            String   @id @default(cuid())
+  sourceMovieId String
+  targetMovieId String
+  score         Float    @default(0)
+  audienceScore Float    @default(0)
+  bucket        String?
+  reasonsJson   String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([sourceMovieId, targetMovieId])
+  @@index([sourceMovieId, score])
+  @@index([targetMovieId])
+  @@index([bucket])
+}
+
 model MovieEvent {
   id        String   @id @default(cuid())
   movieId   String?

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere, buildCountryFilterWhere } from "@/lib/catalog-filters";
 import { baseSlugFromCollectionSlug, buildCollectionSlug, movieSlugFromFilmSeoSlug, normalizeMovieBaseTitle } from "@/lib/seo-slugs";
-import { sortSimilarMovies } from "@/lib/similar";
+import { buildSimilarityCandidateWhere, sortSimilarMovies, type SimilarMovieResult } from "@/lib/similar";
 
 export const movieSeoInclude = {
   genres: { include: { genre: true } },
@@ -21,31 +21,67 @@ export async function getSeoMovieByFilmSlug(slug: string) {
   return movieSlug ? getSeoMovieBySlug(movieSlug) : null;
 }
 
-export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
-  const genreIds = movie.genres.map((item) => item.genreId);
-  const candidates = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), {
-      id: { not: movie.id },
-      OR: [
-        { type: movie.type },
-        { year: { gte: movie.year - 6, lte: movie.year + 6 } },
-        ...(genreIds.length ? [{ genres: { some: { genreId: { in: genreIds } } } }] : []),
-      ],
-    }] },
+function parseReasonsJson(value: string | null): string[] {
+  if (!value) return ["смысловая похожесть рассчитана REDFILM"];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string").slice(0, 6) : ["смысловая похожесть рассчитана REDFILM"];
+  } catch {
+    return ["смысловая похожесть рассчитана REDFILM"];
+  }
+}
+
+async function getCachedSimilarSeoMovies(movie: SeoMovie, limit: number): Promise<SimilarMovieResult[]> {
+  const cached = await prisma.movieSimilarity.findMany({
+    where: { sourceMovieId: movie.id, score: { gte: 180 } },
+    orderBy: [{ score: "desc" }, { updatedAt: "desc" }],
+    take: limit,
+  });
+  if (!cached.length) return [];
+
+  const ids = cached.map((item) => item.targetMovieId);
+  const movies = await prisma.movie.findMany({
+    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { in: ids } }] },
     include: movieSeoInclude,
-    take: 100,
+  });
+  const byId = new Map(movies.map((item) => [item.id, item]));
+  return cached
+    .map((item) => {
+      const target = byId.get(item.targetMovieId);
+      if (!target) return null;
+      return {
+        ...target,
+        similarityScore: item.score,
+        similarityReasons: parseReasonsJson(item.reasonsJson),
+        similarityBucket: item.bucket || undefined,
+      } satisfies SimilarMovieResult;
+    })
+    .filter((item): item is SimilarMovieResult => Boolean(item))
+    .slice(0, limit);
+}
+
+export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
+  const cached = await getCachedSimilarSeoMovies(movie, limit);
+  if (cached.length >= Math.min(limit, 6)) return cached;
+
+  const candidates = await prisma.movie.findMany({
+    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), buildSimilarityCandidateWhere(movie)] },
+    include: movieSeoInclude,
+    orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
+    take: 450,
   });
   const ranked = sortSimilarMovies(movie, candidates, limit);
-  if (ranked.length >= limit) return ranked;
+  if (ranked.length >= Math.min(limit, 6)) return ranked;
 
   const usedIds = [movie.id, ...ranked.map((item) => item.id)];
-  const fallback = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { notIn: usedIds } }] },
+  const fallbackCandidates = await prisma.movie.findMany({
+    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { notIn: usedIds }, type: movie.type }] },
     include: movieSeoInclude,
-    orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }],
-    take: limit - ranked.length,
+    orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }],
+    take: 160,
   });
-  return [...ranked, ...fallback.map((item) => ({ ...item, similarityScore: 1, similarityReasons: ["популярно в каталоге REDFILM"] }))];
+  const fallbackRanked = sortSimilarMovies(movie, fallbackCandidates, limit - ranked.length);
+  return [...ranked, ...fallbackRanked].slice(0, limit);
 }
 
 export async function findFranchiseParts(movie: Pick<SeoMovie, "titleRu">) {

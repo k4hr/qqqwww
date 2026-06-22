@@ -16,6 +16,7 @@ import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { getPopularMovies, getRecentPopularityStats } from "@/lib/popularity";
 import { takeUniqueMovies } from "@/lib/recommendation-dedupe";
 import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
+import { buildAudienceCandidateWhere, sortAudienceMovies } from "@/lib/similar";
 import { countryPath, genrePath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
 
 export const dynamic = "force-dynamic";
@@ -55,8 +56,9 @@ export default async function WatchPage({ params }: Props) {
   const countries = extractCountries(movie.country);
   const primaryGenre = movie.genres[0]?.genre;
   const recommendationWhere = [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id } }];
-  const [similarCandidates, genreCandidates, yearCandidates, countryCandidates, popularityStats] = await Promise.all([
+  const [similarCandidates, audienceCandidates, genreCandidates, yearCandidates, countryCandidates, popularityStats] = await Promise.all([
     findSimilarSeoMovies(movie, 12),
+    prisma.movie.findMany({ where: { AND: [...recommendationWhere, buildAudienceCandidateWhere(movie)] }, include: { genres: { include: { genre: true } }, cast: { include: { person: true }, orderBy: { sortOrder: "asc" } } }, orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }], take: 180 }),
     primaryGenre ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { genres: { some: { genreId: movie.genres[0].genreId } } }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 80 }) : Promise.resolve([]),
     prisma.movie.findMany({ where: { AND: [...recommendationWhere, { year: movie.year }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 60 }),
     countries[0] ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { country: { contains: countries[0], mode: "insensitive" } }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 60 }) : Promise.resolve([]),
@@ -70,7 +72,7 @@ export default async function WatchPage({ params }: Props) {
     return selected;
   };
   const similar = selectBlock(similarCandidates);
-  const watchedTogether = selectBlock(getPopularMovies(genreCandidates, popularityStats, 20));
+  const watchedTogether = selectBlock(sortAudienceMovies(movie, audienceCandidates, 20).length ? sortAudienceMovies(movie, audienceCandidates, 20) : getPopularMovies(genreCandidates, popularityStats, 20));
   const moreInGenre = selectBlock(genreCandidates);
   const sameYear = selectBlock(yearCandidates);
   const sameCountry = sameYear.length ? [] : selectBlock(countryCandidates);
