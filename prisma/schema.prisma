@@ -226,11 +226,18 @@ model VibixSyncJob {
   errors         Int       @default(0)
   playerByIframe Int       @default(0)
   playerByEmbed  Int       @default(0)
-  rateLimited    Boolean   @default(false)
-  rateLimitUntil DateTime?
-  lastError      String?   @db.Text
-  startedAt      DateTime?
-  finishedAt     DateTime?
+  rateLimited      Boolean   @default(false)
+  rateLimitUntil   DateTime?
+  lastError        String?   @db.Text
+  lastFailedType   String?
+  lastFailedPage   Int?
+  lastFailedAt     DateTime?
+  lastSkippedType  String?
+  lastSkippedPage  Int?
+  skippedPagesJson String?   @db.Text
+  safeResumeNote   String?   @db.Text
+  startedAt        DateTime?
+  finishedAt       DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

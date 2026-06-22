@@ -350,15 +350,20 @@ async function fetchVibixJson(url: URL, method: "GET" | "POST" = "GET"): Promise
   return { data: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error: null };
 }
 
+function appendSearchParams(url: URL, searchParams?: URLSearchParams) {
+  if (!searchParams) return;
+  searchParams.forEach((value, key) => url.searchParams.append(key, value));
+}
+
 async function vibixRequest(path: string, searchParams?: URLSearchParams, method: "GET" | "POST" = "GET") {
   const url = new URL(`${VIBIX_API_URL}${path}`);
-  if (searchParams) searchParams.forEach((value, key) => url.searchParams.set(key, value));
+  appendSearchParams(url, searchParams);
   return fetchVibixJson(url, method);
 }
 
 async function vibixRootRequest(path: string, searchParams?: URLSearchParams) {
   const url = new URL(`${VIBIX_API_ROOT}${path}`);
-  if (searchParams) searchParams.forEach((value, key) => url.searchParams.set(key, value));
+  appendSearchParams(url, searchParams);
   return fetchVibixJson(url);
 }
 

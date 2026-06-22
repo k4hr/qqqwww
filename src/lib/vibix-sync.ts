@@ -11,6 +11,7 @@ import {
   getVibixVideoByKpId,
   getVibixVideoByKpIdResult,
   getVibixVideoLinks,
+  getVibixKpIds,
   normalizeVibixLimit,
   sleep,
   type VibixCatalogType,
@@ -517,6 +518,85 @@ function emptySyncResult(): VibixSyncResult {
       other: 0,
     },
     skippedSamples: [],
+  };
+}
+
+
+export async function syncVibixKpIdPage(options: VibixPageSyncOptions): Promise<VibixPageSyncResult> {
+  const page = Math.max(1, Math.min(Math.trunc(options.page), 10_000));
+  const limit = normalizeVibixLimit(options.limit);
+  const detailDelayMs = Math.max(2_000, Math.min(options.detailDelayMs ?? 2_000, 10_000));
+  const result = emptySyncResult();
+  const response = await getVibixKpIds({ page, limit, type: options.type });
+  let retryAfterMs = response.retryAfterMs;
+
+  if (response.rateLimited) {
+    result.rateLimited = true;
+    result.message = "Vibix API rate limit reached";
+    result.httpStatus = response.error?.status ?? 429;
+    result.httpStatusText = response.error?.statusText ?? "Too Many Requests";
+    result.httpBodyPreview = response.error?.bodyPreview ?? null;
+  } else if (response.requestFailed) {
+    result.errors = 1;
+    result.httpStatus = response.error?.status ?? null;
+    result.httpStatusText = response.error?.statusText ?? null;
+    result.httpBodyPreview = response.error?.bodyPreview ?? null;
+    result.message = response.error
+      ? `HTTP ${response.error.status} ${response.error.statusText}`
+      : "Vibix get_kpids request failed";
+  } else {
+    result.pagesProcessed = 1;
+    result.totalFromVibix = response.kpIds.length;
+
+    let lastDetailRequestAt = 0;
+    const waitForDetailRequest = async () => {
+      const remainingDelay = detailDelayMs - (Date.now() - lastDetailRequestAt);
+      if (remainingDelay > 0) await sleep(remainingDelay);
+      lastDetailRequestAt = Date.now();
+    };
+
+    for (const kpId of response.kpIds) {
+      try {
+        await waitForDetailRequest();
+        const lookup = await getVibixVideoByKpIdResult(kpId);
+        if (lookup.rateLimited) {
+          result.rateLimited = true;
+          result.message = "Vibix API rate limit reached during get_kpids detail enrichment";
+          retryAfterMs = lookup.retryAfterMs;
+          break;
+        }
+        if (lookup.requestFailed) {
+          result.errors += 1;
+          continue;
+        }
+        if (!lookup.video) {
+          result.skipped += 1;
+          result.skippedReasons.missing_identifier += 1;
+          continue;
+        }
+        const saved = await saveVibixVideo(lookup.video);
+        if (saved.status === "skipped") registerSkip(result, saved.reason, lookup.video);
+        else {
+          result[saved.status] += 1;
+          if (stringValue(lookup.video.iframe_url)) result.playerSourceByIframeUrl += 1;
+          else result.playerSourceByEmbedCode += 1;
+        }
+      } catch (error) {
+        result.errors += 1;
+        console.warn("[Vibix] Failed to save get_kpids detail:", error instanceof Error ? error.message : error);
+      }
+    }
+  }
+
+  result.finishedAt = new Date().toISOString();
+  return {
+    ...result,
+    page,
+    type: options.type,
+    lastPage: null,
+    total: null,
+    itemsReceived: response.kpIds.length,
+    retryAfterMs,
   };
 }
 
