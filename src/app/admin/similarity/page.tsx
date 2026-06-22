@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { SimilarityRecalculateControls } from "./SimilarityRecalculateControls";
 
 export const dynamic = "force-dynamic";
 
@@ -35,14 +36,7 @@ export default async function AdminSimilarityPage({ searchParams }: Props) {
       <section className="admin-panel mb-5 p-5">
         <h2 className="text-xl font-black">Пересчёт похожих</h2>
         <p className="mt-2 text-sm text-neutral-600">Кнопка считает похожие фильмы заранее и сохраняет их в MovieSimilarity. Для всей базы лучше запускать батчами, чтобы не упереться в timeout.</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <form action="/api/admin/similarity/recalculate?limit=300" method="post" target="_blank">
-            <button className="rounded-lg bg-[#e50914] px-5 py-3 font-bold text-white" type="submit">Пересчитать 300 фильмов</button>
-          </form>
-          <form action="/api/admin/similarity/recalculate?limit=1000" method="post" target="_blank">
-            <button className="rounded-lg bg-[#333] px-5 py-3 font-bold text-white" type="submit">Пересчитать 1000 фильмов</button>
-          </form>
-        </div>
+        <SimilarityRecalculateControls />
         <p className="mt-3 text-sm text-neutral-500">Для полного фонового прогона через Railway console: <code>npm run similarity:recalculate</code></p>
       </section>
 
