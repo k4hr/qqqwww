@@ -32,15 +32,9 @@ function statusLabel(status: string) {
   return status;
 }
 
-async function resumeExpiredPausedJob<T extends {
-  id: string;
-  status: string;
-  rateLimitUntil: Date | null;
-  currentStage: string;
-  currentType: string;
-  nextPage: number;
-  message: string | null;
-} | null>(job: T): Promise<T> {
+type VibixCatalogMagicJob = Awaited<ReturnType<typeof prisma.vibixCatalogAutoJob.findFirst>>;
+
+async function resumeExpiredPausedJob(job: VibixCatalogMagicJob): Promise<VibixCatalogMagicJob> {
   if (!job || job.status !== "PAUSED" || !job.rateLimitUntil) return job;
   if (job.rateLimitUntil.getTime() > Date.now()) return job;
 
@@ -51,7 +45,7 @@ async function resumeExpiredPausedJob<T extends {
       rateLimitUntil: null,
       message: `Пауза уже прошла. Задача снова в очереди: ${job.currentStage}, ${job.currentType}, page ${job.nextPage}.`,
     },
-  }) as Promise<T>;
+  });
 }
 
 export async function getLatestVibixCatalogMagicJob() {
