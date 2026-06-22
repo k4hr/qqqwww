@@ -57,6 +57,16 @@ function filterParams(filterKind?: string | null, filterId?: number | null) {
   return {};
 }
 
+type VibixAuditFilter = (typeof VIBIX_AUDIT_FILTERS)[number];
+
+function getAuditFilterKind(filter: VibixAuditFilter): string | null {
+  return "filterKind" in filter ? filter.filterKind : null;
+}
+
+function getAuditFilterId(filter: VibixAuditFilter): number | null {
+  return "filterId" in filter ? filter.filterId : null;
+}
+
 export async function getMyCatalogStats() {
   const [
     total,
@@ -138,11 +148,13 @@ export async function refreshVibixReferences(): Promise<CatalogAuditResult> {
 export async function refreshVibixCatalogSnapshots(): Promise<CatalogAuditResult> {
   const result = { updated: 0, failed: 0, errors: [] as string[] };
   for (const filter of VIBIX_AUDIT_FILTERS) {
+    const filterKind = getAuditFilterKind(filter);
+    const filterId = getAuditFilterId(filter);
     const response = await getVibixVideoLinks({
       type: filter.sourceType,
       page: 1,
       limit: 20,
-      ...filterParams(filter.filterKind, filter.filterId),
+      ...filterParams(filterKind, filterId),
     });
     const key = filter.key;
     if (response.requestFailed || response.rateLimited) {
@@ -152,16 +164,16 @@ export async function refreshVibixCatalogSnapshots(): Promise<CatalogAuditResult
           key,
           label: filter.label,
           sourceType: filter.sourceType,
-          filterKind: filter.filterKind ?? null,
-          filterId: filter.filterId ?? null,
+          filterKind,
+          filterId,
           lastCheckedAt: new Date(),
           lastError: response.error ? `HTTP ${response.error.status}: ${response.error.bodyPreview ?? response.error.statusText}`.slice(0, 2_000) : "Request failed",
         },
         update: {
           label: filter.label,
           sourceType: filter.sourceType,
-          filterKind: filter.filterKind ?? null,
-          filterId: filter.filterId ?? null,
+          filterKind,
+          filterId,
           lastCheckedAt: new Date(),
           lastError: response.error ? `HTTP ${response.error.status}: ${response.error.bodyPreview ?? response.error.statusText}`.slice(0, 2_000) : "Request failed",
         },
@@ -177,8 +189,8 @@ export async function refreshVibixCatalogSnapshots(): Promise<CatalogAuditResult
         key,
         label: filter.label,
         sourceType: filter.sourceType,
-        filterKind: filter.filterKind ?? null,
-        filterId: filter.filterId ?? null,
+        filterKind,
+        filterId,
         total: response.meta?.total ?? response.data.length,
         lastPage: response.meta?.lastPage ?? null,
         perPage: response.meta?.perPage ?? null,
@@ -188,8 +200,8 @@ export async function refreshVibixCatalogSnapshots(): Promise<CatalogAuditResult
       update: {
         label: filter.label,
         sourceType: filter.sourceType,
-        filterKind: filter.filterKind ?? null,
-        filterId: filter.filterId ?? null,
+        filterKind,
+        filterId,
         total: response.meta?.total ?? response.data.length,
         lastPage: response.meta?.lastPage ?? null,
         perPage: response.meta?.perPage ?? null,
@@ -352,6 +364,11 @@ export async function getVibixCatalogDashboardData() {
     referenceCounts,
     index: { total: indexTotal, missing: indexMissing, present: indexPresent, imported: indexImported, failed: indexFailed, missingPreview },
     suggestedCategoryIds: VIBIX_CATEGORY_IDS,
-    suggestedFilters: VIBIX_AUDIT_FILTERS.map((item) => ({ ...item, filterLabel: vibixFilterLabel(item.filterKind, item.filterId) })),
+    suggestedFilters: VIBIX_AUDIT_FILTERS.map((item) => ({
+      ...item,
+      filterKind: getAuditFilterKind(item),
+      filterId: getAuditFilterId(item),
+      filterLabel: vibixFilterLabel(getAuditFilterKind(item), getAuditFilterId(item)),
+    })),
   };
 }
