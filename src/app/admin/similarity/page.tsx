@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { SimilarityRecalculateControls } from "./SimilarityRecalculateControls";
+import { getSimilarityJobSnapshot } from "@/lib/similarity/similarity-job";
 
 export const dynamic = "force-dynamic";
 
@@ -9,11 +10,12 @@ type Props = { searchParams: Promise<{ q?: string }> };
 export default async function AdminSimilarityPage({ searchParams }: Props) {
   const params = await searchParams;
   const q = params.q?.trim() || "Мстители: Война бесконечности";
-  const [movies, links, topSources, samples] = await Promise.all([
+  const [movies, links, topSources, samples, jobSnapshot] = await Promise.all([
     prisma.movie.count({ where: { isPublished: true, vibixAvailable: true } }),
     prisma.movieSimilarity.count(),
     prisma.movieSimilarity.findMany({ select: { sourceMovieId: true }, distinct: ["sourceMovieId"], take: 1 }).catch(() => []),
     prisma.movieSimilarity.findMany({ orderBy: { score: "desc" }, take: 10 }).catch(() => []),
+    getSimilarityJobSnapshot(),
   ]);
 
   return (
@@ -35,9 +37,9 @@ export default async function AdminSimilarityPage({ searchParams }: Props) {
 
       <section className="admin-panel mb-5 p-5">
         <h2 className="text-xl font-black">Пересчёт похожих</h2>
-        <p className="mt-2 text-sm text-neutral-600">Кнопка считает похожие фильмы заранее и сохраняет их в MovieSimilarity. Для всей базы лучше запускать батчами, чтобы не упереться в timeout.</p>
-        <SimilarityRecalculateControls />
-        <p className="mt-3 text-sm text-neutral-500">Для полного фонового прогона через Railway console: <code>npm run similarity:recalculate</code></p>
+        <p className="mt-2 text-sm text-neutral-600">Теперь пересчёт работает фоновой задачей: нажимаешь один раз, дальше отдельный worker считает всю базу батчами и автоматически подхватывает новые фильмы.</p>
+        <SimilarityRecalculateControls initialSnapshot={jobSnapshot} />
+        <p className="mt-3 text-sm text-neutral-500">Для постоянной автоматики добавь отдельный Railway service с командой: <code>npm run similarity:worker</code></p>
       </section>
 
       <section className="admin-panel mb-5 p-5">

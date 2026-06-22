@@ -438,6 +438,8 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
         vibixLgbtContent: data.lgbtContent,
         actorPowerScore: data.actorPowerScore,
         isPublished: true,
+        similarityDirty: true,
+        similarityDirtyReason: "vibix_update",
       },
     });
     await syncVibixRelations(updated.id, video);
@@ -481,6 +483,8 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
       vibixLgbtContent: data.lgbtContent,
       actorPowerScore: data.actorPowerScore,
       isPublished: true,
+      similarityDirty: true,
+      similarityDirtyReason: "vibix_import",
     },
   });
   await syncVibixRelations(created.id, video);

@@ -87,6 +87,9 @@ model Movie {
   lastTrendSyncAt DateTime?
   lastQualitySyncAt DateTime?
   lastCatalogScoreAt DateTime?
+  similarityCalculatedAt DateTime?
+  similarityDirty Boolean          @default(true)
+  similarityDirtyReason String?
   lastVibixEnrichedAt DateTime?
   lastVibixSeenAt DateTime?
   lastExternalEnrichmentAt DateTime?
@@ -119,6 +122,7 @@ model Movie {
   @@index([isPopularEligible, popularScore])
   @@index([isTopEligible, topScore])
   @@index([isFreshEligible, freshScore])
+  @@index([similarityDirty, similarityCalculatedAt])
 }
 
 model Genre {
@@ -277,6 +281,32 @@ model MovieSimilarity {
   @@index([sourceMovieId, score])
   @@index([targetMovieId])
   @@index([bucket])
+}
+
+model SimilarityJob {
+  id            String   @id @default(cuid())
+  status        String   @default("QUEUED")
+  mode          String   @default("DIRTY")
+  total         Int?
+  processed     Int      @default(0)
+  saved         Int      @default(0)
+  deleted       Int      @default(0)
+  errors        Int      @default(0)
+  batchSize     Int      @default(100)
+  targetLimit   Int      @default(24)
+  minScore      Float    @default(180)
+  cursorMovieId String?
+  lastMovieTitle String?
+  message       String?
+  lastError     String?  @db.Text
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([mode, status])
+  @@index([updatedAt])
 }
 
 model MovieEvent {

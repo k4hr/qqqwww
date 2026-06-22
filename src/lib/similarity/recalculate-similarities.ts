@@ -48,18 +48,27 @@ async function recalculateOneMovie(source: SeoMovie, targetLimit: number, minSco
 
   await prisma.movieSimilarity.deleteMany({ where: { sourceMovieId: source.id } });
 
-  if (!ranked.length) return { saved: 0, deleted: 1 };
+  if (ranked.length) {
+    await prisma.movieSimilarity.createMany({
+      data: ranked.map((item) => ({
+        sourceMovieId: source.id,
+        targetMovieId: item.candidate.id,
+        score: item.result.score,
+        audienceScore: item.result.audienceScore,
+        bucket: item.result.bucket,
+        reasonsJson: reasonsJson(item.result.reasons),
+      })),
+      skipDuplicates: true,
+    });
+  }
 
-  await prisma.movieSimilarity.createMany({
-    data: ranked.map((item) => ({
-      sourceMovieId: source.id,
-      targetMovieId: item.candidate.id,
-      score: item.result.score,
-      audienceScore: item.result.audienceScore,
-      bucket: item.result.bucket,
-      reasonsJson: reasonsJson(item.result.reasons),
-    })),
-    skipDuplicates: true,
+  await prisma.movie.update({
+    where: { id: source.id },
+    data: {
+      similarityDirty: false,
+      similarityDirtyReason: null,
+      similarityCalculatedAt: new Date(),
+    },
   });
 
   return { saved: ranked.length, deleted: 1 };
@@ -92,6 +101,56 @@ export async function recalculateMovieSimilarities(options: SimilarityRecalculat
       if (result.examples.length < 10) result.examples.push({ source: source.titleRu, saved: one.saved });
     } catch (error) {
       result.errors += 1;
+      console.error(`[Similarity] Failed for ${source.titleRu}:`, error);
+    }
+  }
+
+  return result;
+}
+
+export async function markAllMovieSimilaritiesDirty(reason = "manual_all") {
+  return prisma.movie.updateMany({
+    where: vibixPublicMovieWhere,
+    data: { similarityDirty: true, similarityDirtyReason: reason },
+  });
+}
+
+export async function countDirtyMovieSimilarities() {
+  return prisma.movie.count({ where: { AND: [vibixPublicMovieWhere, { similarityDirty: true }] } });
+}
+
+export async function recalculateDirtyMovieSimilarities(options: SimilarityRecalculateOptions = {}): Promise<SimilarityRecalculateResult> {
+  const limit = Math.max(1, Math.min(options.limit ?? 100, 1000));
+  const targetLimit = Math.max(6, Math.min(options.targetLimit ?? 24, 60));
+  const minScore = Math.max(0, options.minScore ?? 180);
+
+  const sources = await prisma.movie.findMany({
+    where: { AND: [vibixPublicMovieWhere, { similarityDirty: true }] },
+    include: movieSeoInclude,
+    orderBy: [
+      { popularScore: "desc" },
+      { kpRating: "desc" },
+      { updatedAt: "desc" },
+      { createdAt: "desc" },
+    ],
+    take: limit,
+  });
+
+  const result: SimilarityRecalculateResult = { processed: 0, sources: sources.length, saved: 0, deleted: 0, errors: 0, examples: [] };
+
+  for (const source of sources) {
+    try {
+      const one = await recalculateOneMovie(source, targetLimit, minScore);
+      result.processed += 1;
+      result.saved += one.saved;
+      result.deleted += one.deleted;
+      if (result.examples.length < 10) result.examples.push({ source: source.titleRu, saved: one.saved });
+    } catch (error) {
+      result.errors += 1;
+      await prisma.movie.update({
+        where: { id: source.id },
+        data: { similarityDirty: true, similarityDirtyReason: error instanceof Error ? error.message.slice(0, 180) : "similarity_error" },
+      }).catch(() => null);
       console.error(`[Similarity] Failed for ${source.titleRu}:`, error);
     }
   }
