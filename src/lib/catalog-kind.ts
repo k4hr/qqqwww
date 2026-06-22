@@ -165,7 +165,7 @@ export function hasStrictAnimeSignal(input: CatalogKindInput) {
   const trustedText = [parts.structuredText, parts.titleText].join(" ");
 
   if (parts.categoryIds.includes(VIBIX_CATEGORY_IDS.anime) || parts.genreIds.includes(VIBIX_GENRE_IDS.anime)) return true;
-  if (parts.tagIds.some((id) => [VIBIX_TAG_IDS.dorama].includes(id))) return false;
+  if (parts.tagIds.some((id) => id === VIBIX_TAG_IDS.dorama)) return false;
   if (textHasMarker(trustedText, EXPLICIT_ANIME_MARKERS)) return true;
 
   // OVA/ONA are real anime category markers, but as plain substrings they create huge false positives:
