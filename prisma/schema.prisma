@@ -354,6 +354,15 @@ model VibixCatalogIndex {
   categoryId      Int?
   categoryName    String?
   sourcePage      Int?
+  indexSource     String   @default("kpids")
+  vibixId         Int?
+  imdbId          String?
+  title           String?
+  year            Int?
+  hasPlayableLink Boolean  @default(false)
+  detailAvailable Boolean?
+  detailCheckedAt DateTime?
+  rawJson         Json?
   importStatus    String   @default("UNKNOWN")
   importedMovieId String?
   lastImportError String?  @db.Text
@@ -366,7 +375,9 @@ model VibixCatalogIndex {
   @@unique([sourceType, kpId])
   @@index([sourceType])
   @@index([sourceType, categoryId])
+  @@index([indexSource])
   @@index([importStatus, sourceType])
+  @@index([detailAvailable])
   @@index([kpId])
 }
 

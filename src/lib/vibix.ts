@@ -97,6 +97,7 @@ type VibixLinksParams = {
   countryIds?: number[];
   tagIds?: number[];
   voiceoverIds?: number[];
+  fields?: readonly string[];
   existKpId?: boolean | null;
   noAds?: boolean;
   lgbt?: boolean;
@@ -120,7 +121,7 @@ export type VibixReferenceResult = {
   error: VibixHttpError | null;
 };
 
-const VIBIX_LINK_FIELDS = [
+export const VIBIX_LINK_FIELDS = [
   "id",
   "name",
   "name_rus",
@@ -477,15 +478,17 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
     limit: String(normalizeVibixLimit(params.limit)),
   });
 
-  // Vibix current /publisher/videos/links documentation lists only the filter params
-  // category[], year[], genre[], country[], tag[], voiceover[], page and limit.
-  // Do not send fields[] or undocumented flags here: they can make Vibix return 500.
   if (params.year) query.append("year[]", String(params.year));
   appendNumericArray(query, "category[]", params.categoryIds);
   appendNumericArray(query, "genre[]", params.genreIds);
   appendNumericArray(query, "country[]", params.countryIds);
   appendNumericArray(query, "tag[]", params.tagIds);
   appendNumericArray(query, "voiceover[]", params.voiceoverIds);
+
+  if (params.existKpId !== undefined && params.existKpId !== null) query.set("exist_kp_id", params.existKpId ? "true" : "false");
+  if (params.noAds !== undefined && params.noAds !== null) query.set("no_ads", params.noAds ? "true" : "false");
+  if (params.lgbt !== undefined && params.lgbt !== null) query.set("lgbt", params.lgbt ? "true" : "false");
+  for (const field of params.fields ?? []) query.append("fields[]", field);
 
   const response = await vibixRequest("/links", query);
   const rawItems = extractItems(response.data);

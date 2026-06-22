@@ -3,6 +3,7 @@ import { getVibixCatalogDashboardData } from "@/lib/vibix-catalog/catalog-audit"
 import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
 import {
   buildVibixIndexAction,
+  buildVibixPlayableLinksIndexAction,
   importMissingFromVibixAction,
   recalculateCatalogKindsAction,
   refreshVibixCatalogAuditAction,
@@ -113,18 +114,42 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
 
       <section className="admin-panel mt-5 p-5">
         <h2 className="text-2xl font-black text-[#222]">Сравнение и недостающие</h2>
-        <p className="mt-1 text-sm text-neutral-500">Индекс Vibix хранит kpId из /get_kpids и сравнивает их с Movie.kinopoiskId.</p>
+        <p className="mt-1 text-sm text-neutral-500">/links индекс — реальный доступный каталог для догрузки. /get_kpids — сырой контрольный список kpId, он может содержать ID без доступного detail.</p>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <Stat label="В индексе Vibix" value={data.index.total} />
+          <Stat label="В индексе всего" value={data.index.total} />
+          <Stat label="/links доступных" value={data.index.playable} good />
           <Stat label="Уже есть" value={data.index.present} good />
+          <Stat label="К догрузке из /links" value={data.index.missing} bad />
+          <Stat label="Сырой get_kpids" value={data.index.rawOnly} />
+          <Stat label="Detail 404" value={data.index.detailMissing} bad />
           <Stat label="Импортировано индексом" value={data.index.imported} good />
-          <Stat label="Не хватает / проверить" value={data.index.missing} bad />
           <Stat label="Ошибок импорта" value={data.index.failed} bad />
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <form action={buildVibixPlayableLinksIndexAction} className="rounded-2xl border border-green-200 bg-green-50 p-4">
+            <h3 className="text-lg font-black text-[#222]">Построить доступный /links индекс</h3>
+            <p className="mt-1 text-xs text-green-900">Это главный индекс для догрузки. Он берёт только реальные записи из /links, которые Vibix показывает как доступные.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Select label="Тип" name="sourceType" options={[ ["movie", "Фильмы"], ["serial", "Сериалы"] ]} />
+              <Select label="Категория" name="categoryId" options={[ ["", "Все"], [String(VIBIX_CATEGORY_IDS.anime), "Аниме"], [String(VIBIX_CATEGORY_IDS.cartoon), "Мультфильм"], [String(VIBIX_CATEGORY_IDS.adultCartoon), "Мультфильм для взрослых"], [String(VIBIX_CATEGORY_IDS.dorama), "Дорама"] ]} />
+              <Select label="Доп. фильтр Vibix" name="filterKind" options={[ ["", "Нет"], ["category", "category[]"], ["genre", "genre[]"], ["tag", "tag[]"], ["country", "country[]"], ["voiceover", "voiceover[]"] ]} />
+              <Input label="ID доп. фильтра" name="filterId" defaultValue="" min="1" max="100000" />
+              <Input label="Год year[]" name="year" defaultValue="" min="1880" max="2200" />
+              <Select label="exist_kp_id" name="existKpId" options={[ ["", "Не отправлять"], ["true", "true — только с KP ID"], ["false", "false — без фильтра KP"] ]} />
+              <Select label="no_ads" name="noAds" options={[ ["", "Не отправлять"], ["true", "true"], ["false", "false"] ]} />
+              <Select label="lgbt" name="lgbt" options={[ ["", "Не отправлять"], ["true", "true"], ["false", "false"] ]} />
+              <Input label="Начать со страницы /links" name="startPage" defaultValue="1" min="1" max="100000" />
+              <Input label="Страниц за запуск" name="pages" defaultValue="50" min="1" max="100" />
+            </div>
+            <label className="mt-4 flex items-center gap-2 text-sm font-bold text-[#333]"><input name="useFields" type="checkbox" defaultChecked /> Отправлять fields[]: id, name, kp_id, imdb_id, iframe_url, poster_url, genre, country, tags</label>
+            <p className="mt-2 text-xs text-green-900">Для полного каталога оставь exist_kp_id/no_ads/lgbt в режиме “Не отправлять”. Эти флаги нужны только для точечной диагностики, иначе можно случайно обрезать выдачу.</p>
+            <button className="mt-4 h-12 w-full rounded-xl bg-[#e50914] px-4 font-bold text-white">Построить /links индекс</button>
+          </form>
+
           <form action={buildVibixIndexAction} className="rounded-2xl border border-[#ddd] bg-white p-4">
-            <h3 className="text-lg font-black text-[#222]">Построить / продолжить индекс Vibix</h3>
+            <h3 className="text-lg font-black text-[#222]">Сырой get_kpids индекс</h3>
+            <p className="mt-1 text-xs text-neutral-500">Только для контроля. Vibix может отдавать здесь kpId, по которым /kp потом возвращает 404.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Select label="Тип" name="sourceType" options={[ ["movie", "Фильмы"], ["serial", "Сериалы"] ]} />
               <Select label="Категория" name="categoryId" options={[ ["", "Все"], [String(VIBIX_CATEGORY_IDS.anime), "Аниме"], [String(VIBIX_CATEGORY_IDS.cartoon), "Мультфильм"], [String(VIBIX_CATEGORY_IDS.adultCartoon), "Мультфильм для взрослых"], [String(VIBIX_CATEGORY_IDS.dorama), "Дорама"] ]} />
@@ -132,7 +157,7 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
               <Input label="Страниц за запуск" name="pages" defaultValue="5" min="1" max="50" />
               <Input label="Limit get_kpids" name="limit" defaultValue="1000" min="100" max="1000" />
             </div>
-            <button className="mt-4 h-12 w-full rounded-xl bg-[#e50914] px-4 font-bold text-white">Построить индекс</button>
+            <button className="mt-4 h-12 w-full rounded-xl bg-[#333] px-4 font-bold text-white">Построить сырой индекс</button>
           </form>
 
           <form action={importMissingFromVibixAction} className="rounded-2xl border border-[#ddd] bg-white p-4">
@@ -148,7 +173,7 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
 
         <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="font-bold">Как пользоваться:</div>
-          <div className="mt-1">1) Обновить всё Vibix → 2) Построить индекс для movie/serial → 3) Догрузить недостающее → 4) Пересчитать категории.</div>
+          <div className="mt-1">1) Обновить всё Vibix → 2) Строить именно доступный /links индекс для movie/serial → 3) Догружать недостающее → 4) Пересчитать категории. Сырой get_kpids не использовать для догрузки.</div>
         </div>
       </section>
 
@@ -188,19 +213,21 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
         <h2 className="text-2xl font-black text-[#222]">Пример недостающих из индекса</h2>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm text-[#222]">
-            <thead className="border-b border-[#ddd] text-neutral-500"><tr><th className="p-2">type</th><th className="p-2">kpId</th><th className="p-2">Категория</th><th className="p-2">Статус</th><th className="p-2">page</th><th className="p-2">Ошибка</th></tr></thead>
+            <thead className="border-b border-[#ddd] text-neutral-500"><tr><th className="p-2">type</th><th className="p-2">ID индекса / kpId</th><th className="p-2">Название</th><th className="p-2">Категория</th><th className="p-2">Источник</th><th className="p-2">Статус</th><th className="p-2">page</th><th className="p-2">Ошибка</th></tr></thead>
             <tbody className="divide-y divide-[#eee]">
               {data.index.missingPreview.map((item) => (
                 <tr key={item.id}>
                   <td className="p-2">{item.sourceType}</td>
                   <td className="p-2 font-bold">{item.kpId}</td>
+                  <td className="p-2">{item.title ?? "—"}</td>
                   <td className="p-2">{item.categoryName ?? item.categoryId ?? "—"}</td>
+                  <td className="p-2">{item.indexSource}</td>
                   <td className="p-2">{item.importStatus}</td>
                   <td className="p-2">{item.sourcePage ?? "—"}</td>
                   <td className="max-w-[420px] break-words p-2 text-xs text-red-700">{item.lastImportError ?? "—"}</td>
                 </tr>
               ))}
-              {!data.index.missingPreview.length ? <tr><td className="p-3 text-neutral-500" colSpan={6}>Пока нет индекса или недостающих записей.</td></tr> : null}
+              {!data.index.missingPreview.length ? <tr><td className="p-3 text-neutral-500" colSpan={8}>Пока нет индекса или недостающих записей.</td></tr> : null}
             </tbody>
           </table>
         </div>

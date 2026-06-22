@@ -5,6 +5,7 @@ import {
   getVibixReferenceItems,
   getVibixVideoByKpIdResult,
   getVibixVideoLinks,
+  VIBIX_LINK_FIELDS,
   type VibixCatalogType,
   type VibixReferenceKind,
 } from "@/lib/vibix";
@@ -46,6 +47,60 @@ function categoryName(categoryId?: number | null) {
 
 function toPrismaJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue;
+}
+
+function fromPrismaJson<T = Record<string, unknown>>(value: unknown): T | null {
+  if (!value || typeof value !== "object") return null;
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function stringValue(value: unknown) {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+function intValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function videoKpId(video: Record<string, unknown>) {
+  return stringValue(video.kp_id ?? video.kinopoisk_id ?? video.kpId ?? video.kinopoiskId);
+}
+
+function videoImdbId(video: Record<string, unknown>) {
+  return stringValue(video.imdb_id ?? video.imdbId);
+}
+
+function videoTitle(video: Record<string, unknown>) {
+  return stringValue(video.name_rus ?? video.name ?? video.name_eng ?? video.name_original);
+}
+
+function videoHasPlayer(video: Record<string, unknown>) {
+  return Boolean(stringValue(video.iframe_url ?? video.iframeUrl) || stringValue(video.embed_code ?? video.embedCode));
+}
+
+function isRealKpId(value: string | null | undefined) {
+  return Boolean(value && /^\d+$/.test(value));
+}
+
+function syntheticIndexKey(sourceType: string, video: Record<string, unknown>) {
+  const realKpId = videoKpId(video);
+  if (realKpId) return { key: realKpId, realKpId };
+  const vibixId = intValue(video.id);
+  if (vibixId !== null) return { key: `vibix:${sourceType}:${vibixId}`, realKpId: null };
+  const imdbId = videoImdbId(video);
+  if (imdbId) return { key: `imdb:${sourceType}:${imdbId}`, realKpId: null };
+  const title = videoTitle(video);
+  const year = intValue(video.year);
+  if (title && year) return { key: `title:${sourceType}:${title.toLocaleLowerCase("ru-RU")}:${year}`, realKpId: null };
+  return null;
+}
+
+function boolParam(value: boolean | null | undefined) {
+  return value === true || value === false ? value : undefined;
 }
 
 function filterParams(filterKind?: string | null, filterId?: number | null) {
@@ -233,7 +288,7 @@ export async function buildVibixCatalogIndexBatch(options: {
   const startPage = Math.max(1, Math.trunc(options.startPage ?? 1));
   const pages = Math.max(1, Math.min(50, Math.trunc(options.pages ?? 5)));
   const limit = Math.max(100, Math.min(1000, Math.trunc(options.limit ?? 1000)));
-  const result = { sourceType, categoryId, startPage, pages, limit, scannedPages: 0, indexed: 0, emptyPages: 0, failed: 0, errors: [] as string[] };
+  const result = { sourceType, categoryId, startPage, pages, limit, scannedPages: 0, indexed: 0, present: 0, rawOnly: 0, emptyPages: 0, failed: 0, errors: [] as string[] };
 
   for (let page = startPage; page < startPage + pages; page += 1) {
     const response = await getVibixKpIds({ type: sourceType, page, limit, categoryIds: categoryId ? [categoryId] : undefined });
@@ -248,13 +303,16 @@ export async function buildVibixCatalogIndexBatch(options: {
       break;
     }
 
-    const existingKp = new Set((await prisma.movie.findMany({
-      where: { kinopoiskId: { in: response.kpIds.map(String) } },
+    const kpStrings = response.kpIds.map(String);
+    const existingKp = new Map((await prisma.movie.findMany({
+      where: { kinopoiskId: { in: kpStrings } },
       select: { id: true, kinopoiskId: true },
-    })).map((movie) => movie.kinopoiskId).filter(Boolean) as string[]);
+    })).flatMap((movie) => movie.kinopoiskId ? [[movie.kinopoiskId, movie.id] as const] : []));
 
     for (const kpId of response.kpIds) {
       const kp = String(kpId);
+      const existingMovieId = existingKp.get(kp) ?? null;
+      const status = existingMovieId ? "PRESENT" : "RAW_KPID";
       await prisma.vibixCatalogIndex.upsert({
         where: { sourceType_kpId: { sourceType, kpId: kp } },
         create: {
@@ -263,18 +321,167 @@ export async function buildVibixCatalogIndexBatch(options: {
           categoryId,
           categoryName: category,
           sourcePage: page,
-          importStatus: existingKp.has(kp) ? "PRESENT" : "MISSING",
+          indexSource: "kpids",
+          importStatus: status,
+          importedMovieId: existingMovieId,
           lastSeenAt: new Date(),
         },
         update: {
           categoryId,
           categoryName: category,
           sourcePage: page,
-          importStatus: existingKp.has(kp) ? "PRESENT" : "MISSING",
+          indexSource: "kpids",
+          importStatus: status,
+          importedMovieId: existingMovieId,
           lastSeenAt: new Date(),
+          lastImportError: status === "PRESENT" ? null : undefined,
         },
       });
       result.indexed += 1;
+      if (existingMovieId) result.present += 1;
+      else result.rawOnly += 1;
+    }
+  }
+
+  return result;
+}
+
+export async function buildVibixPlayableLinksIndexBatch(options: {
+  sourceType: VibixCatalogType;
+  categoryId?: number | null;
+  filterKind?: string | null;
+  filterId?: number | null;
+  year?: number | null;
+  startPage?: number;
+  pages?: number;
+  existKpId?: boolean | null;
+  noAds?: boolean | null;
+  lgbt?: boolean | null;
+  useFields?: boolean;
+}) {
+  const sourceType = options.sourceType;
+  const categoryId = options.categoryId ?? (options.filterKind === "category" ? options.filterId ?? null : null);
+  const filterKind = options.filterKind ?? (categoryId ? "category" : null);
+  const filterId = options.filterId ?? categoryId;
+  const category = categoryName(categoryId);
+  const startPage = Math.max(1, Math.trunc(options.startPage ?? 1));
+  const pages = Math.max(1, Math.min(100, Math.trunc(options.pages ?? 10)));
+  const result = {
+    sourceType,
+    categoryId,
+    filterKind,
+    filterId,
+    startPage,
+    pages,
+    scannedPages: 0,
+    indexed: 0,
+    present: 0,
+    missingImportable: 0,
+    skippedNoIdentifier: 0,
+    emptyPages: 0,
+    failed: 0,
+    errors: [] as string[],
+  };
+
+  for (let page = startPage; page < startPage + pages; page += 1) {
+    const response = await getVibixVideoLinks({
+      type: sourceType,
+      page,
+      limit: 20,
+      year: options.year ?? undefined,
+      ...filterParams(filterKind, filterId),
+      existKpId: options.existKpId ?? undefined,
+      noAds: boolParam(options.noAds),
+      lgbt: boolParam(options.lgbt),
+      fields: options.useFields === false ? undefined : VIBIX_LINK_FIELDS,
+    });
+    if (response.requestFailed || response.rateLimited) {
+      result.failed += 1;
+      result.errors.push(`links page ${page}: ${response.error?.status ?? "request failed"} ${response.error?.bodyPreview ?? ""}`.slice(0, 500));
+      break;
+    }
+    result.scannedPages += 1;
+    if (!response.data.length) {
+      result.emptyPages += 1;
+      break;
+    }
+
+    const normalizedRows = response.data.flatMap((video) => {
+      const raw = video as unknown as Record<string, unknown>;
+      const key = syntheticIndexKey(sourceType, raw);
+      if (!key) return [];
+      return [{ raw, identityKey: key.key, realKpId: key.realKpId, imdbId: videoImdbId(raw), vibixId: intValue(raw.id) }];
+    });
+    result.skippedNoIdentifier += response.data.length - normalizedRows.length;
+
+    const realKpIds = normalizedRows.map((item) => item.realKpId).filter((value): value is string => Boolean(value));
+    const imdbIds = normalizedRows.map((item) => item.imdbId).filter((value): value is string => Boolean(value));
+    const vibixIds = normalizedRows.map((item) => item.vibixId).filter((value): value is number => value !== null);
+
+    const existingByKp = new Map((await prisma.movie.findMany({
+      where: realKpIds.length ? { kinopoiskId: { in: realKpIds } } : { id: "__none__" },
+      select: { id: true, kinopoiskId: true },
+    })).flatMap((movie) => movie.kinopoiskId ? [[movie.kinopoiskId, movie.id] as const] : []));
+    const existingByImdb = new Map((await prisma.movie.findMany({
+      where: imdbIds.length ? { imdbId: { in: imdbIds } } : { id: "__none__" },
+      select: { id: true, imdbId: true },
+    })).flatMap((movie) => movie.imdbId ? [[movie.imdbId, movie.id] as const] : []));
+    const existingByVibix = new Map((await prisma.movie.findMany({
+      where: vibixIds.length ? { vibixId: { in: vibixIds } } : { id: "__none__" },
+      select: { id: true, vibixId: true },
+    })).flatMap((movie) => movie.vibixId !== null ? [[movie.vibixId, movie.id] as const] : []));
+
+    for (const item of normalizedRows) {
+      const existingMovieId = (item.realKpId ? existingByKp.get(item.realKpId) : null)
+        ?? (item.imdbId ? existingByImdb.get(item.imdbId) : null)
+        ?? (item.vibixId !== null ? existingByVibix.get(item.vibixId) : null)
+        ?? null;
+      const status = existingMovieId ? "PRESENT" : "MISSING";
+      const hasPlayer = videoHasPlayer(item.raw);
+      await prisma.vibixCatalogIndex.upsert({
+        where: { sourceType_kpId: { sourceType, kpId: item.identityKey } },
+        create: {
+          sourceType,
+          kpId: item.identityKey,
+          categoryId,
+          categoryName: category,
+          sourcePage: page,
+          indexSource: "links",
+          vibixId: item.vibixId,
+          imdbId: item.imdbId,
+          title: videoTitle(item.raw),
+          year: intValue(item.raw.year),
+          hasPlayableLink: hasPlayer,
+          detailAvailable: true,
+          detailCheckedAt: new Date(),
+          rawJson: toPrismaJson(item.raw),
+          importStatus: status,
+          importedMovieId: existingMovieId,
+          lastSeenAt: new Date(),
+          lastImportError: null,
+        },
+        update: {
+          categoryId,
+          categoryName: category,
+          sourcePage: page,
+          indexSource: "links",
+          vibixId: item.vibixId,
+          imdbId: item.imdbId,
+          title: videoTitle(item.raw),
+          year: intValue(item.raw.year),
+          hasPlayableLink: hasPlayer,
+          detailAvailable: true,
+          detailCheckedAt: new Date(),
+          rawJson: toPrismaJson(item.raw),
+          importStatus: status,
+          importedMovieId: existingMovieId,
+          lastSeenAt: new Date(),
+          lastImportError: null,
+        },
+      });
+      result.indexed += 1;
+      if (existingMovieId) result.present += 1;
+      else result.missingImportable += 1;
     }
   }
 
@@ -289,33 +496,57 @@ export async function importMissingFromVibixIndex(options: {
   const limit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 50)));
   const sourceType = options.sourceType ?? "both";
   const where: Prisma.VibixCatalogIndexWhereInput = {
-    importStatus: { in: ["MISSING", "UNKNOWN", "FAILED"] },
+    importStatus: "MISSING",
+    indexSource: "links",
     ...(sourceType === "both" ? {} : { sourceType }),
     ...(options.categoryId ? { categoryId: options.categoryId } : {}),
   };
   const rows = await prisma.vibixCatalogIndex.findMany({ where, orderBy: [{ updatedAt: "asc" }], take: limit });
-  const result = { requested: rows.length, imported: 0, updated: 0, skipped: 0, failed: 0, errors: [] as string[] };
+  const result = { requested: rows.length, imported: 0, updated: 0, skipped: 0, detailMissing: 0, failed: 0, errors: [] as string[] };
 
   for (const row of rows) {
     try {
-      const existing = await prisma.movie.findFirst({ where: { kinopoiskId: row.kpId }, select: { id: true } });
+      const existingConditions: Prisma.MovieWhereInput[] = [
+        ...(isRealKpId(row.kpId) ? [{ kinopoiskId: row.kpId }] : []),
+        ...(row.imdbId ? [{ imdbId: row.imdbId }] : []),
+        ...(row.vibixId !== null ? [{ vibixId: row.vibixId }] : []),
+      ];
+      const existing = existingConditions.length
+        ? await prisma.movie.findFirst({ where: { OR: existingConditions }, select: { id: true } })
+        : null;
       if (existing) {
         await prisma.vibixCatalogIndex.update({ where: { id: row.id }, data: { importStatus: "PRESENT", importedMovieId: existing.id, importedAt: new Date(), lastImportError: null } });
         result.skipped += 1;
         continue;
       }
 
-      const lookup = await getVibixVideoByKpIdResult(row.kpId);
-      if (lookup.rateLimited || lookup.requestFailed || !lookup.video) {
-        const message = lookup.error ? `HTTP ${lookup.error.status}: ${lookup.error.bodyPreview ?? lookup.error.statusText}` : "Vibix detail missing";
-        await prisma.vibixCatalogIndex.update({ where: { id: row.id }, data: { importStatus: "FAILED", lastImportError: message.slice(0, 2_000) } });
-        result.failed += 1;
-        result.errors.push(`${row.kpId}: ${message}`.slice(0, 500));
+      let videoToSave = fromPrismaJson<Parameters<typeof saveVibixVideo>[0]>(row.rawJson);
+      let lookup: Awaited<ReturnType<typeof getVibixVideoByKpIdResult>> | null = null;
+      if (isRealKpId(row.kpId)) {
+        lookup = await getVibixVideoByKpIdResult(row.kpId);
+        if (lookup.video) videoToSave = { ...(videoToSave ?? {}), ...lookup.video, category_id: row.categoryId } as Parameters<typeof saveVibixVideo>[0];
+      }
+      if (!lookup?.video && videoToSave) videoToSave = { ...videoToSave, category_id: row.categoryId } as Parameters<typeof saveVibixVideo>[0];
+
+      if (lookup?.rateLimited || lookup?.requestFailed) {
+        const status = lookup.error?.status ?? null;
+        if (status && status !== 404) {
+          const message = lookup.error ? `HTTP ${lookup.error.status}: ${lookup.error.bodyPreview ?? lookup.error.statusText}` : "Vibix request failed";
+          await prisma.vibixCatalogIndex.update({ where: { id: row.id }, data: { importStatus: "FAILED", detailCheckedAt: new Date(), detailAvailable: false, lastImportError: message.slice(0, 2_000) } });
+          result.failed += 1;
+          result.errors.push(`${row.kpId}: ${message}`.slice(0, 500));
+          continue;
+        }
+      }
+
+      if (!videoToSave) {
+        const message = "Vibix detail missing; raw /links data is not available. Rebuild playable /links index for this type/category.";
+        await prisma.vibixCatalogIndex.update({ where: { id: row.id }, data: { importStatus: "DETAIL_MISSING", detailCheckedAt: new Date(), detailAvailable: false, lastImportError: message } });
+        result.detailMissing += 1;
         continue;
       }
 
-      const enrichedVideo = { ...lookup.video, category_id: row.categoryId } as Parameters<typeof saveVibixVideo>[0];
-      const saved = await saveVibixVideo(enrichedVideo);
+      const saved = await saveVibixVideo(videoToSave);
       if (saved.status === "imported") result.imported += 1;
       else if (saved.status === "updated") result.updated += 1;
       else result.skipped += 1;
@@ -325,6 +556,8 @@ export async function importMissingFromVibixIndex(options: {
           importStatus: saved.status === "skipped" ? "SKIPPED" : "IMPORTED",
           importedMovieId: "movieId" in saved ? saved.movieId : null,
           importedAt: new Date(),
+          detailCheckedAt: new Date(),
+          detailAvailable: Boolean(lookup?.video || row.rawJson),
           lastImportError: saved.status === "skipped" ? saved.reason : null,
         },
       });
@@ -340,21 +573,48 @@ export async function importMissingFromVibixIndex(options: {
 }
 
 export async function getVibixCatalogDashboardData() {
-  const [my, snapshots, refs, indexTotal, indexMissing, indexPresent, indexImported, indexFailed, missingPreview] = await Promise.all([
+  const [my, snapshots, refs, indexRows, missingPreview] = await Promise.all([
     getMyCatalogStats(),
     prisma.vibixCatalogSnapshot.findMany({ orderBy: [{ sourceType: "asc" }, { key: "asc" }] }),
     prisma.vibixReferenceItem.groupBy({ by: ["kind"], _count: { _all: true } }),
-    prisma.vibixCatalogIndex.count(),
-    prisma.vibixCatalogIndex.count({ where: { importStatus: { in: ["MISSING", "UNKNOWN", "FAILED"] } } }),
-    prisma.vibixCatalogIndex.count({ where: { importStatus: "PRESENT" } }),
-    prisma.vibixCatalogIndex.count({ where: { importStatus: "IMPORTED" } }),
-    prisma.vibixCatalogIndex.count({ where: { importStatus: "FAILED" } }),
+    prisma.vibixCatalogIndex.findMany({ select: { kpId: true, imdbId: true, vibixId: true, importStatus: true, indexSource: true, importedMovieId: true } }),
     prisma.vibixCatalogIndex.findMany({
-      where: { importStatus: { in: ["MISSING", "UNKNOWN", "FAILED"] } },
+      where: { importStatus: { in: ["MISSING", "DETAIL_MISSING", "FAILED"] } },
       orderBy: [{ updatedAt: "desc" }],
       take: 30,
     }),
   ]);
+
+  const localMovies = await prisma.movie.findMany({
+    select: { kinopoiskId: true, imdbId: true, vibixId: true },
+  });
+  const localKpIds = new Set(localMovies.map((movie) => movie.kinopoiskId).filter((value): value is string => Boolean(value)));
+  const localImdbIds = new Set(localMovies.map((movie) => movie.imdbId).filter((value): value is string => Boolean(value)));
+  const localVibixIds = new Set(localMovies.map((movie) => movie.vibixId).filter((value): value is number => value !== null));
+
+  let present = 0;
+  let imported = 0;
+  let missing = 0;
+  let failed = 0;
+  let rawOnly = 0;
+  let detailMissing = 0;
+  let playableIndex = 0;
+
+  for (const row of indexRows) {
+    const existsNow = (isRealKpId(row.kpId) && localKpIds.has(row.kpId))
+      || (row.imdbId ? localImdbIds.has(row.imdbId) : false)
+      || (row.vibixId !== null ? localVibixIds.has(row.vibixId) : false)
+      || Boolean(row.importedMovieId)
+      || row.importStatus === "PRESENT"
+      || row.importStatus === "IMPORTED";
+    if (existsNow) present += 1;
+    if (row.importStatus === "IMPORTED") imported += 1;
+    if (row.indexSource === "links") playableIndex += 1;
+    if (!existsNow && row.importStatus === "MISSING" && row.indexSource === "links") missing += 1;
+    if (row.importStatus === "FAILED") failed += 1;
+    if (row.importStatus === "DETAIL_MISSING") detailMissing += 1;
+    if (!existsNow && row.indexSource !== "links" && ["RAW_KPID", "UNKNOWN", "MISSING"].includes(row.importStatus)) rawOnly += 1;
+  }
 
   const referenceCounts = Object.fromEntries(refs.map((item) => [item.kind, item._count._all]));
 
@@ -362,7 +622,7 @@ export async function getVibixCatalogDashboardData() {
     my,
     snapshots,
     referenceCounts,
-    index: { total: indexTotal, missing: indexMissing, present: indexPresent, imported: indexImported, failed: indexFailed, missingPreview },
+    index: { total: indexRows.length, playable: playableIndex, rawOnly, missing, present, imported, failed, detailMissing, missingPreview },
     suggestedCategoryIds: VIBIX_CATEGORY_IDS,
     suggestedFilters: VIBIX_AUDIT_FILTERS.map((item) => ({
       ...item,

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { recalculateAllCatalogScores } from "@/lib/catalog-score";
 import {
   buildVibixCatalogIndexBatch,
+  buildVibixPlayableLinksIndexBatch,
   importMissingFromVibixIndex,
   refreshVibixCatalogAudit,
   refreshVibixCatalogSnapshots,
@@ -20,6 +21,18 @@ function numberField(formData: FormData, name: string, fallback: number, min: nu
 function optionalNumberField(formData: FormData, name: string) {
   const value = Number(formData.get(name));
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : null;
+}
+
+function optionalBooleanField(formData: FormData, name: string) {
+  const value = String(formData.get(name) ?? "");
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+function optionalStringField(formData: FormData, name: string) {
+  const value = String(formData.get(name) ?? "").trim();
+  return value || null;
 }
 
 function sourceTypeField(formData: FormData): VibixCatalogType {
@@ -56,6 +69,27 @@ export async function buildVibixIndexAction(formData: FormData) {
   redirectWithResult({ ok: result.failed === 0, message: `Индекс Vibix: страниц ${result.scannedPages}, kpId ${result.indexed}, ошибок ${result.failed}.`, details: result });
 }
 
+
+export async function buildVibixPlayableLinksIndexAction(formData: FormData) {
+  const categoryId = optionalNumberField(formData, "categoryId");
+  const filterKind = optionalStringField(formData, "filterKind");
+  const filterId = optionalNumberField(formData, "filterId");
+  const result = await buildVibixPlayableLinksIndexBatch({
+    sourceType: sourceTypeField(formData),
+    categoryId,
+    filterKind: filterKind === "category" && categoryId ? "category" : filterKind,
+    filterId: filterKind === "category" && categoryId ? categoryId : filterId,
+    year: optionalNumberField(formData, "year"),
+    startPage: numberField(formData, "startPage", 1, 1, 100_000),
+    pages: numberField(formData, "pages", 10, 1, 100),
+    existKpId: optionalBooleanField(formData, "existKpId"),
+    noAds: optionalBooleanField(formData, "noAds"),
+    lgbt: optionalBooleanField(formData, "lgbt"),
+    useFields: formData.get("useFields") === "on",
+  });
+  redirectWithResult({ ok: result.failed === 0, message: `Playable /links индекс: страниц ${result.scannedPages}, записей ${result.indexed}, новых к догрузке ${result.missingImportable}, ошибок ${result.failed}.`, details: result });
+}
+
 export async function importMissingFromVibixAction(formData: FormData) {
   const sourceRaw = formData.get("sourceType");
   const sourceType = sourceRaw === "both" ? "both" : sourceTypeField(formData);
@@ -65,7 +99,7 @@ export async function importMissingFromVibixAction(formData: FormData) {
     categoryId,
     limit: numberField(formData, "limit", 50, 1, 200),
   });
-  redirectWithResult({ ok: result.failed === 0, message: `Догрузка: импорт ${result.imported}, обновлено ${result.updated}, пропущено ${result.skipped}, ошибок ${result.failed}.`, details: result });
+  redirectWithResult({ ok: result.failed === 0, message: `Догрузка: импорт ${result.imported}, обновлено ${result.updated}, пропущено ${result.skipped}, detail 404 ${result.detailMissing}, ошибок ${result.failed}.`, details: result });
 }
 
 export async function recalculateCatalogKindsAction() {
