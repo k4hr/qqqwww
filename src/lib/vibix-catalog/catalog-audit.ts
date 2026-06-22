@@ -379,22 +379,65 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
     missingImportable: 0,
     skippedNoIdentifier: 0,
     emptyPages: 0,
+    fieldFallbacks: 0,
+    existKpFallbacks: 0,
     failed: 0,
     errors: [] as string[],
   };
 
+  const baseParams = {
+    type: sourceType,
+    limit: 20,
+    year: options.year ?? undefined,
+    ...filterParams(filterKind, filterId),
+    noAds: boolParam(options.noAds),
+    lgbt: boolParam(options.lgbt),
+  };
+
   for (let page = startPage; page < startPage + pages; page += 1) {
-    const response = await getVibixVideoLinks({
-      type: sourceType,
+    let response = await getVibixVideoLinks({
+      ...baseParams,
       page,
-      limit: 20,
-      year: options.year ?? undefined,
-      ...filterParams(filterKind, filterId),
       existKpId: options.existKpId ?? undefined,
-      noAds: boolParam(options.noAds),
-      lgbt: boolParam(options.lgbt),
-      fields: options.useFields === false ? undefined : VIBIX_LINK_FIELDS,
+      fields: options.useFields === true ? VIBIX_LINK_FIELDS : undefined,
     });
+
+    // Vibix иногда падает HTTP 500 именно от fields[]. Для полного индекса безопаснее
+    // потерять выборку полей, чем остановить весь импорт.
+    if ((response.requestFailed || response.rateLimited) && options.useFields === true) {
+      const status = response.error?.status ?? null;
+      if (status === null || status >= 500) {
+        const fallback = await getVibixVideoLinks({
+          ...baseParams,
+          page,
+          existKpId: options.existKpId ?? undefined,
+          fields: undefined,
+        });
+        if (!fallback.requestFailed && !fallback.rateLimited) {
+          response = fallback;
+          result.fieldFallbacks += 1;
+        }
+      }
+    }
+
+    // Если общий /links у Vibix падает на тяжёлой странице, пробуем облегчённый вариант
+    // только с kpId. Он не заменяет полный индекс, но даёт продолжить покрытие.
+    if ((response.requestFailed || response.rateLimited) && (options.existKpId === null || options.existKpId === undefined)) {
+      const status = response.error?.status ?? null;
+      if (status === null || status >= 500) {
+        const fallback = await getVibixVideoLinks({
+          ...baseParams,
+          page,
+          existKpId: true,
+          fields: undefined,
+        });
+        if (!fallback.requestFailed && !fallback.rateLimited) {
+          response = fallback;
+          result.existKpFallbacks += 1;
+        }
+      }
+    }
+
     if (response.requestFailed || response.rateLimited) {
       result.failed += 1;
       result.errors.push(`links page ${page}: ${response.error?.status ?? "request failed"} ${response.error?.bodyPreview ?? ""}`.slice(0, 500));

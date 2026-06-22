@@ -142,7 +142,7 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
               <Input label="Начать со страницы /links" name="startPage" defaultValue="1" min="1" max="100000" />
               <Input label="Страниц за запуск" name="pages" defaultValue="50" min="1" max="100" />
             </div>
-            <label className="mt-4 flex items-center gap-2 text-sm font-bold text-[#333]"><input name="useFields" type="checkbox" defaultChecked /> Отправлять fields[]: id, name, kp_id, imdb_id, iframe_url, poster_url, genre, country, tags</label>
+            <label className="mt-4 flex items-center gap-2 text-sm font-bold text-[#333]"><input name="useFields" type="checkbox" /> Отправлять fields[]: id, name, kp_id, imdb_id, iframe_url, poster_url, genre, country, tags</label>
             <p className="mt-2 text-xs text-green-900">Для полного каталога оставь exist_kp_id/no_ads/lgbt в режиме “Не отправлять”. Эти флаги нужны только для точечной диагностики, иначе можно случайно обрезать выдачу.</p>
             <button className="mt-4 h-12 w-full rounded-xl bg-[#e50914] px-4 font-bold text-white">Построить /links индекс</button>
           </form>
