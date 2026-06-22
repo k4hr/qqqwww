@@ -142,11 +142,12 @@ export function sleep(ms: number) {
 }
 
 export function normalizeVibixLimit(value: unknown) {
-  const parsed = Number.parseInt(String(value ?? "50"), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 50;
-  // Vibix rejects too small limits with HTTP 422: Invalid Limit.
-  // Keep full-sync/update requests inside the conservative documented range.
-  return Math.min(100, Math.max(50, parsed));
+  const parsed = Number.parseInt(String(value ?? "20"), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 20;
+  // /publisher/videos/links in this account behaves like a 20-items page API.
+  // Do not normalize full-sync to 50/100, otherwise resume pages no longer match
+  // the already imported ~20-items-per-page progress.
+  return Math.min(20, Math.max(1, parsed));
 }
 
 export function normalizeVibixKpIdsLimit(value: unknown) {

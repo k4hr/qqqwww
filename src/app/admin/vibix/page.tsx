@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { syncVibixQuickAction } from "./actions";
 import type { VibixSkippedReason, VibixSkippedSample } from "@/lib/vibix-sync";
-import { getLatestVibixSyncJob } from "@/lib/vibix-sync-job";
+import { getLatestVibixSyncJob, getVibixFullSyncResumeEstimate } from "@/lib/vibix-sync-job";
 import { VibixSyncJobPanel, type VibixJobView } from "@/components/vibix-sync-job-panel";
 
 export const dynamic = "force-dynamic";
@@ -53,8 +53,9 @@ export default async function VibixAdminPage({ searchParams }: Props) {
   const rateLimited = result.rateLimited === "1";
   const skippedReasons = parseSkippedReasons(result.skippedReasons);
   const skippedSamples = parseSkippedSamples(result.skippedSamples);
-  const latestJob = await getLatestVibixSyncJob();
+  const [latestJob, resumeEstimateRaw] = await Promise.all([getLatestVibixSyncJob(), getVibixFullSyncResumeEstimate(20)]);
   const initialJob = latestJob ? JSON.parse(JSON.stringify(latestJob)) as VibixJobView : null;
+  const resumeEstimate = JSON.parse(JSON.stringify(resumeEstimateRaw)) as typeof resumeEstimateRaw;
 
   return (
     <div className="container admin-shell py-6">
@@ -88,7 +89,7 @@ export default async function VibixAdminPage({ searchParams }: Props) {
         Если Vibix вернул 429, worker применит retry/backoff. Полная задача сохраняет прогресс после каждой страницы.
       </div>
 
-      <VibixSyncJobPanel initialJob={initialJob} configured={configured} />
+      <VibixSyncJobPanel initialJob={initialJob} configured={configured} resumeEstimate={resumeEstimate} />
 
       {hasResult ? (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

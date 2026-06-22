@@ -31,7 +31,18 @@ export type VibixJobView = {
   updatedAt: string;
 };
 
-type Props = { initialJob: VibixJobView | null; configured: boolean };
+export type VibixResumeEstimateView = {
+  limit: number;
+  movieCount: number;
+  serialCount: number;
+  moviePage: number;
+  serialPage: number;
+  recommendedType: "movie" | "serial";
+  recommendedPage: number;
+  note: string;
+};
+
+type Props = { initialJob: VibixJobView | null; configured: boolean; resumeEstimate: VibixResumeEstimateView };
 const API_BASE = "/api/admin/vibix/full-sync";
 
 function parseSkippedPages(value: string | null) {
@@ -54,9 +65,16 @@ function parseSkippedPages(value: string | null) {
   }
 }
 
-export function VibixSyncJobPanel({ initialJob, configured }: Props) {
+function parsePositivePage(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+export function VibixSyncJobPanel({ initialJob, configured, resumeEstimate }: Props) {
   const [job, setJob] = useState(initialJob);
   const [contentType, setContentType] = useState("both");
+  const [manualType, setManualType] = useState<"movie" | "serial">(resumeEstimate.recommendedType);
+  const [manualPage, setManualPage] = useState(String(resumeEstimate.recommendedPage));
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -78,23 +96,61 @@ export function VibixSyncJobPanel({ initialJob, configured }: Props) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const start = async () => {
+  const start = async (options: { resumeFromExisting?: boolean; startType?: "movie" | "serial"; startPage?: number; forceRestart?: boolean } = {}) => {
     if (hasUnfinishedJob) {
-      setMessage("Уже есть незавершённая задача. Сначала нажми “Продолжить”, “Пропустить страницу” или “Отменить”.");
+      setMessage("Уже есть незавершённая задача. Используй кнопки продолжения по базе или ручной страницы — они переставят текущую задачу, не создавая новую с page 1.");
       return;
     }
-    const confirmed = window.confirm("Запустить НОВУЮ полную синхронизацию Vibix с начала? Если старая задача не завершена, её нужно сначала отменить вручную.");
-    if (!confirmed) return;
+    if (!options.resumeFromExisting && !options.startPage) {
+      const confirmed = window.confirm("Запустить НОВУЮ полную синхронизацию Vibix с page 1? Обычно это НЕ нужно, если база уже заполнена. Лучше нажать “Продолжить по текущей базе”.");
+      if (!confirmed) return;
+    }
     setBusy(true);
     setMessage(null);
     try {
-      const response = await fetch(`${API_BASE}/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contentType }) });
+      const response = await fetch(`${API_BASE}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contentType, ...options }),
+      });
       const data = await response.json() as { job?: VibixJobView; message?: string; error?: string };
       if (!response.ok) throw new Error(data.error || "Не удалось создать задачу");
       setJob(data.job ?? null);
       setMessage(data.message || "Задача запущена");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось создать задачу");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setStartPage = async (options: { resumeFromExisting?: boolean; startType?: "movie" | "serial"; startPage?: number }) => {
+    if (!job) {
+      await start(options);
+      return;
+    }
+    if (["DONE", "CANCELED"].includes(job.status)) {
+      await start(options);
+      return;
+    }
+    const targetType = options.resumeFromExisting ? resumeEstimate.recommendedType : options.startType ?? manualType;
+    const targetPage = options.resumeFromExisting ? resumeEstimate.recommendedPage : options.startPage ?? parsePositivePage(manualPage);
+    const confirmed = window.confirm(`Переставить текущую задачу на ${targetType} page ${targetPage}? Это НЕ удаляет фильмы и не начинает с первой страницы.`);
+    if (!confirmed) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`${API_BASE}/set-start-page`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: job.id, contentType, ...options, startType: targetType, startPage: targetPage }),
+      });
+      const data = await response.json() as { job?: VibixJobView; error?: string };
+      if (!response.ok) throw new Error(data.error || "Не удалось переставить задачу");
+      if (data.job) setJob(data.job);
+      setMessage(`Задача переставлена на ${targetType} page ${targetPage}. Worker продолжит с этой точки.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось переставить задачу");
     } finally {
       setBusy(false);
     }
@@ -128,17 +184,46 @@ export function VibixSyncJobPanel({ initialJob, configured }: Props) {
       <h2 className="text-xl font-bold text-[#222]">Полная фоновая синхронизация</h2>
       <p className="mt-1 text-sm text-neutral-500">Кнопка создаёт задачу в PostgreSQL. Отдельный worker продолжает её до конца и возобновляет после перезапуска.</p>
       <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        Безопасный режим: если Vibix отдаёт HTTP 500, задача ставится на паузу и не теряет страницу. Можно повторить эту страницу позже или пропустить её и идти дальше.
+        Если база уже частично высосана, не стартуй с page 1. Используй “Продолжить по текущей базе” или ручно укажи страницу.
       </div>
+
+      <div className="mt-4 grid gap-3 rounded-xl border border-[#ddd] bg-white p-4 lg:grid-cols-4">
+        <Metric label="В базе movie-like" value={resumeEstimate.movieCount} />
+        <Metric label="В базе serial-like" value={resumeEstimate.serialCount} />
+        <Metric label="Рекомендуем movie page" value={resumeEstimate.moviePage} />
+        <Metric label="Рекомендуем serial page" value={resumeEstimate.serialPage} />
+        <div className="lg:col-span-4 rounded-lg bg-[#f5f5f5] px-4 py-3 text-sm text-[#333]">
+          Расчёт идёт по текущей базе и limit={resumeEstimate.limit}. Если уже высосано около 16К записей по 20 на страницу, продолжение будет около page 800, а не page 1.
+        </div>
+      </div>
+
       <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <select value={contentType} onChange={(event) => setContentType(event.target.value)} className="h-12 rounded-xl border border-[#ddd] bg-white px-4 text-[#222]">
           <option value="movie">Фильмы</option>
           <option value="serial">Сериалы</option>
           <option value="both">Фильмы + сериалы</option>
         </select>
-        <button type="button" onClick={start} disabled={!canStartNew} className="min-h-12 break-words rounded-xl bg-[#e50914] px-5 font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400 max-sm:w-full">Создать новую полную синхронизацию Vibix</button>
+        <button type="button" onClick={() => void setStartPage({ resumeFromExisting: true })} disabled={!configured || busy || (!job && !canStartNew)} className="min-h-12 break-words rounded-xl bg-[#e50914] px-5 font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400 max-sm:w-full">
+          Продолжить по текущей базе
+        </button>
       </div>
-      {hasUnfinishedJob ? <div className="mt-3 rounded-lg bg-[#f5f5f5] px-4 py-3 text-sm font-bold text-[#333]">Есть незавершённая задача. Новую синхронизацию с начала нельзя случайно запустить, пока текущая не завершена или не отменена.</div> : null}
+
+      <div className="mt-3 grid gap-3 rounded-xl border border-[#ddd] bg-[#fafafa] p-4 sm:grid-cols-[160px_minmax(0,1fr)_auto]">
+        <select value={manualType} onChange={(event) => setManualType(event.target.value as "movie" | "serial")} className="h-11 rounded-xl border border-[#ddd] bg-white px-3 text-[#222]">
+          <option value="movie">movie</option>
+          <option value="serial">serial</option>
+        </select>
+        <input value={manualPage} onChange={(event) => setManualPage(event.target.value)} type="number" min="1" className="h-11 rounded-xl border border-[#ddd] bg-white px-3 text-[#222]" placeholder="Страница, например 800" />
+        <button type="button" onClick={() => void setStartPage({ startType: manualType, startPage: parsePositivePage(manualPage) })} disabled={!configured || busy || (!job && !canStartNew)} className="min-h-11 rounded-xl bg-[#333] px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-neutral-400">
+          Начать/переставить с этой страницы
+        </button>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={() => void start()} disabled={!canStartNew} className="rounded-lg border border-red-200 px-4 py-2 text-sm font-bold text-red-700 disabled:cursor-not-allowed disabled:opacity-40">Опасно: начать с page 1</button>
+      </div>
+
+      {hasUnfinishedJob ? <div className="mt-3 rounded-lg bg-[#f5f5f5] px-4 py-3 text-sm font-bold text-[#333]">Есть незавершённая задача. Новую синхронизацию с page 1 нельзя случайно запустить. Можно переставить текущую задачу на рекомендованную страницу.</div> : null}
       {message ? <div className="mt-3 rounded-lg bg-[#f5f5f5] px-4 py-3 text-sm font-bold text-[#333]">{message}</div> : null}
 
       {job ? (

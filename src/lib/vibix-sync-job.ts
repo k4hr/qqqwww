@@ -1,3 +1,4 @@
+import { ContentType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { toTimestamp } from "@/lib/date-utils";
 import { normalizeVibixKpIdsLimit, normalizeVibixLimit, sleep, type VibixCatalogType } from "@/lib/vibix";
@@ -11,14 +12,17 @@ type CreateJobOptions = {
   pageDelayMs?: number;
   detailDelayMs?: number;
   forceRestart?: boolean;
+  resumeFromExisting?: boolean;
+  startType?: VibixCatalogType;
+  startPage?: number;
 };
 
 const ACTIVE_STATUSES = ["QUEUED", "RUNNING"];
 const RECOVERABLE_STATUSES = ["QUEUED", "RUNNING", "PAUSED", "FAILED"];
 const STOPPED_STATUSES = ["DONE", "CANCELED"];
-// Vibix returns HTTP 422 “Invalid Limit” for 10/20 on some endpoints.
-// Do not use limits below 50 for /links, and use 100+ for /get_kpids.
-const SAFE_LINK_LIMITS = [50];
+// /links uses 20-item pages for the already imported database progress.
+// /get_kpids has a separate 100+ limit and must not reuse this value.
+const SAFE_LINK_LIMITS = [20];
 const MAX_SKIPPED_PAGE_LOG = 80;
 
 type SkippedPageRecord = {
@@ -36,6 +40,91 @@ function normalizeDelay(value: unknown, fallback: number, minimum: number, maxim
 
 function normalizeContentType(value: unknown): VibixJobContentType {
   return ["movie", "serial", "both"].includes(String(value ?? "")) ? value as VibixJobContentType : "both";
+}
+
+function normalizeStartPage(value: unknown) {
+  const parsed = Number.parseInt(String(value ?? "1"), 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return 1;
+  return Math.min(parsed, 200_000);
+}
+
+function normalizeStartType(value: unknown): VibixCatalogType {
+  return value === "serial" ? "serial" : "movie";
+}
+
+function pageFromCount(count: number, limit: number) {
+  return Math.max(1, Math.floor(Math.max(0, count) / Math.max(1, limit)) + 1);
+}
+
+function movieLikeWhere(): Prisma.MovieWhereInput {
+  return {
+    OR: [
+      { vibixType: "movie" },
+      { type: { in: [ContentType.MOVIE, ContentType.CARTOON, ContentType.ANIME] } },
+    ],
+    AND: [
+      {
+        OR: [
+          { vibixId: { not: null } },
+          { vibixAvailable: true },
+          { vibixIframeUrl: { not: null } },
+          { vibixEmbedCode: { not: null } },
+        ],
+      },
+    ],
+  };
+}
+
+function serialLikeWhere(): Prisma.MovieWhereInput {
+  return {
+    OR: [
+      { vibixType: "serial" },
+      { type: ContentType.SERIES },
+    ],
+    AND: [
+      {
+        OR: [
+          { vibixId: { not: null } },
+          { vibixAvailable: true },
+          { vibixIframeUrl: { not: null } },
+          { vibixEmbedCode: { not: null } },
+        ],
+      },
+    ],
+  };
+}
+
+export type VibixFullSyncResumeEstimate = {
+  limit: number;
+  movieCount: number;
+  serialCount: number;
+  moviePage: number;
+  serialPage: number;
+  recommendedType: VibixCatalogType;
+  recommendedPage: number;
+  note: string;
+};
+
+export async function getVibixFullSyncResumeEstimate(limitInput: unknown = 20): Promise<VibixFullSyncResumeEstimate> {
+  const limit = normalizeVibixLimit(limitInput);
+  const [movieCount, serialCount] = await Promise.all([
+    prisma.movie.count({ where: movieLikeWhere() }),
+    prisma.movie.count({ where: serialLikeWhere() }),
+  ]);
+  const moviePage = pageFromCount(movieCount, limit);
+  const serialPage = pageFromCount(serialCount, limit);
+  const recommendedType: VibixCatalogType = movieCount > 0 ? "movie" : "serial";
+  const recommendedPage = recommendedType === "movie" ? moviePage : serialPage;
+  return {
+    limit,
+    movieCount,
+    serialCount,
+    moviePage,
+    serialPage,
+    recommendedType,
+    recommendedPage,
+    note: `В базе уже примерно ${movieCount} movie-like и ${serialCount} serial-like Vibix-записей. При limit=${limit} безопасное продолжение: movie page ${moviePage}, serial page ${serialPage}.`,
+  };
 }
 
 function parseSkippedPages(value: string | null): SkippedPageRecord[] {
@@ -135,17 +224,26 @@ export async function createVibixFullSyncJob(options: CreateJobOptions = {}) {
   }
 
   const contentType = normalizeContentType(options.contentType);
+  const limit = normalizeVibixLimit(options.limit);
+  const estimate = options.resumeFromExisting ? await getVibixFullSyncResumeEstimate(limit) : null;
+  const startType = normalizeStartType(options.startType ?? estimate?.recommendedType ?? (contentType === "serial" ? "serial" : "movie"));
+  const startPage = normalizeStartPage(options.startPage ?? estimate?.recommendedPage ?? 1);
   return {
     created: true,
     reused: false,
     job: await prisma.vibixSyncJob.create({
       data: {
         contentType,
-        currentType: contentType === "serial" ? "serial" : "movie",
-        limit: normalizeVibixLimit(options.limit),
+        currentType: startType,
+        nextPage: startPage,
+        limit,
         pageDelayMs: normalizeDelay(options.pageDelayMs, 10_000, 10_000, 60_000),
         detailDelayMs: normalizeDelay(options.detailDelayMs, 2_000, 2_000, 10_000),
-        safeResumeNote: "Created from admin full sync panel.",
+        safeResumeNote: options.resumeFromExisting
+          ? `Created from existing database resume. ${estimate?.note ?? ""}`
+          : startPage > 1
+            ? `Created from admin panel at ${startType} page ${startPage}.`
+            : "Created from admin full sync panel.",
       },
     }),
   };
@@ -324,6 +422,44 @@ export async function skipCurrentVibixSyncJob(jobId: string) {
       rateLimited: false,
       rateLimitUntil: null,
       safeResumeNote: `Skipped ${skippedType} page ${skippedPage}; queued next page ${skippedPage + 1}.`,
+    },
+  });
+}
+
+
+export async function setVibixSyncJobStartPage(
+  jobId: string,
+  options: { startType?: VibixCatalogType; startPage?: number; contentType?: VibixJobContentType; resumeFromExisting?: boolean } = {},
+) {
+  const job = await prisma.vibixSyncJob.findUnique({ where: { id: jobId } });
+  if (!job || STOPPED_STATUSES.includes(job.status)) return job;
+
+  const contentType = normalizeContentType(options.contentType ?? job.contentType);
+  const limit = normalizeVibixLimit(job.limit || 20);
+  const estimate = options.resumeFromExisting ? await getVibixFullSyncResumeEstimate(limit) : null;
+  const startType = normalizeStartType(options.startType ?? estimate?.recommendedType ?? job.currentType);
+  const startPage = normalizeStartPage(options.startPage ?? estimate?.recommendedPage ?? job.nextPage);
+
+  return prisma.vibixSyncJob.update({
+    where: { id: jobId },
+    data: {
+      status: "QUEUED",
+      contentType,
+      currentType: startType,
+      nextPage: startPage,
+      limit,
+      lastPage: null,
+      total: null,
+      lastError: null,
+      lastFailedType: null,
+      lastFailedPage: null,
+      lastFailedAt: null,
+      finishedAt: null,
+      rateLimited: false,
+      rateLimitUntil: null,
+      safeResumeNote: options.resumeFromExisting
+        ? `Moved to existing database resume: ${startType} page ${startPage}. ${estimate?.note ?? ""}`
+        : `Moved manually to ${startType} page ${startPage}.`,
     },
   });
 }
