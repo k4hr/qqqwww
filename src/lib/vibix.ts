@@ -142,9 +142,18 @@ export function sleep(ms: number) {
 }
 
 export function normalizeVibixLimit(value: unknown) {
-  const parsed = Number.parseInt(String(value ?? "20"), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 20;
-  return Math.min(parsed, 100);
+  const parsed = Number.parseInt(String(value ?? "50"), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 50;
+  // Vibix rejects too small limits with HTTP 422: Invalid Limit.
+  // Keep full-sync/update requests inside the conservative documented range.
+  return Math.min(100, Math.max(50, parsed));
+}
+
+export function normalizeVibixKpIdsLimit(value: unknown) {
+  const parsed = Number.parseInt(String(value ?? "100"), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 100;
+  // /get_kpids rejects 10/20. Use 100 as the safe fallback batch.
+  return Math.min(1000, Math.max(100, parsed));
 }
 
 function getApiKey() {
@@ -415,7 +424,7 @@ export async function getVibixKpIds(params: { type: VibixCatalogType; year?: num
   const query = new URLSearchParams({
     type: params.type,
     page: String(Math.max(1, params.page ?? 1)),
-    limit: String(Math.min(1_000, Math.max(1, params.limit ?? 1_000))),
+    limit: String(normalizeVibixKpIdsLimit(params.limit)),
   });
   if (params.year) query.set("year", String(params.year));
   const response = await vibixRequest("/get_kpids", query);

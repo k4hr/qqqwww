@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { toTimestamp } from "@/lib/date-utils";
-import { normalizeVibixLimit, sleep, type VibixCatalogType } from "@/lib/vibix";
+import { normalizeVibixKpIdsLimit, normalizeVibixLimit, sleep, type VibixCatalogType } from "@/lib/vibix";
 import { syncVibixKpIdPage, syncVibixPage, type VibixPageSyncResult } from "@/lib/vibix-sync";
 
 export type VibixJobContentType = "movie" | "serial" | "both";
@@ -16,7 +16,9 @@ type CreateJobOptions = {
 const ACTIVE_STATUSES = ["QUEUED", "RUNNING"];
 const RECOVERABLE_STATUSES = ["QUEUED", "RUNNING", "PAUSED", "FAILED"];
 const STOPPED_STATUSES = ["DONE", "CANCELED"];
-const SAFE_LIMITS = [20, 10];
+// Vibix returns HTTP 422 “Invalid Limit” for 10/20 on some endpoints.
+// Do not use limits below 50 for /links, and use 100+ for /get_kpids.
+const SAFE_LINK_LIMITS = [50];
 const MAX_SKIPPED_PAGE_LOG = 80;
 
 type SkippedPageRecord = {
@@ -76,15 +78,15 @@ function isServerFailure(result: VibixPageSyncResult) {
   return result.httpStatus !== null && result.httpStatus >= 500;
 }
 
-function uniqueLimits(baseLimit: number) {
-  return Array.from(new Set([normalizeVibixLimit(baseLimit), ...SAFE_LIMITS].filter((value) => value > 0)));
+function uniqueLinkLimits(baseLimit: number) {
+  return Array.from(new Set([normalizeVibixLimit(baseLimit), ...SAFE_LINK_LIMITS].filter((value) => value > 0)));
 }
 
 async function processPageWithFallbacks(job: { nextPage: number; currentType: string; limit: number; detailDelayMs: number }) {
   let lastResult: VibixPageSyncResult | null = null;
   const catalogType = job.currentType as VibixCatalogType;
 
-  for (const limit of uniqueLimits(job.limit)) {
+  for (const limit of uniqueLinkLimits(job.limit)) {
     lastResult = await syncVibixPage({
       page: job.nextPage,
       type: catalogType,
@@ -102,7 +104,7 @@ async function processPageWithFallbacks(job: { nextPage: number; currentType: st
     await sleep(2_000);
   }
 
-  const kpFallbackLimit = Math.min(100, Math.max(20, normalizeVibixLimit(job.limit)));
+  const kpFallbackLimit = normalizeVibixKpIdsLimit(100);
   const kpResult = await syncVibixKpIdPage({
     page: job.nextPage,
     type: catalogType,
@@ -159,7 +161,7 @@ export async function processVibixSyncJob(jobId: string) {
       status: "RUNNING",
       startedAt: job.startedAt ?? new Date(),
       finishedAt: null,
-      limit: Math.min(20, Math.max(10, job.limit || 20)),
+      limit: normalizeVibixLimit(job.limit || 50),
       pageDelayMs: Math.max(job.pageDelayMs, 10_000),
       detailDelayMs: Math.max(job.detailDelayMs, 2_000),
     },
