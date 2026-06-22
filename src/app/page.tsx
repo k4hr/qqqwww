@@ -159,7 +159,7 @@ export default async function HomePage() {
     <SectionGrid title="Популярные мультфильмы" href="/cartoons/popular" movies={popularCartoons} showSorts={false} mobileCarousel />
     <SectionGrid title="Популярное аниме" href="/anime/popular" movies={popularAnime} showSorts={false} mobileCarousel />
     <SectionGrid title={`Новинки ${currentYear}`} href={`/year/${currentYear}`} movies={newest} showSorts={false} mobileCarousel />
-    <div className="home-catalog-ad"><VibixBanner size="728x90" /></div>
+    <div className="home-catalog-ad"><VibixBanner slot="home_after_popular" size="728x90" /></div>
     <SectionGrid title="Проверенная классика" href="/top" movies={best} showSorts={false} mobileCarousel />
   </div>;
 }

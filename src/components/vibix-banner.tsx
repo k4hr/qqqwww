@@ -1,18 +1,39 @@
-"use client";
+import { getVibixAdSettings, getVibixBannerSlot, type VibixBannerSize, type VibixBannerSlotKey } from "@/lib/vibix-ads";
 
-import { useIsMobile } from "@/hooks/use-is-mobile";
+export type { VibixBannerSize, VibixBannerSlotKey };
 
-const bannerSizes = ["300x250", "300x600", "680x200", "680x250", "728x90"] as const;
+type Props = {
+  slot: VibixBannerSlotKey;
+  size?: VibixBannerSize;
+};
 
-export type VibixBannerSize = typeof bannerSizes[number];
+export async function VibixBanner({ slot, size }: Props) {
+  const settings = await getVibixAdSettings();
+  const slotConfig = getVibixBannerSlot(settings, slot);
 
-export function VibixBanner({ size }: { size: VibixBannerSize }) {
-  const isMobile = useIsMobile(768);
-  if (isMobile) return null;
-  const wide = size.startsWith("680") || size.startsWith("728");
+  if (!settings.enabled || !settings.bannersEnabled || !slotConfig.enabled) return null;
+
+  const bannerSize = size || slotConfig.size;
+  const wide = bannerSize.startsWith("680") || bannerSize.startsWith("728");
+  const deviceClass = slotConfig.desktop && slotConfig.mobile
+    ? "flex"
+    : slotConfig.desktop
+      ? "hidden md:flex"
+      : "flex md:hidden";
+
   return (
-    <aside className={`${wide ? "hidden md:flex" : "flex"} glass-panel section-glow my-7 w-full max-w-full min-w-0 items-center justify-center overflow-hidden rounded-3xl p-3 md:min-h-[110px]`} aria-label="Реклама">
-      <ins data-pm-b={size} className="block h-auto max-w-full overflow-hidden" />
+    <aside
+      className={`${deviceClass} ${wide ? "" : ""} glass-panel section-glow my-7 w-full max-w-full min-w-0 items-center justify-center overflow-hidden rounded-3xl p-3 md:min-h-[110px]`}
+      aria-label="Реклама"
+      data-redfilm-ad-slot={slot}
+    >
+      <ins data-pm-b={bannerSize} className="block h-auto max-w-full overflow-hidden" />
     </aside>
   );
+}
+
+export async function VibixFlyrollSlot({ slot }: { slot: string }) {
+  const settings = await getVibixAdSettings();
+  if (!settings.enabled || !settings.flyrollEnabled || settings.flyrollManualSlot !== slot) return null;
+  return <ins data-pm-flyroll="" data-redfilm-flyroll-slot={slot} />;
 }

@@ -171,6 +171,24 @@ model ProviderLink {
   @@index([provider, isAvailable])
 }
 
+model VibixAdSettings {
+  id                 String   @id @default(cuid())
+  singletonKey       String   @unique @default("default")
+  enabled            Boolean  @default(true)
+  publisherId        String?
+  scriptUrl          String?  @default("https://v-js-menu.run/public/lib.en.min.js")
+  stickerEnabled     Boolean  @default(true)
+  pcStickerEnabled   Boolean  @default(true)
+  bannersEnabled     Boolean  @default(true)
+  brandEnabled       Boolean  @default(false)
+  flyrollEnabled     Boolean  @default(true)
+  flyrollPosition    Int      @default(2)
+  flyrollManualSlot  String   @default("auto")
+  bannerSlotsJson    Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
 model VibixUpdateCursor {
   id String @id @default(cuid())
   type ContentType

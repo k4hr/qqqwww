@@ -7,7 +7,7 @@ import { JsonLd } from "@/components/json-ld";
 import { MovieCard } from "@/components/movie-card";
 import { SectionGrid } from "@/components/section-grid";
 import { PlayerBlock } from "@/components/player-block";
-import { VibixBanner } from "@/components/vibix-banner";
+import { VibixBanner, VibixFlyrollSlot } from "@/components/vibix-banner";
 import { AnalyticsEvent } from "@/components/analytics-event";
 import { WatchClientActions } from "@/components/watch-client-actions";
 import { buildDefaultCatalogCountryWhere, extractCountries } from "@/lib/catalog-filters";
@@ -125,7 +125,11 @@ export default async function WatchPage({ params }: Props) {
         </div>
       </article>
 
+      <VibixBanner slot="movie_above_player" size="728x90" />
+      <VibixFlyrollSlot slot="movie_above_player" />
       <PlayerBlock movie={movie} />
+      <VibixBanner slot="movie_below_player" size="680x250" />
+      <VibixFlyrollSlot slot="movie_below_player" />
 
       <section className="mt-8">
         <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">Похожие фильмы</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>
@@ -135,7 +139,7 @@ export default async function WatchPage({ params }: Props) {
       {moreInGenre.length && primaryGenre ? <SectionGrid title={`Ещё в жанре ${primaryGenre.name}`} href={genrePath(primaryGenre)} movies={moreInGenre} showSorts={false} mobileCarousel /> : null}
       {sameYear.length ? <SectionGrid title={`Фильмы ${movie.year} года`} href={yearPath(movie)} movies={sameYear} showSorts={false} mobileCarousel /> : null}
       {sameCountry.length && countries[0] ? <SectionGrid title={`Фильмы ${countries[0]}`} href={countryPath(countries[0])} movies={sameCountry} showSorts={false} mobileCarousel /> : null}
-      <VibixBanner size="680x200" />
+      <VibixBanner slot="movie_bottom" size="680x200" />
     </div>
   );
 }

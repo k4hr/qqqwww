@@ -17,6 +17,22 @@ type VibixAttributes = {
   "data-publisher-id": string;
   "data-type": VibixDataType;
   "data-id": string;
+  "data-season"?: string;
+  "data-episodes"?: string;
+  "data-voiceover"?: string;
+  "data-voiceover-only"?: string;
+  "data-design"?: string;
+  "data-poster"?: string;
+  "data-nopreload"?: string;
+  "data-sync"?: string;
+  "data-autoplay"?: string;
+  "data-width"?: string;
+  "data-height"?: string;
+  "data-color1"?: string;
+  "data-color2"?: string;
+  "data-color3"?: string;
+  "data-color4"?: string;
+  "data-color5"?: string;
 };
 
 type VibixSdkWindow = Window & {
@@ -28,6 +44,51 @@ type VibixSdkWindow = Window & {
 const VIBIX_PUBLISHER_ID = "678353780";
 const VIBIX_SDK_URL = "https://graphicslab.io/sdk/v2/rendex-sdk.min.js";
 const VIBIX_DATA_TYPES = new Set<VibixDataType>(["movie", "series", "kp", "imdb"]);
+
+const REDFILM_PLAYER_DEFAULT_ATTRS = {
+  "data-design": "5",
+  "data-poster": "true",
+  "data-nopreload": "true",
+  "data-color1": "#e50914",
+  "data-color2": "#ffffff",
+  "data-color3": "#a7a7b0",
+  "data-color4": "#ff1f2d",
+  "data-color5": "#050507",
+} satisfies Partial<VibixAttributes>;
+
+const OPTIONAL_VIBIX_PLAYER_ATTRS = [
+  "data-season",
+  "data-episodes",
+  "data-voiceover",
+  "data-voiceover-only",
+  "data-design",
+  "data-poster",
+  "data-nopreload",
+  "data-sync",
+  "data-autoplay",
+  "data-width",
+  "data-height",
+  "data-color1",
+  "data-color2",
+  "data-color3",
+  "data-color4",
+  "data-color5",
+] as const;
+
+function withRedfilmPlayerStyle(attrs: VibixAttributes, parsed: Record<`data-${string}`, string> = {}): VibixAttributes {
+  const next: VibixAttributes = { ...attrs, ...REDFILM_PLAYER_DEFAULT_ATTRS };
+
+  for (const key of OPTIONAL_VIBIX_PLAYER_ATTRS) {
+    const value = parsed[key]?.trim();
+    if (value) next[key] = value;
+  }
+
+  // REDFILM style should be applied even when the stored Vibix embed code only has id/type.
+  next["data-design"] = next["data-design"] || REDFILM_PLAYER_DEFAULT_ATTRS["data-design"];
+  next["data-poster"] = next["data-poster"] || REDFILM_PLAYER_DEFAULT_ATTRS["data-poster"];
+  next["data-nopreload"] = next["data-nopreload"] || REDFILM_PLAYER_DEFAULT_ATTRS["data-nopreload"];
+  return next;
+}
 
 export function parseEmbedCode(embedCode?: string | null) {
   const attributes: Record<`data-${string}`, string> = {};
@@ -48,11 +109,11 @@ function buildEmbedAttrs(embedCode?: string | null): VibixAttributes | null {
   const id = parsed["data-id"]?.trim();
   if (!type || !VIBIX_DATA_TYPES.has(type) || !id) return null;
 
-  return {
+  return withRedfilmPlayerStyle({
     "data-publisher-id": parsed["data-publisher-id"]?.trim() || VIBIX_PUBLISHER_ID,
     "data-type": type,
     "data-id": id,
-  };
+  }, parsed);
 }
 
 export function buildVibixAttrs({ kinopoiskId, imdbId, embedCode }: Pick<VibixPlayerProps, "kinopoiskId" | "imdbId" | "embedCode">): VibixAttributes | null {
@@ -60,10 +121,10 @@ export function buildVibixAttrs({ kinopoiskId, imdbId, embedCode }: Pick<VibixPl
   if (embedAttrs) return embedAttrs;
 
   const kpId = String(kinopoiskId ?? "").trim();
-  if (kpId) return { "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "kp", "data-id": kpId };
+  if (kpId) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "kp", "data-id": kpId });
 
   const normalizedImdbId = imdbId?.trim();
-  if (normalizedImdbId) return { "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "imdb", "data-id": normalizedImdbId };
+  if (normalizedImdbId) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "imdb", "data-id": normalizedImdbId });
 
   return null;
 }
@@ -122,8 +183,8 @@ export function VibixPlayer({ title, kinopoiskId, imdbId, embedCode, iframeUrl, 
       }
     };
 
-    const existing = document.querySelector<HTMLScriptElement>('script[data-redfilm-vibix-sdk="true"]');
-    let sdkScript = existing;
+    const existing = Array.from(document.scripts).find((script) => script.dataset.redfilmVibixSdk === "true" || script.src === VIBIX_SDK_URL) as HTMLScriptElement | undefined;
+    let sdkScript: HTMLScriptElement | undefined = existing;
     const handleLoad = () => initializeWithRetries();
     const handleError = () => console.error("[VibixPlayer] Failed to load SDK", VIBIX_SDK_URL);
     if (!existing) {

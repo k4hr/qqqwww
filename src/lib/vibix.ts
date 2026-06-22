@@ -447,11 +447,12 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
     page: String(Math.max(1, params.page ?? 1)),
     limit: String(normalizeVibixLimit(params.limit)),
   });
-  for (const field of VIBIX_LINK_FIELDS) query.append("fields[]", field);
+
+  // Vibix current /publisher/videos/links documentation lists only the filter params
+  // category[], year[], genre[], country[], tag[], voiceover[], page and limit.
+  // Do not send fields[] or undocumented flags here: they can make Vibix return 500.
   if (params.year) query.append("year[]", String(params.year));
-  if (params.existKpId !== null) query.set("exist_kp_id", String(params.existKpId ?? true));
-  if (params.noAds === true) query.set("no_ads", "true");
-  if (params.lgbt === true) query.set("lgbt", "true");
+
   const response = await vibixRequest("/links", query);
   const rawItems = extractItems(response.data);
   const data = rawItems.map(normalizeVideo).filter((item): item is VibixVideo => item !== null);

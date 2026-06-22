@@ -1,10 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 
 import "./globals.css";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { VibixUnion } from "@/components/vibix-union";
+import { getVibixAdSettings, getVibixAddTypesAttribute } from "@/lib/vibix-ads";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://redfilm.win"),
@@ -17,10 +23,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const adSettings = await getVibixAdSettings();
+  const vibixAdTypes = getVibixAddTypesAttribute(adSettings);
+
   return (
     <html lang="ru">
       <body className="site-shell">
+        <Script id="redfilm-vibix-player-sdk" src="https://graphicslab.io/sdk/v2/rendex-sdk.min.js" strategy="afterInteractive" />
         <Script id="yandex-metrika" strategy="afterInteractive">
           {`
             (function(m,e,t,r,i,k,a){
@@ -57,8 +69,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="cinematic-page">{children}</main>
         <Footer />
         <VibixUnion
-          publisherId={process.env.VIBIX_PUBLISHER_ID?.trim() || "678353780"}
-          adTypes={process.env.NEXT_PUBLIC_VIBIX_AD_TYPES?.trim() || "sticker,pcsticker,banners,flyroll"}
+          enabled={adSettings.enabled}
+          publisherId={adSettings.publisherId}
+          adTypes={vibixAdTypes}
+          scriptUrl={adSettings.scriptUrl}
+          flyrollPosition={adSettings.flyrollPosition}
         />
       </body>
     </html>
