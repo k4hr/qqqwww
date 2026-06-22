@@ -32,8 +32,31 @@ function statusLabel(status: string) {
   return status;
 }
 
+async function resumeExpiredPausedJob<T extends {
+  id: string;
+  status: string;
+  rateLimitUntil: Date | null;
+  currentStage: string;
+  currentType: string;
+  nextPage: number;
+  message: string | null;
+} | null>(job: T): Promise<T> {
+  if (!job || job.status !== "PAUSED" || !job.rateLimitUntil) return job;
+  if (job.rateLimitUntil.getTime() > Date.now()) return job;
+
+  return prisma.vibixCatalogAutoJob.update({
+    where: { id: job.id },
+    data: {
+      status: "QUEUED",
+      rateLimitUntil: null,
+      message: `Пауза уже прошла. Задача снова в очереди: ${job.currentStage}, ${job.currentType}, page ${job.nextPage}.`,
+    },
+  }) as Promise<T>;
+}
+
 export async function getLatestVibixCatalogMagicJob() {
-  return prisma.vibixCatalogAutoJob.findFirst({ orderBy: { createdAt: "desc" } });
+  const job = await prisma.vibixCatalogAutoJob.findFirst({ orderBy: { createdAt: "desc" } });
+  return resumeExpiredPausedJob(job);
 }
 
 export async function startVibixCatalogMagicJob(options: { restart?: boolean } = {}) {
@@ -88,15 +111,28 @@ export async function cancelVibixCatalogMagicJob() {
   });
 }
 
-async function getRunnableJob() {
-  const job = await prisma.vibixCatalogAutoJob.findFirst({
+async function getRunnableJob(options: { force?: boolean } = {}) {
+  let job = await prisma.vibixCatalogAutoJob.findFirst({
     where: { status: { in: ACTIVE_STATUSES } },
     orderBy: { createdAt: "desc" },
   });
   if (!job) return null;
 
-  if (job.rateLimitUntil && job.rateLimitUntil.getTime() > Date.now()) {
+  job = await resumeExpiredPausedJob(job);
+
+  if (!options.force && job.rateLimitUntil && job.rateLimitUntil.getTime() > Date.now()) {
     return job;
+  }
+
+  if (options.force && job.status === "PAUSED") {
+    job = await prisma.vibixCatalogAutoJob.update({
+      where: { id: job.id },
+      data: {
+        status: "QUEUED",
+        rateLimitUntil: null,
+        message: `Пауза снята вручную. Продолжаю: ${job.currentStage}, ${job.currentType}, page ${job.nextPage}.`,
+      },
+    });
   }
 
   if (job.status !== "RUNNING") {
@@ -126,8 +162,8 @@ async function pauseJob(jobId: string, message: string, delayMs: number, lastErr
   });
 }
 
-export async function runVibixCatalogMagicJobIteration() {
-  const job = await getRunnableJob();
+export async function runVibixCatalogMagicJobIteration(options: { force?: boolean } = {}) {
+  const job = await getRunnableJob(options);
   if (!job) {
     return { ok: true, idle: true, message: "Нет активной задачи Vibix catalog magic." };
   }
@@ -136,7 +172,7 @@ export async function runVibixCatalogMagicJobIteration() {
     return {
       ok: true,
       idle: true,
-      message: `Пауза до ${job.rateLimitUntil.toLocaleString("ru-RU")} из-за лимита Vibix.`,
+      message: `Пауза из-за лимита Vibix. Продолжение после ${job.rateLimitUntil.toISOString()}.`,
       job,
     };
   }

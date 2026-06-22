@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MagicJobPauseInfo } from "./MagicJobPauseInfo";
 import { getVibixCatalogDashboardData } from "@/lib/vibix-catalog/catalog-audit";
 import { getLatestVibixCatalogMagicJob } from "@/lib/vibix-catalog/catalog-magic-sync";
 import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
@@ -95,19 +96,23 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
         {magicJob ? (
           <div className="mt-4 rounded-2xl bg-white/80 p-4 text-sm text-[#222]">
             <div><b>Сообщение:</b> {magicJob.message ?? "—"}</div>
-            <div className="mt-1"><b>Пауза до:</b> {date(magicJob.rateLimitUntil)}</div>
+            <MagicJobPauseInfo
+              status={magicJob.status}
+              pauseUntil={magicJob.rateLimitUntil?.toISOString() ?? null}
+              updatedAt={magicJob.updatedAt?.toISOString() ?? null}
+            />
             <div className="mt-1"><b>Ошибки:</b> {magicJob.failed} {magicJob.lastError ? <span className="text-red-700">— {magicJob.lastError.slice(0, 260)}</span> : null}</div>
           </div>
         ) : null}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <form action={runVibixCatalogMagicOnceAction}><button className="h-12 w-full rounded-xl bg-[#333] px-4 font-bold text-white">Обработать шаг сейчас</button></form>
+          <form action={runVibixCatalogMagicOnceAction}><button className="h-12 w-full rounded-xl bg-[#333] px-4 font-bold text-white">Продолжить сейчас</button></form>
           <form action={cancelVibixCatalogMagicAction}><button className="h-12 w-full rounded-xl border border-red-200 bg-white px-4 font-bold text-[#e50914]">Остановить</button></form>
           <form action={restartVibixCatalogMagicAction}><button className="h-12 w-full rounded-xl border border-[#333] bg-white px-4 font-bold text-[#222]">Начать заново</button></form>
         </div>
 
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Чтобы оно реально работало без кликов, в Railway нужен отдельный service/worker со Start Command: <b>npm run vibix:catalog-worker</b>. Без worker кнопка только создаст задачу, а “Обработать шаг сейчас” будет делать один шаг вручную.
+          Чтобы оно реально работало без кликов, в Railway нужен отдельный service/worker со Start Command: <b>npm run vibix:catalog-worker</b>. Без worker кнопка только создаст задачу, а “Продолжить сейчас” снимет паузу и сделает один шаг вручную.
         </div>
       </section>
 

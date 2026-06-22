@@ -58,7 +58,7 @@ export async function restartVibixCatalogMagicAction() {
 }
 
 export async function runVibixCatalogMagicOnceAction() {
-  const result = await runVibixCatalogMagicJobIteration();
+  const result = await runVibixCatalogMagicJobIteration({ force: true });
   redirectWithResult(result);
 }
 
