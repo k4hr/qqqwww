@@ -5,6 +5,7 @@ import {
   getVibixReferenceItems,
   getVibixVideoByKpIdResult,
   getVibixVideoLinks,
+  sleep,
   VIBIX_LINK_FIELDS,
   type VibixCatalogType,
   type VibixReferenceKind,
@@ -358,6 +359,7 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
   noAds?: boolean | null;
   lgbt?: boolean | null;
   useFields?: boolean;
+  pageDelayMs?: number;
 }) {
   const sourceType = options.sourceType;
   const categoryId = options.categoryId ?? (options.filterKind === "category" ? options.filterId ?? null : null);
@@ -381,6 +383,9 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
     emptyPages: 0,
     fieldFallbacks: 0,
     existKpFallbacks: 0,
+    rateLimited: false,
+    retryAfterMs: null as number | null,
+    stoppedAtPage: null as number | null,
     failed: 0,
     errors: [] as string[],
   };
@@ -440,12 +445,16 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
 
     if (response.requestFailed || response.rateLimited) {
       result.failed += 1;
+      result.rateLimited = Boolean(response.rateLimited || response.error?.status === 429);
+      result.retryAfterMs = response.retryAfterMs;
+      result.stoppedAtPage = page;
       result.errors.push(`links page ${page}: ${response.error?.status ?? "request failed"} ${response.error?.bodyPreview ?? ""}`.slice(0, 500));
       break;
     }
     result.scannedPages += 1;
     if (!response.data.length) {
       result.emptyPages += 1;
+      result.stoppedAtPage = page;
       break;
     }
 
@@ -526,6 +535,10 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
       if (existingMovieId) result.present += 1;
       else result.missingImportable += 1;
     }
+
+    if (options.pageDelayMs && options.pageDelayMs > 0 && page < startPage + pages - 1) {
+      await sleep(Math.min(30_000, Math.max(250, Math.trunc(options.pageDelayMs))));
+    }
   }
 
   return result;
@@ -565,11 +578,14 @@ export async function importMissingFromVibixIndex(options: {
 
       let videoToSave = fromPrismaJson<Parameters<typeof saveVibixVideo>[0]>(row.rawJson);
       let lookup: Awaited<ReturnType<typeof getVibixVideoByKpIdResult>> | null = null;
-      if (isRealKpId(row.kpId)) {
+
+      // Для массовой догрузки не бьём /kp/{kpId} по каждой записи: /links уже дал
+      // доступную карточку. Detail-запрос используем только если raw /links отсутствует.
+      if (!videoToSave && isRealKpId(row.kpId)) {
         lookup = await getVibixVideoByKpIdResult(row.kpId);
-        if (lookup.video) videoToSave = { ...(videoToSave ?? {}), ...lookup.video, category_id: row.categoryId } as Parameters<typeof saveVibixVideo>[0];
+        if (lookup.video) videoToSave = lookup.video as Parameters<typeof saveVibixVideo>[0];
       }
-      if (!lookup?.video && videoToSave) videoToSave = { ...videoToSave, category_id: row.categoryId } as Parameters<typeof saveVibixVideo>[0];
+      if (videoToSave) videoToSave = { ...videoToSave, category_id: row.categoryId } as Parameters<typeof saveVibixVideo>[0];
 
       if (lookup?.rateLimited || lookup?.requestFailed) {
         const status = lookup.error?.status ?? null;

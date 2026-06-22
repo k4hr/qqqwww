@@ -1,14 +1,19 @@
 import Link from "next/link";
 import { getVibixCatalogDashboardData } from "@/lib/vibix-catalog/catalog-audit";
+import { getLatestVibixCatalogMagicJob } from "@/lib/vibix-catalog/catalog-magic-sync";
 import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
 import {
   buildVibixIndexAction,
   buildVibixPlayableLinksIndexAction,
+  cancelVibixCatalogMagicAction,
   importMissingFromVibixAction,
   recalculateCatalogKindsAction,
+  restartVibixCatalogMagicAction,
+  runVibixCatalogMagicOnceAction,
   refreshVibixCatalogAuditAction,
   refreshVibixReferencesAction,
   refreshVibixTotalsAction,
+  startVibixCatalogMagicAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +46,7 @@ function date(value?: Date | string | null) {
 export default async function AdminCatalogPage({ searchParams }: Props) {
   const params = await searchParams;
   const actionResult = parseResult(params.result);
-  const data = await getVibixCatalogDashboardData();
+  const [data, magicJob] = await Promise.all([getVibixCatalogDashboardData(), getLatestVibixCatalogMagicJob()]);
   const snapshotsByKey = new Map(data.snapshots.map((item) => [item.key, item]));
   const movieTotal = snapshotsByKey.get("movie_all")?.total ?? null;
   const serialTotal = snapshotsByKey.get("serial_all")?.total ?? null;
@@ -65,6 +70,46 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
           {actionResult.details ? <pre className="mt-3 max-h-72 overflow-auto rounded-lg bg-white/70 p-3 text-xs text-[#222]">{JSON.stringify(actionResult.details, null, 2)}</pre> : null}
         </div>
       ) : null}
+
+
+      <section className="admin-panel mt-5 overflow-hidden border-2 border-[#e50914] bg-gradient-to-br from-[#fff5f5] to-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-[#222]">ВОЛШЕБНАЯ ЗАГРУЗКА ВСЕГО VIBIX</h2>
+            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Одна кнопка создаёт фоновую задачу: обновляет справочники Vibix, строит доступный /links индекс для фильмов и сериалов, при 429 сама уходит на паузу, потом продолжает, догружает недостающее и пересчитывает каталог.</p>
+          </div>
+          <form action={startVibixCatalogMagicAction}>
+            <button className="h-14 rounded-2xl bg-[#e50914] px-6 text-lg font-black text-white shadow-lg shadow-red-200">Загрузить всё автоматически</button>
+          </form>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="rounded-2xl bg-[#f5f5f5] px-4 py-3"><div className="text-xs text-neutral-500">Статус</div><div className="mt-1 text-xl font-black text-[#222]">{magicJob?.status ?? "—"}</div></div>
+          <div className="rounded-2xl bg-[#f5f5f5] px-4 py-3"><div className="text-xs text-neutral-500">Этап</div><div className="mt-1 text-xl font-black text-[#222]">{magicJob?.currentStage ?? "—"}</div></div>
+          <div className="rounded-2xl bg-[#f5f5f5] px-4 py-3"><div className="text-xs text-neutral-500">Тип / page</div><div className="mt-1 text-xl font-black text-[#222]">{magicJob ? `${magicJob.currentType} / ${magicJob.nextPage}` : "—"}</div></div>
+          <Stat label="Проиндексировано" value={magicJob?.indexed ?? null} />
+          <Stat label="К догрузке найдено" value={magicJob?.missing ?? null} bad />
+          <Stat label="Импортировано" value={(magicJob?.imported ?? 0) + (magicJob?.updated ?? 0) || null} good />
+        </div>
+
+        {magicJob ? (
+          <div className="mt-4 rounded-2xl bg-white/80 p-4 text-sm text-[#222]">
+            <div><b>Сообщение:</b> {magicJob.message ?? "—"}</div>
+            <div className="mt-1"><b>Пауза до:</b> {date(magicJob.rateLimitUntil)}</div>
+            <div className="mt-1"><b>Ошибки:</b> {magicJob.failed} {magicJob.lastError ? <span className="text-red-700">— {magicJob.lastError.slice(0, 260)}</span> : null}</div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <form action={runVibixCatalogMagicOnceAction}><button className="h-12 w-full rounded-xl bg-[#333] px-4 font-bold text-white">Обработать шаг сейчас</button></form>
+          <form action={cancelVibixCatalogMagicAction}><button className="h-12 w-full rounded-xl border border-red-200 bg-white px-4 font-bold text-[#e50914]">Остановить</button></form>
+          <form action={restartVibixCatalogMagicAction}><button className="h-12 w-full rounded-xl border border-[#333] bg-white px-4 font-bold text-[#222]">Начать заново</button></form>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Чтобы оно реально работало без кликов, в Railway нужен отдельный service/worker со Start Command: <b>npm run vibix:catalog-worker</b>. Без worker кнопка только создаст задачу, а “Обработать шаг сейчас” будет делать один шаг вручную.
+        </div>
+      </section>
 
       <section className="mt-6 grid gap-5 xl:grid-cols-2">
         <div className="admin-panel p-5">

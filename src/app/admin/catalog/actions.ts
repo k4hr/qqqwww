@@ -12,6 +12,7 @@ import {
   refreshVibixReferences,
 } from "@/lib/vibix-catalog/catalog-audit";
 import type { VibixCatalogType } from "@/lib/vibix";
+import { cancelVibixCatalogMagicJob, runVibixCatalogMagicJobIteration, startVibixCatalogMagicJob } from "@/lib/vibix-catalog/catalog-magic-sync";
 
 function numberField(formData: FormData, name: string, fallback: number, min: number, max: number) {
   const value = Number(formData.get(name));
@@ -43,6 +44,27 @@ function redirectWithResult(result: unknown) {
   revalidatePath("/admin/catalog");
   const encoded = Buffer.from(JSON.stringify(result)).toString("base64url");
   redirect(`/admin/catalog?result=${encoded}`);
+}
+
+
+export async function startVibixCatalogMagicAction() {
+  const job = await startVibixCatalogMagicJob();
+  redirectWithResult({ ok: true, message: `Волшебная загрузка запущена. Статус: ${job.status}, этап: ${job.currentStage}. Worker продолжит сам.`, details: job });
+}
+
+export async function restartVibixCatalogMagicAction() {
+  const job = await startVibixCatalogMagicJob({ restart: true });
+  redirectWithResult({ ok: true, message: `Волшебная загрузка создана заново. Статус: ${job.status}, этап: ${job.currentStage}.`, details: job });
+}
+
+export async function runVibixCatalogMagicOnceAction() {
+  const result = await runVibixCatalogMagicJobIteration();
+  redirectWithResult(result);
+}
+
+export async function cancelVibixCatalogMagicAction() {
+  const job = await cancelVibixCatalogMagicJob();
+  redirectWithResult({ ok: true, message: job ? "Волшебная загрузка остановлена." : "Активной волшебной загрузки нет.", details: job });
 }
 
 export async function refreshVibixCatalogAuditAction() {
