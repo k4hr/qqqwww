@@ -113,6 +113,7 @@ async function getRunnableJob(options: { force?: boolean } = {}) {
   if (!job) return null;
 
   job = await resumeExpiredPausedJob(job);
+  if (!job) return null;
 
   if (!options.force && job.rateLimitUntil && job.rateLimitUntil.getTime() > Date.now()) {
     return job;
