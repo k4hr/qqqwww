@@ -12,8 +12,83 @@ const transliteration: Record<string, string> = {
   х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
 };
 
+const WORD_BOUNDARY_PATTERN = /[\s:;,.!?()\[\]{}<>«»"'`~|\\/\-_+–—]/;
+const SHORT_TOKEN_MAX_PREFIX_EXTRA = 2;
+
+// Небольшой словарь нужен не для “Тора”, а для всей логики рус/англ франшиз.
+// Поиск всё равно сначала ранжирует точные title matches, а алиасы только помогают найти оригинальные названия.
+const SEARCH_ALIASES: Record<string, string[]> = {
+  "тор": ["thor"],
+  "халк": ["hulk"],
+  "мстители": ["avengers"],
+  "человек паук": ["spider man", "spider-man", "spiderman"],
+  "паук": ["spider man", "spider-man"],
+  "железный человек": ["iron man"],
+  "железный": ["iron man"],
+  "капитан америка": ["captain america"],
+  "черная вдова": ["black widow"],
+  "чёрная вдова": ["black widow"],
+  "черная пантера": ["black panther"],
+  "чёрная пантера": ["black panther"],
+  "доктор стрэндж": ["doctor strange", "dr strange"],
+  "доктор стрендж": ["doctor strange", "dr strange"],
+  "стражи галактики": ["guardians of the galaxy"],
+  "дэдпул": ["deadpool"],
+  "дедпул": ["deadpool"],
+  "росомаха": ["wolverine"],
+  "люди икс": ["x men", "x-men"],
+  "икс мен": ["x men", "x-men"],
+  "бэтмен": ["batman"],
+  "бетмен": ["batman"],
+  "супермен": ["superman"],
+  "джокер": ["joker"],
+  "флэш": ["flash"],
+  "флеш": ["flash"],
+  "аквамен": ["aquaman"],
+  "чудо женщина": ["wonder woman"],
+  "гарри поттер": ["harry potter"],
+  "поттер": ["harry potter", "potter"],
+  "властелин колец": ["lord of the rings"],
+  "хоббит": ["hobbit"],
+  "звездные войны": ["star wars"],
+  "звёздные войны": ["star wars"],
+  "пираты карибского моря": ["pirates of the caribbean"],
+  "форсаж": ["fast and furious", "fast furious"],
+  "миссия невыполнима": ["mission impossible"],
+  "терминатор": ["terminator"],
+  "матрица": ["matrix"],
+  "аватар": ["avatar"],
+  "интерстеллар": ["interstellar"],
+  "начало": ["inception"],
+  "игра престолов": ["game of thrones"],
+  "престолов": ["game of thrones"],
+  "ходячие мертвецы": ["walking dead", "the walking dead"],
+  "извне": ["from"],
+  "во все тяжкие": ["breaking bad"],
+  "лучше звоните солу": ["better call saul"],
+  "очень странные дела": ["stranger things"],
+  "пацаны": ["the boys"],
+};
+
+for (const [russian, aliases] of Object.entries({ ...SEARCH_ALIASES })) {
+  for (const alias of aliases) {
+    const normalizedAlias = normalizeRawSearchText(alias);
+    SEARCH_ALIASES[normalizedAlias] = Array.from(new Set([...(SEARCH_ALIASES[normalizedAlias] ?? []), russian]));
+  }
+}
+
+function normalizeRawSearchText(value: string) {
+  return value
+    .toLocaleLowerCase("ru-RU")
+    .replaceAll("ё", "е")
+    .replace(/&/g, " and ")
+    .replace(/[^a-zа-я0-9]+/gi, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 export function normalizeSearchQuery(query: string) {
-  return query.toLocaleLowerCase("ru-RU").replaceAll("ё", "е").replace(/[^a-zа-я0-9]+/gi, " ").trim().replace(/\s+/g, " ");
+  return normalizeRawSearchText(query);
 }
 
 export function tokenizeSearchQuery(query: string) {
@@ -24,26 +99,100 @@ export function transliterateSearchQuery(query: string) {
   return normalizeSearchQuery(query).split("").map((letter) => transliteration[letter] ?? letter).join("");
 }
 
-function tokenWhere(token: string): Prisma.MovieWhereInput {
-  const transliterated = transliterateSearchQuery(token);
-  const textFields: Prisma.MovieWhereInput[] = [
-    { titleRu: { contains: token, mode: "insensitive" } },
-    { titleOriginal: { contains: token, mode: "insensitive" } },
-    { description: { contains: token, mode: "insensitive" } },
-    { country: { contains: token, mode: "insensitive" } },
-    { kinopoiskId: { contains: token, mode: "insensitive" } },
-    { imdbId: { contains: token, mode: "insensitive" } },
-    { genres: { some: { genre: { name: { contains: token, mode: "insensitive" } } } } },
+function addUnique(target: string[], value: string | null | undefined) {
+  const normalized = normalizeSearchQuery(value ?? "");
+  if (normalized && !target.includes(normalized)) target.push(normalized);
+}
+
+function buildSearchVariants(query: string) {
+  const variants: string[] = [];
+  const normalized = normalizeSearchQuery(query);
+  addUnique(variants, normalized);
+  addUnique(variants, transliterateSearchQuery(normalized));
+
+  for (const alias of SEARCH_ALIASES[normalized] ?? []) addUnique(variants, alias);
+  for (const token of tokenizeSearchQuery(normalized)) {
+    for (const alias of SEARCH_ALIASES[token] ?? []) addUnique(variants, alias);
+  }
+
+  return variants.slice(0, 12);
+}
+
+function isShortSingleToken(query: string) {
+  const tokens = tokenizeSearchQuery(query);
+  return tokens.length === 1 && tokens[0].length <= 3;
+}
+
+type SearchTextField = "titleRu" | "titleOriginal" | "slug";
+
+function textFieldWhere(field: SearchTextField, condition: Prisma.StringFilter<"Movie">): Prisma.MovieWhereInput {
+  if (field === "titleRu") return { titleRu: condition };
+  if (field === "titleOriginal") return { titleOriginal: condition };
+  return { slug: condition };
+}
+
+function titleFieldWhere(value: string, relaxedContains: boolean): Prisma.MovieWhereInput[] {
+  const normalized = normalizeSearchQuery(value);
+  if (!normalized) return [];
+  const boundaryQueries = [
+    ` ${normalized}`,
+    `-${normalized}`,
+    `: ${normalized}`,
+    `. ${normalized}`,
+    `, ${normalized}`,
+    `«${normalized}`,
+    `"${normalized}`,
+    `(${normalized}`,
   ];
-  if (transliterated !== token) textFields.push({ titleOriginal: { contains: transliterated, mode: "insensitive" } });
-  if (/^(19|20)\d{2}$/.test(token)) textFields.push({ year: Number(token) });
-  return { OR: textFields };
+
+  const fields: SearchTextField[] = ["titleRu", "titleOriginal", "slug"];
+  const where: Prisma.MovieWhereInput[] = [];
+
+  for (const field of fields) {
+    where.push(textFieldWhere(field, { equals: normalized, mode: "insensitive" }));
+    where.push(textFieldWhere(field, { startsWith: normalized, mode: "insensitive" }));
+    for (const boundaryValue of boundaryQueries) where.push(textFieldWhere(field, { contains: boundaryValue, mode: "insensitive" }));
+    if (relaxedContains) where.push(textFieldWhere(field, { contains: normalized, mode: "insensitive" }));
+  }
+
+  return where;
+}
+
+function idWhere(query: string): Prisma.MovieWhereInput[] {
+  const normalized = normalizeSearchQuery(query);
+  const compact = normalized.replace(/\s+/g, "");
+  const where: Prisma.MovieWhereInput[] = [];
+  if (/^tt\d{4,}$/i.test(compact)) where.push({ imdbId: { equals: compact, mode: "insensitive" } });
+  if (/^\d{3,}$/.test(compact)) {
+    where.push({ kinopoiskId: { equals: compact, mode: "insensitive" } });
+    where.push({ tmdbId: { equals: compact, mode: "insensitive" } });
+    const maybeVibixId = Number(compact);
+    if (Number.isSafeInteger(maybeVibixId)) where.push({ vibixId: maybeVibixId });
+  }
+  if (/^(19|20)\d{2}$/.test(compact)) where.push({ year: Number(compact) });
+  return where;
+}
+
+function metadataWhere(query: string): Prisma.MovieWhereInput[] {
+  const normalized = normalizeSearchQuery(query);
+  if (normalized.length < 4) return [];
+  return [
+    { genres: { some: { genre: { name: { equals: normalized, mode: "insensitive" } } } } },
+    { genres: { some: { genre: { name: { startsWith: normalized, mode: "insensitive" } } } } },
+    { country: { contains: normalized, mode: "insensitive" } },
+  ];
 }
 
 export function buildSearchWhere(query: string): Prisma.MovieWhereInput {
-  const tokens = tokenizeSearchQuery(query);
-  if (!tokens.length) return {};
-  return { OR: tokens.map(tokenWhere) };
+  const variants = buildSearchVariants(query);
+  if (!variants.length) return {};
+  const relaxedContains = !isShortSingleToken(query);
+  const OR = [
+    ...idWhere(query),
+    ...variants.flatMap((variant) => titleFieldWhere(variant, relaxedContains)),
+    ...metadataWhere(query),
+  ];
+  return OR.length ? { OR } : {};
 }
 
 function editDistance(left: string, right: string) {
@@ -64,34 +213,127 @@ function editDistance(left: string, right: string) {
   return previous[right.length];
 }
 
-export function scoreSearchResult(movie: SearchMovie, query: string) {
-  const normalized = normalizeSearchQuery(query);
-  const tokens = tokenizeSearchQuery(query);
-  if (!normalized || !tokens.length) return 0;
-  const title = normalizeSearchQuery(movie.titleRu);
-  const original = normalizeSearchQuery(movie.titleOriginal ?? "");
-  const titleWords = `${title} ${original}`.split(" ").filter(Boolean);
-  const searchable = normalizeSearchQuery([
-    movie.titleRu, movie.titleOriginal, movie.description, movie.country,
-    movie.kinopoiskId, movie.imdbId, movie.year,
-    ...movie.genres.map((item) => item.genre.name),
-  ].filter(Boolean).join(" "));
+function splitWords(text: string) {
+  return normalizeSearchQuery(text).split(" ").filter(Boolean);
+}
+
+function hasBoundaryAfter(text: string, position: number, phrase: string) {
+  const next = text[position + phrase.length];
+  return !next || WORD_BOUNDARY_PATTERN.test(next);
+}
+
+function hasBoundaryBefore(text: string, position: number) {
+  const previous = text[position - 1];
+  return !previous || WORD_BOUNDARY_PATTERN.test(previous);
+}
+
+function phraseAtWordBoundary(text: string, phrase: string) {
+  if (!text || !phrase) return false;
+  let fromIndex = 0;
+  while (fromIndex <= text.length) {
+    const position = text.indexOf(phrase, fromIndex);
+    if (position < 0) return false;
+    if (hasBoundaryBefore(text, position) && hasBoundaryAfter(text, position, phrase)) return true;
+    fromIndex = position + 1;
+  }
+  return false;
+}
+
+function phraseStartsAtBoundary(text: string, phrase: string) {
+  if (!text || !phrase) return false;
+  return text === phrase || (text.startsWith(phrase) && hasBoundaryAfter(text, 0, phrase));
+}
+
+function isAllowedShortPrefix(token: string, word: string) {
+  if (!word.startsWith(token)) return false;
+  if (token.length >= 4) return true;
+  return word.length <= token.length + SHORT_TOKEN_MAX_PREFIX_EXTRA;
+}
+
+function firstNumber(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function popularityBoost(movie: SearchMovie) {
+  const rating = Math.max(firstNumber(movie.kpRating), firstNumber(movie.imdbRating), firstNumber(movie.tmdbRating));
+  const votes = Math.max(firstNumber(movie.kpVotes), firstNumber(movie.imdbVotes), firstNumber(movie.tmdbVotes));
+  const voteBoost = votes > 0 ? Math.min(18, Math.log10(votes + 1) * 2.2) : 0;
+  const scoreBoost = Math.max(firstNumber(movie.homeScore), firstNumber(movie.catalogScore), firstNumber(movie.popularScore), firstNumber(movie.topScore)) / 12;
+  return Math.min(35, rating + voteBoost + scoreBoost);
+}
+
+function scoreOneTextField(text: string, variant: string, tokens: string[], exactWeight: number, prefixWeight: number, wordWeight: number) {
+  const normalizedText = normalizeSearchQuery(text);
+  if (!normalizedText || !variant) return 0;
+  const words = splitWords(normalizedText);
   let score = 0;
 
-  if (title === normalized || original === normalized) score += 140;
-  else if (title.startsWith(normalized) || original.startsWith(normalized)) score += 95;
-  else if (title.includes(normalized) || original.includes(normalized)) score += 75;
+  if (normalizedText === variant) score += exactWeight;
+  else if (phraseStartsAtBoundary(normalizedText, variant)) score += prefixWeight;
+  else if (phraseAtWordBoundary(normalizedText, variant)) score += wordWeight;
 
-  for (const token of tokens) {
-    if (titleWords.includes(token)) score += 24;
-    else if (titleWords.some((word) => word.startsWith(token) || token.startsWith(word))) score += 15;
-    else if (token.length >= 4 && titleWords.some((word) => editDistance(token, word) <= (token.length >= 7 ? 2 : 1))) score += 12;
-    else if (searchable.includes(token)) score += 5;
+  if (tokens.length) {
+    let matchedTokens = 0;
+    for (const token of tokens) {
+      const exactWord = words.includes(token);
+      const prefixWord = words.some((word) => isAllowedShortPrefix(token, word));
+      const fuzzyWord = token.length >= 4 && words.some((word) => editDistance(token, word) <= (token.length >= 7 ? 2 : 1));
+      if (exactWord) {
+        matchedTokens += 1;
+        score += 22;
+      } else if (prefixWord) {
+        matchedTokens += 1;
+        score += token.length <= 3 ? 10 : 15;
+      } else if (fuzzyWord) {
+        matchedTokens += 1;
+        score += 8;
+      }
+    }
+    if (matchedTokens === tokens.length) score += tokens.length >= 2 ? 28 : 12;
   }
-  if (tokens.every((token) => titleWords.some((word) => word === token || editDistance(token, word) <= 2))) score += 35;
-  if (tokens.some((token) => token === String(movie.year))) score += 18;
-  if (normalized === normalizeSearchQuery(movie.kinopoiskId ?? "") || normalized === normalizeSearchQuery(movie.imdbId ?? "")) score += 120;
-  score += Math.max(movie.kpRating ?? 0, movie.imdbRating ?? 0);
+
+  return score;
+}
+
+export function scoreSearchResult(movie: SearchMovie, query: string) {
+  const normalized = normalizeSearchQuery(query);
+  const variants = buildSearchVariants(normalized);
+  const tokens = tokenizeSearchQuery(normalized);
+  if (!normalized || !tokens.length || !variants.length) return 0;
+
+  let score = 0;
+  const idQuery = normalized.replace(/\s+/g, "");
+  if (idQuery && idQuery === normalizeSearchQuery(movie.kinopoiskId ?? "")) score += 260;
+  if (idQuery && idQuery === normalizeSearchQuery(movie.imdbId ?? "")) score += 260;
+  if (idQuery && idQuery === normalizeSearchQuery(movie.tmdbId ?? "")) score += 190;
+  if (/^\d+$/.test(idQuery) && movie.vibixId === Number(idQuery)) score += 190;
+
+  for (const variant of variants) {
+    const variantTokens = tokenizeSearchQuery(variant);
+    const aliasPenalty = variant === normalized ? 0 : 18;
+    score += Math.max(0, scoreOneTextField(movie.titleRu, variant, variantTokens, 210, 165, 132) - aliasPenalty);
+    score += Math.max(0, scoreOneTextField(movie.titleOriginal ?? "", variant, variantTokens, 185, 145, 112) - aliasPenalty);
+    score += Math.max(0, scoreOneTextField(movie.slug, variant, variantTokens, 135, 105, 85) - aliasPenalty);
+  }
+
+  if (tokens.some((token) => token === String(movie.year))) score += 40;
+
+  // Жанры/страны — только вторичный поиск. Они не должны обгонять совпадения по названию.
+  if (normalized.length >= 4) {
+    const genreWords = movie.genres.flatMap((item) => splitWords(item.genre.name));
+    if (tokens.some((token) => genreWords.includes(token))) score += 18;
+    if (movie.country && phraseAtWordBoundary(normalizeSearchQuery(movie.country), normalized)) score += 12;
+  }
+
+  // Защита от мусора типа “тор” внутри “доктор/торонто/история/шторм”.
+  if (isShortSingleToken(normalized) && score < 70) return 0;
+
+  if (score <= 0) return 0;
+  if (movie.vibixAvailable) score += 8;
+  if (movie.posterUrl) score += 5;
+  if (movie.isPublicVisible) score += 8;
+  if (movie.isHomeEligible || movie.isPopularEligible || movie.isTopEligible) score += 5;
+  score += popularityBoost(movie);
   return score;
 }
 
@@ -111,32 +353,54 @@ function filterWhere(filters: SearchFilters, hasQuery: boolean): Prisma.MovieWhe
   };
 }
 
+function uniqueMovies(movies: SearchMovie[]) {
+  return Array.from(new Map(movies.map((movie) => [movie.id, movie])).values());
+}
+
 export async function searchMovies(query: string, filters: SearchFilters = {}, limit = 48) {
   const normalized = normalizeSearchQuery(query);
   const baseWhere = filterWhere(filters, Boolean(normalized));
   if (!normalized) return [];
-  const take = Math.min(240, Math.max(80, limit * 8));
+
+  const take = Math.min(320, Math.max(100, limit * 10));
+  const strictWhere = buildSearchWhere(normalized);
   let candidates = await prisma.movie.findMany({
-    where: { AND: [baseWhere, buildSearchWhere(normalized)] },
+    where: { AND: [baseWhere, strictWhere] },
     include: searchInclude,
-    orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ isPublicVisible: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
     take,
   });
 
-  if (candidates.length < Math.min(12, limit)) {
-    const fallback = await prisma.movie.findMany({
-      where: baseWhere,
-      include: searchInclude,
-      orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }],
-      take: 240,
-    });
-    candidates = Array.from(new Map([...candidates, ...fallback].map((movie) => [movie.id, movie])).values());
+  // Для длинных запросов можно добрать metadata-результаты, но они всё равно будут ниже title matches по score.
+  if (!isShortSingleToken(normalized) && candidates.length < Math.min(16, limit)) {
+    const relaxedVariants = buildSearchVariants(normalized).filter((variant) => variant.length >= 4);
+    if (relaxedVariants.length) {
+      const relaxed = await prisma.movie.findMany({
+        where: {
+          AND: [
+            baseWhere,
+            {
+              OR: relaxedVariants.flatMap((variant) => [
+                { titleRu: { contains: variant, mode: "insensitive" } },
+                { titleOriginal: { contains: variant, mode: "insensitive" } },
+                { description: { contains: variant, mode: "insensitive" } },
+                { genres: { some: { genre: { name: { contains: variant, mode: "insensitive" } } } } },
+              ]),
+            },
+          ],
+        },
+        include: searchInclude,
+        orderBy: [{ isPublicVisible: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }],
+        take: Math.min(160, take),
+      });
+      candidates = uniqueMovies([...candidates, ...relaxed]);
+    }
   }
 
   return candidates
     .map((movie) => ({ movie, score: scoreSearchResult(movie, normalized) }))
-    .filter((item) => item.score >= 10)
-    .sort((a, b) => b.score - a.score || (b.movie.kpRating ?? 0) - (a.movie.kpRating ?? 0))
+    .filter((item) => item.score >= 70)
+    .sort((a, b) => b.score - a.score || popularityBoost(b.movie) - popularityBoost(a.movie) || (b.movie.year ?? 0) - (a.movie.year ?? 0))
     .slice(0, limit)
     .map((item) => item.movie);
 }
