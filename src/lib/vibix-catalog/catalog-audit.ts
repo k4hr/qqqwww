@@ -3,12 +3,14 @@ import { prisma } from "@/lib/prisma";
 import {
   getVibixKpIds,
   getVibixReferenceItems,
+  getVibixVideoByImdbIdResult,
   getVibixVideoByKpIdResult,
   getVibixVideoLinks,
   sleep,
   VIBIX_LINK_FIELDS,
   type VibixCatalogType,
   type VibixReferenceKind,
+  type VibixVideo,
 } from "@/lib/vibix";
 import { saveVibixVideo } from "@/lib/vibix-sync";
 import { VIBIX_AUDIT_FILTERS, VIBIX_CATEGORY_IDS, vibixFilterLabel } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
@@ -629,6 +631,247 @@ export async function importMissingFromVibixIndex(options: {
   }
 
   return result;
+}
+
+
+function normalizeSourceType(value?: string | null): VibixCatalogType {
+  const normalized = stringValue(value)?.toLowerCase() ?? "";
+  return ["serial", "series", "tv", "show", "series"].includes(normalized) ? "serial" : "movie";
+}
+
+function parseEmbedCode(value?: string | null) {
+  const embedCode = stringValue(value);
+  if (!embedCode) return { embedCode: null, vibixId: null as number | null, sourceType: null as VibixCatalogType | null };
+  const idMatch = embedCode.match(/data-id=["']?(\d+)["']?/i);
+  const typeMatch = embedCode.match(/data-type=["']?([a-z_\-]+)["']?/i);
+  return {
+    embedCode,
+    vibixId: idMatch ? intValue(idMatch[1]) : null,
+    sourceType: typeMatch ? normalizeSourceType(typeMatch[1]) : null,
+  };
+}
+
+function mergeManualVideo(base: VibixVideo | null, manual: Partial<VibixVideo>): VibixVideo | null {
+  const source = base ?? {} as VibixVideo;
+  const merged: VibixVideo = {
+    id: source.id ?? manual.id ?? null,
+    name: source.name ?? manual.name ?? null,
+    name_rus: source.name_rus ?? manual.name_rus ?? null,
+    name_eng: source.name_eng ?? manual.name_eng ?? null,
+    name_original: source.name_original ?? manual.name_original ?? null,
+    type: source.type ?? manual.type ?? null,
+    year: source.year ?? manual.year ?? null,
+    kp_id: source.kp_id ?? manual.kp_id ?? null,
+    kinopoisk_id: source.kinopoisk_id ?? manual.kinopoisk_id ?? null,
+    imdb_id: source.imdb_id ?? manual.imdb_id ?? null,
+    kp_rating: source.kp_rating ?? manual.kp_rating ?? null,
+    kp_votes: source.kp_votes ?? manual.kp_votes ?? null,
+    imdb_rating: source.imdb_rating ?? manual.imdb_rating ?? null,
+    imdb_votes: source.imdb_votes ?? manual.imdb_votes ?? null,
+    iframe_url: source.iframe_url ?? manual.iframe_url ?? null,
+    embed_code: source.embed_code ?? manual.embed_code ?? null,
+    persons: source.persons ?? manual.persons ?? null,
+    voiceovers: source.voiceovers ?? manual.voiceovers ?? null,
+    tags: source.tags ?? manual.tags ?? null,
+    poster_url: source.poster_url ?? manual.poster_url ?? null,
+    backdrop_url: source.backdrop_url ?? manual.backdrop_url ?? null,
+    quality: source.quality ?? manual.quality ?? null,
+    duration: source.duration ?? manual.duration ?? null,
+    genre: source.genre ?? manual.genre ?? null,
+    country: source.country ?? manual.country ?? null,
+    description: source.description ?? manual.description ?? null,
+    description_short: source.description_short ?? manual.description_short ?? null,
+    lgbt_content: source.lgbt_content ?? manual.lgbt_content ?? null,
+    updated_at: source.updated_at ?? manual.updated_at ?? null,
+    uploaded_at: source.uploaded_at ?? manual.uploaded_at ?? null,
+  };
+  return merged.id !== null || merged.name !== null || merged.name_rus !== null || merged.kp_id !== null || merged.imdb_id !== null || merged.embed_code !== null
+    ? merged
+    : null;
+}
+
+async function findLocalMovieByHints(input: {
+  kpId?: string | null;
+  imdbId?: string | null;
+  vibixId?: number | null;
+  title?: string | null;
+}) {
+  const or: Prisma.MovieWhereInput[] = [];
+  if (input.kpId) or.push({ kinopoiskId: input.kpId });
+  if (input.imdbId) or.push({ imdbId: input.imdbId });
+  if (input.vibixId !== null && input.vibixId !== undefined) or.push({ vibixId: input.vibixId });
+  const title = stringValue(input.title);
+  if (title) or.push({ titleRu: { contains: title, mode: "insensitive" } });
+  if (!or.length) return null;
+  return prisma.movie.findFirst({
+    where: { OR: or },
+    include: { genres: { include: { genre: true } } },
+    orderBy: [{ vibixAvailable: "desc" }, { isPublicVisible: "desc" }, { updatedAt: "desc" }],
+  });
+}
+
+function visibilityDiagnosis(movie: Awaited<ReturnType<typeof findLocalMovieByHints>>) {
+  if (!movie) return { exists: false, reasons: ["not_in_redfilm"] };
+  const reasons: string[] = [];
+  const hasPlayer = Boolean(stringValue(movie.vibixIframeUrl) || stringValue(movie.vibixEmbedCode));
+  if (!movie.isPublished) reasons.push("isPublished=false");
+  if (!movie.vibixAvailable) reasons.push("vibixAvailable=false");
+  if (!movie.isCatalogAllowed) reasons.push(`isCatalogAllowed=false${movie.catalogBlockReason ? `:${movie.catalogBlockReason}` : ""}`);
+  if (!movie.isPublicVisible) reasons.push("isPublicVisible=false");
+  if (!hasPlayer) reasons.push("missing_player");
+  if (!stringValue(movie.posterUrl)) reasons.push("missing_poster");
+  if (!/[а-яё]/iu.test(movie.titleRu)) reasons.push("titleRu_not_russian");
+  return {
+    exists: true,
+    id: movie.id,
+    titleRu: movie.titleRu,
+    slug: movie.slug,
+    url: `/film/${movie.slug}`,
+    type: movie.type,
+    year: movie.year,
+    kinopoiskId: movie.kinopoiskId,
+    imdbId: movie.imdbId,
+    vibixId: movie.vibixId,
+    vibixType: movie.vibixType,
+    vibixAvailable: movie.vibixAvailable,
+    isPublished: movie.isPublished,
+    isCatalogAllowed: movie.isCatalogAllowed,
+    catalogBlockReason: movie.catalogBlockReason,
+    isPublicVisible: movie.isPublicVisible,
+    isHomeEligible: movie.isHomeEligible,
+    isPopularEligible: movie.isPopularEligible,
+    isTopEligible: movie.isTopEligible,
+    hasPlayer,
+    hasPoster: Boolean(stringValue(movie.posterUrl)),
+    hasBackdrop: Boolean(stringValue(movie.backdropUrl)),
+    genres: movie.genres.map((item) => item.genre.name),
+    reasons,
+  };
+}
+
+export async function diagnoseVibixManualImport(input: {
+  kpId?: string | null;
+  imdbId?: string | null;
+  vibixId?: number | null;
+  embedCode?: string | null;
+  title?: string | null;
+  type?: string | null;
+}) {
+  const embed = parseEmbedCode(input.embedCode);
+  const kpId = stringValue(input.kpId);
+  const imdbId = stringValue(input.imdbId);
+  const vibixId = input.vibixId ?? embed.vibixId;
+  const sourceType = normalizeSourceType(input.type ?? embed.sourceType);
+  const local = await findLocalMovieByHints({ kpId, imdbId, vibixId, title: input.title });
+  const sources: Record<string, unknown> = {};
+
+  if (kpId) {
+    const lookup = await getVibixVideoByKpIdResult(kpId);
+    sources.kp = { found: Boolean(lookup.video), rateLimited: lookup.rateLimited, requestFailed: lookup.requestFailed, error: lookup.error };
+  }
+  if (imdbId) {
+    const lookup = await getVibixVideoByImdbIdResult(imdbId);
+    sources.imdb = { found: Boolean(lookup.video), rateLimited: lookup.rateLimited, requestFailed: lookup.requestFailed, error: lookup.error };
+  }
+  if (kpId) {
+    const links = await getVibixVideoLinks({ type: sourceType, page: 1, limit: 20, kpIds: [kpId] });
+    sources.linksByKp = { found: links.data.length, rateLimited: links.rateLimited, requestFailed: links.requestFailed, error: links.error, sample: links.data.slice(0, 3) };
+  }
+
+  return {
+    ok: true,
+    input: { kpId, imdbId, vibixId, sourceType, title: stringValue(input.title), hasEmbedCode: Boolean(embed.embedCode) },
+    local: visibilityDiagnosis(local),
+    sources,
+  };
+}
+
+export async function importVibixTitleManually(input: {
+  kpId?: string | null;
+  imdbId?: string | null;
+  vibixId?: number | null;
+  embedCode?: string | null;
+  title?: string | null;
+  year?: number | null;
+  type?: string | null;
+}) {
+  const embed = parseEmbedCode(input.embedCode);
+  const kpId = stringValue(input.kpId);
+  const imdbId = stringValue(input.imdbId);
+  const manualVibixId = input.vibixId ?? embed.vibixId;
+  const sourceType = normalizeSourceType(input.type ?? embed.sourceType);
+  const manual: Partial<VibixVideo> = {
+    id: manualVibixId,
+    name: stringValue(input.title),
+    name_rus: stringValue(input.title),
+    type: sourceType === "serial" ? "series" : "movie",
+    year: input.year ?? null,
+    kp_id: kpId,
+    kinopoisk_id: kpId,
+    imdb_id: imdbId,
+    embed_code: embed.embedCode,
+    iframe_url: null,
+  };
+
+  const before = await findLocalMovieByHints({ kpId, imdbId, vibixId: manualVibixId, title: input.title });
+  const attempts: string[] = [];
+  let video: VibixVideo | null = null;
+
+  if (kpId) {
+    const lookup = await getVibixVideoByKpIdResult(kpId);
+    attempts.push(`kp:${kpId}:${lookup.video ? "found" : lookup.rateLimited ? "rate_limited" : lookup.requestFailed ? "request_failed" : "not_found"}`);
+    if (lookup.rateLimited) return { ok: false, message: "Vibix rate limit on KP lookup", details: { lookup, attempts } };
+    if (lookup.video) video = lookup.video;
+  }
+
+  if (!video && imdbId) {
+    const lookup = await getVibixVideoByImdbIdResult(imdbId);
+    attempts.push(`imdb:${imdbId}:${lookup.video ? "found" : lookup.rateLimited ? "rate_limited" : lookup.requestFailed ? "request_failed" : "not_found"}`);
+    if (lookup.rateLimited) return { ok: false, message: "Vibix rate limit on IMDb lookup", details: { lookup, attempts } };
+    if (lookup.video) video = lookup.video;
+  }
+
+  if (!video && kpId) {
+    const links = await getVibixVideoLinks({ type: sourceType, page: 1, limit: 20, kpIds: [kpId] });
+    attempts.push(`links:kp:${kpId}:${links.data.length}`);
+    if (links.rateLimited) return { ok: false, message: "Vibix rate limit on /links lookup", details: { links, attempts } };
+    if (links.data[0]) video = links.data[0];
+  }
+
+  video = mergeManualVideo(video, manual);
+  if (!video) return { ok: false, message: "Не удалось получить данные Vibix и не хватает ручных данных.", details: { attempts } };
+
+  const hasTitle = stringValue(video.name_rus) || stringValue(video.name) || stringValue(video.name_eng) || stringValue(video.name_original);
+  const hasYear = intValue(video.year);
+  if (!hasTitle || !hasYear) {
+    return {
+      ok: false,
+      message: "Не хватает title/year. Укажи название и год вручную или проверь Vibix detail.",
+      details: { attempts, video },
+    };
+  }
+
+  const saved = await saveVibixVideo(video);
+  const movieId = "movieId" in saved ? saved.movieId : null;
+  const after = movieId ? await findLocalMovieByHints({ kpId, imdbId, vibixId: manualVibixId, title: input.title }) : null;
+
+  const indexWhereOr: Prisma.VibixCatalogIndexWhereInput[] = [];
+  if (kpId) indexWhereOr.push({ kpId });
+  if (imdbId) indexWhereOr.push({ imdbId });
+  if (manualVibixId !== null && manualVibixId !== undefined) indexWhereOr.push({ vibixId: manualVibixId });
+
+  if (movieId && indexWhereOr.length) {
+    await prisma.vibixCatalogIndex.updateMany({
+      where: { OR: indexWhereOr },
+      data: { importStatus: saved.status === "skipped" ? "SKIPPED" : "IMPORTED", importedMovieId: movieId, importedAt: new Date(), lastImportError: saved.status === "skipped" ? saved.reason : null },
+    });
+  }
+
+  return {
+    ok: saved.status !== "skipped",
+    message: saved.status === "skipped" ? `Vibix import skipped: ${saved.reason}` : `Импорт/обновление выполнены: ${saved.status}.`,
+    details: { attempts, before: visibilityDiagnosis(before), saved, after: visibilityDiagnosis(after) },
+  };
 }
 
 export async function getVibixCatalogDashboardData() {

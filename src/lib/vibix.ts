@@ -97,6 +97,7 @@ type VibixLinksParams = {
   countryIds?: number[];
   tagIds?: number[];
   voiceoverIds?: number[];
+  kpIds?: Array<number | string>;
   fields?: readonly string[];
   existKpId?: boolean | null;
   noAds?: boolean;
@@ -484,6 +485,10 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
   appendNumericArray(query, "country[]", params.countryIds);
   appendNumericArray(query, "tag[]", params.tagIds);
   appendNumericArray(query, "voiceover[]", params.voiceoverIds);
+  for (const kpId of params.kpIds ?? []) {
+    const normalized = String(kpId ?? "").trim();
+    if (/^\d+$/.test(normalized)) query.append("kp_id[]", normalized);
+  }
 
   if (params.existKpId !== undefined && params.existKpId !== null) query.set("exist_kp_id", params.existKpId ? "true" : "false");
   if (params.noAds !== undefined && params.noAds !== null) query.set("no_ads", params.noAds ? "true" : "false");

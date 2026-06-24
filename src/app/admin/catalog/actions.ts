@@ -6,7 +6,9 @@ import { recalculateAllCatalogScores } from "@/lib/catalog-score";
 import {
   buildVibixCatalogIndexBatch,
   buildVibixPlayableLinksIndexBatch,
+  diagnoseVibixManualImport,
   importMissingFromVibixIndex,
+  importVibixTitleManually,
   refreshVibixCatalogAudit,
   refreshVibixCatalogSnapshots,
   refreshVibixReferences,
@@ -65,6 +67,32 @@ export async function runVibixCatalogMagicOnceAction() {
 export async function cancelVibixCatalogMagicAction() {
   const job = await cancelVibixCatalogMagicJob();
   redirectWithResult({ ok: true, message: job ? "Волшебная загрузка остановлена." : "Активной волшебной загрузки нет.", details: job });
+}
+
+
+export async function diagnoseVibixManualImportAction(formData: FormData) {
+  const result = await diagnoseVibixManualImport({
+    kpId: optionalStringField(formData, "kpId"),
+    imdbId: optionalStringField(formData, "imdbId"),
+    vibixId: optionalNumberField(formData, "vibixId"),
+    embedCode: optionalStringField(formData, "embedCode"),
+    title: optionalStringField(formData, "title"),
+    type: optionalStringField(formData, "manualType"),
+  });
+  redirectWithResult({ ok: true, message: "Диагностика точечного импорта выполнена.", details: result });
+}
+
+export async function importVibixTitleManuallyAction(formData: FormData) {
+  const result = await importVibixTitleManually({
+    kpId: optionalStringField(formData, "kpId"),
+    imdbId: optionalStringField(formData, "imdbId"),
+    vibixId: optionalNumberField(formData, "vibixId"),
+    embedCode: optionalStringField(formData, "embedCode"),
+    title: optionalStringField(formData, "title"),
+    year: optionalNumberField(formData, "year"),
+    type: optionalStringField(formData, "manualType"),
+  });
+  redirectWithResult(result);
 }
 
 export async function refreshVibixCatalogAuditAction() {

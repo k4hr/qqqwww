@@ -7,7 +7,9 @@ import {
   buildVibixIndexAction,
   buildVibixPlayableLinksIndexAction,
   cancelVibixCatalogMagicAction,
+  diagnoseVibixManualImportAction,
   importMissingFromVibixAction,
+  importVibixTitleManuallyAction,
   recalculateCatalogKindsAction,
   restartVibixCatalogMagicAction,
   runVibixCatalogMagicOnceAction,
@@ -113,6 +115,31 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
 
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           Чтобы оно реально работало без кликов, в Railway нужен отдельный service/worker со Start Command: <b>npm run vibix:catalog-worker</b>. Без worker кнопка только создаст задачу, а “Продолжить сейчас” снимет паузу и сделает один шаг вручную.
+        </div>
+      </section>
+
+
+      <section className="admin-panel mt-5 border-2 border-sky-200 bg-sky-50 p-5">
+        <h2 className="text-2xl font-black text-[#222]">Точечный импорт / диагностика Vibix</h2>
+        <p className="mt-2 text-sm text-sky-950">
+          Для важных тайтлов, которые есть в Vibix, но не видны на REDFILM. Пример: Игра престолов — type serial/series, KP ID 464963, IMDb tt0944947, Vibix ID 269.
+        </p>
+        <form className="mt-4 grid gap-3 lg:grid-cols-6" action={importVibixTitleManuallyAction}>
+          <Select label="Тип" name="manualType" options={[["serial", "Сериал / series"], ["movie", "Фильм / movie"]]} />
+          <TextInput label="KP ID" name="kpId" defaultValue="464963" />
+          <TextInput label="IMDb ID" name="imdbId" defaultValue="tt0944947" />
+          <Input label="Vibix ID" name="vibixId" defaultValue="269" min="1" max="10000000" />
+          <Input label="Год fallback" name="year" defaultValue="2011" min="1880" max="2200" />
+          <TextInput label="Название fallback" name="title" defaultValue="Игра престолов" />
+          <label className="text-sm font-bold text-[#333] lg:col-span-6">
+            Embed code fallback
+            <textarea className="mt-2 min-h-20 w-full rounded-xl border border-[#ddd] bg-white px-4 py-3 text-[#222]" name="embedCode" defaultValue={'<ins data-publisher-id="678353780" data-type="series" data-id="269"></ins>'} />
+          </label>
+          <button className="h-12 rounded-xl bg-[#e50914] px-5 font-bold text-white lg:col-span-3">Импортировать / обновить тайтл</button>
+          <button className="h-12 rounded-xl border border-[#333] bg-white px-5 font-bold text-[#222] lg:col-span-3" formAction={diagnoseVibixManualImportAction}>Только проверить, почему не видно</button>
+        </form>
+        <div className="mt-4 rounded-2xl border border-sky-200 bg-white p-4 text-sm text-sky-950">
+          Алгоритм: сначала проверяет REDFILM по KP/IMDb/Vibix ID, потом Vibix detail <b>/kp</b>, <b>/imdb</b>, fallback <b>/links?kp_id[]=...</b>. Если Vibix detail не даёт embed, берёт embed из поля выше и сохраняет нормальный player.
         </div>
       </section>
 
@@ -293,6 +320,11 @@ function Stat({ label, value, accent, good, bad }: { label: string; value?: numb
 
 function Input({ label, name, defaultValue, min, max }: { label: string; name: string; defaultValue: string; min: string; max: string }) {
   return <label className="text-sm font-bold text-[#333]">{label}<input className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222]" name={name} type="number" defaultValue={defaultValue} min={min} max={max} /></label>;
+}
+
+
+function TextInput({ label, name, defaultValue }: { label: string; name: string; defaultValue?: string }) {
+  return <label className="text-sm font-bold text-[#333]">{label}<input className="mt-2 h-12 w-full rounded-xl border border-[#ddd] bg-white px-4 text-[#222]" name={name} type="text" defaultValue={defaultValue ?? ""} /></label>;
 }
 
 function Select({ label, name, options }: { label: string; name: string; options: [string, string][] }) {
