@@ -5,6 +5,7 @@ import {
   buildVibixPlayableLinksIndexBatch,
   importMissingFromVibixIndex,
   refreshVibixCatalogAudit,
+  verifyAndRepairImportantVibixCoverage,
 } from "@/lib/vibix-catalog/catalog-audit";
 
 const ACTIVE_STATUSES = ["QUEUED", "RUNNING", "PAUSED"];
@@ -89,6 +90,49 @@ export async function startVibixCatalogMagicJob(options: { restart?: boolean } =
       importBatchSize: envInt("VIBIX_CATALOG_IMPORT_BATCH_SIZE", 100, 10, 500),
       pageDelayMs: envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 2500, 250, 30_000),
       message: "Задача создана. Worker сам обновит Vibix, построит /links индекс, догрузит недостающее и пересчитает каталог.",
+    },
+  });
+}
+
+export async function startVibixCoverageRepairJob(options: { restart?: boolean } = {}) {
+  if (options.restart) {
+    await prisma.vibixCatalogAutoJob.updateMany({
+      where: { status: { in: ACTIVE_STATUSES } },
+      data: { status: "CANCELED", finishedAt: new Date(), message: "Остановлено перед автопочинкой покрытия." },
+    });
+  }
+
+  const active = await prisma.vibixCatalogAutoJob.findFirst({
+    where: { status: { in: ACTIVE_STATUSES } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (active) {
+    return prisma.vibixCatalogAutoJob.update({
+      where: { id: active.id },
+      data: {
+        status: "QUEUED",
+        currentStage: "VERIFY_COVERAGE",
+        currentType: "both",
+        nextPage: 1,
+        rateLimitUntil: null,
+        message: "Переключаю активную задачу на автопроверку важных тайтлов Vibix: ложные совпадения, скрытые, wrong type/player.",
+        lastError: null,
+      },
+    });
+  }
+
+  return prisma.vibixCatalogAutoJob.create({
+    data: {
+      status: "QUEUED",
+      mode: "COVERAGE_REPAIR",
+      currentStage: "VERIFY_COVERAGE",
+      currentType: "both",
+      nextPage: 1,
+      pagesPerRun: envInt("VIBIX_CATALOG_PAGES_PER_RUN", 15, 1, 30),
+      importBatchSize: envInt("VIBIX_CATALOG_IMPORT_BATCH_SIZE", 100, 10, 500),
+      pageDelayMs: envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 2500, 250, 30_000),
+      message: "Задача автопочинки создана. Worker проверит /links индекс, импортирует важные отсутствующие, поправит type/player и пересчитает каталог.",
     },
   });
 }
@@ -304,8 +348,9 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
         const updated = await prisma.vibixCatalogAutoJob.update({
           where: { id: job.id },
           data: {
-            currentStage: "RECALC",
-            message: "Недостающих записей из /links индекса больше нет. Перехожу к пересчёту каталога и типов.",
+            currentStage: "VERIFY_COVERAGE",
+            currentType: "both",
+            message: "Недостающих записей из /links индекса больше нет. Проверяю важные тайтлы на ложные совпадения, скрытие и неправильный type/player.",
           },
         });
         return { ok: true, message: updated.message, job: updated, details: result };
@@ -315,6 +360,42 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
         where: { id: job.id },
         data: {
           message: `Догрузка: импорт ${result.imported}, обновлено ${result.updated}, пропущено ${result.skipped + result.detailMissing}, ошибок ${result.failed}. Продолжаю следующий батч автоматически.`,
+          lastError: result.failed > 0 ? failedText.slice(0, 2_000) : null,
+        },
+      });
+      return { ok: result.failed === 0, message: updated.message, job: updated, details: result };
+    }
+
+    if (job.currentStage === "VERIFY_COVERAGE") {
+      const result = await verifyAndRepairImportantVibixCoverage({ limit: job.importBatchSize });
+      await prisma.vibixCatalogAutoJob.update({
+        where: { id: job.id },
+        data: {
+          imported: { increment: result.imported },
+          updated: { increment: result.updated },
+          skipped: { increment: result.verified + result.lowValue },
+          failed: { increment: result.failed },
+          loops: { increment: 1 },
+        },
+      });
+
+      if (result.requested === 0) {
+        const updated = await prisma.vibixCatalogAutoJob.update({
+          where: { id: job.id },
+          data: {
+            currentStage: "RECALC",
+            message: "Автопроверка важных тайтлов завершена. Перехожу к пересчёту каталога и типов.",
+            lastError: null,
+          },
+        });
+        return { ok: true, message: updated.message, job: updated, details: result };
+      }
+
+      const failedText = result.errors.join("\n");
+      const updated = await prisma.vibixCatalogAutoJob.update({
+        where: { id: job.id },
+        data: {
+          message: `Автопроверка покрытия: проверено ${result.requested}, auto-repair ${result.repaired}, импорт ${result.imported}, обновлено ${result.updated}, verified ${result.verified}, low-value skip ${result.lowValue}, ошибок ${result.failed}. Продолжаю следующий батч автоматически.`,
           lastError: result.failed > 0 ? failedText.slice(0, 2_000) : null,
         },
       });

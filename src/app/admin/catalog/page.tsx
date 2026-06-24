@@ -17,6 +17,7 @@ import {
   refreshVibixReferencesAction,
   refreshVibixTotalsAction,
   startVibixCatalogMagicAction,
+  startVibixCoverageRepairAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -79,7 +80,7 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 className="text-2xl font-black text-[#222]">ВОЛШЕБНАЯ ЗАГРУЗКА ВСЕГО VIBIX</h2>
-            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Одна кнопка создаёт фоновую задачу: обновляет справочники Vibix, строит доступный /links индекс для фильмов и сериалов, при 429 сама уходит на паузу, потом продолжает, догружает недостающее и пересчитывает каталог.</p>
+            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Одна кнопка создаёт фоновую задачу: обновляет справочники Vibix, строит доступный /links индекс для фильмов и сериалов, при 429 сама уходит на паузу, потом продолжает, догружает недостающее, автоматически чинит важные пропущенные/скрытые тайтлы и пересчитывает каталог.</p>
           </div>
           <form action={startVibixCatalogMagicAction}>
             <button className="h-14 rounded-2xl bg-[#e50914] px-6 text-lg font-black text-white shadow-lg shadow-red-200">Загрузить всё автоматически</button>
@@ -107,8 +108,9 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
           </div>
         ) : null}
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
           <form action={runVibixCatalogMagicOnceAction}><button className="h-12 w-full rounded-xl bg-[#333] px-4 font-bold text-white">Продолжить сейчас</button></form>
+          <form action={startVibixCoverageRepairAction}><button className="h-12 w-full rounded-xl bg-[#e50914] px-4 font-bold text-white">Починить важные автоматически</button></form>
           <form action={cancelVibixCatalogMagicAction}><button className="h-12 w-full rounded-xl border border-red-200 bg-white px-4 font-bold text-[#e50914]">Остановить</button></form>
           <form action={restartVibixCatalogMagicAction}><button className="h-12 w-full rounded-xl border border-[#333] bg-white px-4 font-bold text-[#222]">Начать заново</button></form>
         </div>
@@ -200,6 +202,9 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
           <Stat label="Сырой get_kpids" value={data.index.rawOnly} />
           <Stat label="Detail 404" value={data.index.detailMissing} bad />
           <Stat label="Импортировано индексом" value={data.index.imported} good />
+          <Stat label="Auto-repair" value={data.index.autoRepaired} good />
+          <Stat label="Проверено exact" value={data.index.verifiedOk} />
+          <Stat label="Low-value skip" value={data.index.lowValueSkipped} />
           <Stat label="Ошибок импорта" value={data.index.failed} bad />
         </div>
 
@@ -250,7 +255,7 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
 
         <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="font-bold">Как пользоваться:</div>
-          <div className="mt-1">1) Обновить всё Vibix → 2) Строить именно доступный /links индекс для movie/serial → 3) Догружать недостающее → 4) Пересчитать категории. Сырой get_kpids не использовать для догрузки.</div>
+          <div className="mt-1">1) Обновить всё Vibix → 2) Строить именно доступный /links индекс для movie/serial → 3) Догружать недостающее → 4) Автопочинка важных тайтлов → 5) Пересчитать категории. Сырой get_kpids не использовать для догрузки.</div>
         </div>
       </section>
 

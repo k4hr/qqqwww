@@ -1,4 +1,4 @@
-import { ContentType, type Prisma } from "@prisma/client";
+import { ContentType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   getVibixKpIds,
@@ -634,6 +634,206 @@ export async function importMissingFromVibixIndex(options: {
 }
 
 
+type CoverageRepairStatus =
+  | "VERIFIED_OK"
+  | "AUTO_REPAIRED"
+  | "SKIP_LOW_VALUE"
+  | "MISSING_IMPORTABLE"
+  | "HIDDEN_LOCAL"
+  | "NEEDS_PLAYER_REPAIR"
+  | "NEEDS_TYPE_REPAIR"
+  | "FAILED";
+
+const COVERAGE_FINAL_STATUSES = ["VERIFIED_OK", "AUTO_REPAIRED", "SKIP_LOW_VALUE"];
+const COVERAGE_ACTION_STATUSES = ["MISSING", "PRESENT", "IMPORTED", "SKIPPED", "FAILED", "DETAIL_MISSING", "RAW_KPID", "UNKNOWN"];
+
+function numberFromRaw(value: unknown) {
+  if (value === null || value === undefined || value === "") return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function hasUsableRawForRepair(raw: Record<string, unknown> | null) {
+  if (!raw) return false;
+  return Boolean(videoTitle(raw) && intValue(raw.year) && videoHasPlayer(raw));
+}
+
+function isImportantVibixRow(raw: Record<string, unknown> | null) {
+  if (!raw) return false;
+  const rating = Math.max(numberFromRaw(raw.kp_rating), numberFromRaw(raw.imdb_rating));
+  const votes = Math.max(numberFromRaw(raw.kp_votes), numberFromRaw(raw.imdb_votes));
+  const title = `${videoTitle(raw) ?? ""} ${stringValue(raw.name_eng) ?? ""} ${stringValue(raw.name_original) ?? ""}`.toLocaleLowerCase("ru-RU");
+  const genreText = Array.isArray(raw.genre) ? raw.genre.join(" ").toLocaleLowerCase("ru-RU") : stringValue(raw.genre)?.toLocaleLowerCase("ru-RU") ?? "";
+  const franchiseMarkers = ["game of thrones", "игра престолов", "walking dead", "ходяч", "from", "извне", "interstellar", "интерстеллар", "marvel", "мстител", "harry potter", "гарри поттер", "lord of the rings", "властелин колец"];
+  const massGenre = ["боевик", "триллер", "драма", "фэнтези", "фантастика", "приключения", "криминал", "комедия", "action", "thriller", "drama", "fantasy", "adventure", "crime"].some((marker) => genreText.includes(marker));
+  const franchise = franchiseMarkers.some((marker) => title.includes(marker));
+  return franchise || votes >= 2_000 || (votes >= 100 && rating >= 6.6) || rating >= 7.4 || massGenre;
+}
+
+function expectedContentTypeFromRow(sourceType: string, raw: Record<string, unknown> | null) {
+  const typeText = stringValue(raw?.type)?.toLowerCase() ?? sourceType.toLowerCase();
+  if (["serial", "series", "tv", "show", "tv_series", "tv series"].includes(typeText)) return ContentType.SERIES;
+  return ContentType.MOVIE;
+}
+
+async function findExactLocalMovieForIndex(row: {
+  kpId: string;
+  imdbId: string | null;
+  vibixId: number | null;
+  title: string | null;
+  year: number | null;
+}, raw: Record<string, unknown> | null) {
+  const or: Prisma.MovieWhereInput[] = [];
+  const kpId = videoKpId(raw ?? {}) ?? (isRealKpId(row.kpId) ? row.kpId : null);
+  const imdbId = videoImdbId(raw ?? {}) ?? row.imdbId;
+  const vibixId = intValue(raw?.id) ?? row.vibixId;
+  if (kpId) or.push({ kinopoiskId: kpId });
+  if (imdbId) or.push({ imdbId });
+  if (vibixId !== null) or.push({ vibixId });
+
+  if (or.length) {
+    return prisma.movie.findFirst({
+      where: { OR: or },
+      include: { genres: { include: { genre: true } } },
+      orderBy: [{ vibixAvailable: "desc" }, { isPublicVisible: "desc" }, { updatedAt: "desc" }],
+    });
+  }
+
+  const title = videoTitle(raw ?? {}) ?? row.title;
+  const year = intValue(raw?.year) ?? row.year;
+  if (!title || !year) return null;
+  return prisma.movie.findFirst({
+    where: { titleRu: { equals: title, mode: "insensitive" }, year },
+    include: { genres: { include: { genre: true } } },
+    orderBy: [{ vibixAvailable: "desc" }, { isPublicVisible: "desc" }, { updatedAt: "desc" }],
+  });
+}
+
+function needsCoverageRepair(movie: Awaited<ReturnType<typeof findExactLocalMovieForIndex>>, sourceType: string, raw: Record<string, unknown> | null) {
+  if (!movie) return { needed: true, reason: "MISSING_IMPORTABLE" as CoverageRepairStatus };
+  const hasPlayer = Boolean(stringValue(movie.vibixIframeUrl) || stringValue(movie.vibixEmbedCode));
+  if (!hasPlayer && videoHasPlayer(raw ?? {})) return { needed: true, reason: "NEEDS_PLAYER_REPAIR" as CoverageRepairStatus };
+  const expectedType = expectedContentTypeFromRow(sourceType, raw);
+  if (movie.type !== expectedType) return { needed: true, reason: "NEEDS_TYPE_REPAIR" as CoverageRepairStatus };
+  if (!movie.isPublicVisible && isImportantVibixRow(raw)) return { needed: true, reason: "HIDDEN_LOCAL" as CoverageRepairStatus };
+  return { needed: false, reason: "VERIFIED_OK" as CoverageRepairStatus };
+}
+
+export async function verifyAndRepairImportantVibixCoverage(options: { limit?: number } = {}) {
+  const limit = Math.max(10, Math.min(300, Math.trunc(options.limit ?? 100)));
+  const rows = await prisma.vibixCatalogIndex.findMany({
+    where: {
+      indexSource: "links",
+      importStatus: { in: COVERAGE_ACTION_STATUSES },
+      rawJson: { not: Prisma.JsonNull },
+    },
+    orderBy: [
+      { importStatus: "asc" },
+      { sourcePage: "asc" },
+      { updatedAt: "asc" },
+    ],
+    take: limit,
+  });
+
+  const result = {
+    requested: rows.length,
+    verified: 0,
+    imported: 0,
+    updated: 0,
+    repaired: 0,
+    lowValue: 0,
+    hiddenLocal: 0,
+    playerRepair: 0,
+    typeRepair: 0,
+    failed: 0,
+    errors: [] as string[],
+  };
+
+  for (const row of rows) {
+    try {
+      const raw = fromPrismaJson<Record<string, unknown>>(row.rawJson);
+      const exactLocal = await findExactLocalMovieForIndex(row, raw);
+      const repair = needsCoverageRepair(exactLocal, row.sourceType, raw);
+
+      if (!repair.needed) {
+        await prisma.vibixCatalogIndex.update({
+          where: { id: row.id },
+          data: {
+            importStatus: "VERIFIED_OK",
+            importedMovieId: exactLocal?.id ?? row.importedMovieId,
+            importedAt: row.importedAt ?? new Date(),
+            lastImportError: null,
+          },
+        });
+        result.verified += 1;
+        continue;
+      }
+
+      if (!hasUsableRawForRepair(raw) || !isImportantVibixRow(raw)) {
+        await prisma.vibixCatalogIndex.update({
+          where: { id: row.id },
+          data: {
+            importStatus: "SKIP_LOW_VALUE",
+            importedMovieId: exactLocal?.id ?? row.importedMovieId,
+            lastImportError: repair.reason,
+          },
+        });
+        result.lowValue += 1;
+        continue;
+      }
+
+      const videoToSave = { ...raw, category_id: row.categoryId } as Parameters<typeof saveVibixVideo>[0];
+      const saved = await saveVibixVideo(videoToSave, exactLocal?.id);
+      const movieId = "movieId" in saved ? saved.movieId : exactLocal?.id ?? null;
+
+      if (saved.status === "skipped") {
+        await prisma.vibixCatalogIndex.update({
+          where: { id: row.id },
+          data: {
+            importStatus: repair.reason,
+            importedMovieId: movieId,
+            lastImportError: saved.reason,
+          },
+        });
+        result.failed += 1;
+        result.errors.push(`${row.kpId}: ${repair.reason}: ${saved.reason}`.slice(0, 500));
+        continue;
+      }
+
+      await prisma.vibixCatalogIndex.update({
+        where: { id: row.id },
+        data: {
+          importStatus: "AUTO_REPAIRED",
+          importedMovieId: movieId,
+          importedAt: new Date(),
+          detailAvailable: true,
+          detailCheckedAt: new Date(),
+          lastImportError: repair.reason,
+        },
+      });
+
+      if (saved.status === "imported") result.imported += 1;
+      else result.updated += 1;
+      result.repaired += 1;
+      if (repair.reason === "HIDDEN_LOCAL") result.hiddenLocal += 1;
+      if (repair.reason === "NEEDS_PLAYER_REPAIR") result.playerRepair += 1;
+      if (repair.reason === "NEEDS_TYPE_REPAIR") result.typeRepair += 1;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await prisma.vibixCatalogIndex.update({
+        where: { id: row.id },
+        data: { importStatus: "FAILED", lastImportError: message.slice(0, 2_000) },
+      });
+      result.failed += 1;
+      result.errors.push(`${row.kpId}: ${message}`.slice(0, 500));
+    }
+  }
+
+  return result;
+}
+
+
+
 function normalizeSourceType(value?: string | null): VibixCatalogType {
   const normalized = stringValue(value)?.toLowerCase() ?? "";
   return ["serial", "series", "tv", "show", "series"].includes(normalized) ? "serial" : "movie";
@@ -695,16 +895,30 @@ async function findLocalMovieByHints(input: {
   imdbId?: string | null;
   vibixId?: number | null;
   title?: string | null;
+  year?: number | null;
 }) {
-  const or: Prisma.MovieWhereInput[] = [];
-  if (input.kpId) or.push({ kinopoiskId: input.kpId });
-  if (input.imdbId) or.push({ imdbId: input.imdbId });
-  if (input.vibixId !== null && input.vibixId !== undefined) or.push({ vibixId: input.vibixId });
+  // Важное правило: похожее название НЕ означает, что тайтл уже есть.
+  // “Игра престолов” и “Игра престолов. Последний дозор” — разные записи,
+  // если KP/IMDb/Vibix ID не совпали. Поэтому сначала только строгие ID.
+  const exactOr: Prisma.MovieWhereInput[] = [];
+  if (input.kpId) exactOr.push({ kinopoiskId: input.kpId });
+  if (input.imdbId) exactOr.push({ imdbId: input.imdbId });
+  if (input.vibixId !== null && input.vibixId !== undefined) exactOr.push({ vibixId: input.vibixId });
+
+  if (exactOr.length) {
+    return prisma.movie.findFirst({
+      where: { OR: exactOr },
+      include: { genres: { include: { genre: true } } },
+      orderBy: [{ vibixAvailable: "desc" }, { isPublicVisible: "desc" }, { updatedAt: "desc" }],
+    });
+  }
+
   const title = stringValue(input.title);
-  if (title) or.push({ titleRu: { contains: title, mode: "insensitive" } });
-  if (!or.length) return null;
+  const year = input.year ?? null;
+  if (!title || !year) return null;
+
   return prisma.movie.findFirst({
-    where: { OR: or },
+    where: { titleRu: { equals: title, mode: "insensitive" }, year },
     include: { genres: { include: { genre: true } } },
     orderBy: [{ vibixAvailable: "desc" }, { isPublicVisible: "desc" }, { updatedAt: "desc" }],
   });
@@ -881,7 +1095,7 @@ export async function getVibixCatalogDashboardData() {
     prisma.vibixReferenceItem.groupBy({ by: ["kind"], _count: { _all: true } }),
     prisma.vibixCatalogIndex.findMany({ select: { kpId: true, imdbId: true, vibixId: true, importStatus: true, indexSource: true, importedMovieId: true } }),
     prisma.vibixCatalogIndex.findMany({
-      where: { importStatus: { in: ["MISSING", "DETAIL_MISSING", "FAILED"] } },
+      where: { importStatus: { in: ["MISSING", "MISSING_IMPORTABLE", "WRONG_LOCAL_MATCH", "HIDDEN_LOCAL", "NEEDS_PLAYER_REPAIR", "NEEDS_TYPE_REPAIR", "DETAIL_MISSING", "FAILED"] } },
       orderBy: [{ updatedAt: "desc" }],
       take: 30,
     }),
@@ -901,18 +1115,26 @@ export async function getVibixCatalogDashboardData() {
   let rawOnly = 0;
   let detailMissing = 0;
   let playableIndex = 0;
+  let autoRepaired = 0;
+  let verifiedOk = 0;
+  let lowValueSkipped = 0;
+
+  const presentStatuses = new Set(["PRESENT", "IMPORTED", "VERIFIED_OK", "AUTO_REPAIRED"]);
+  const missingStatuses = new Set(["MISSING", "MISSING_IMPORTABLE", "WRONG_LOCAL_MATCH", "HIDDEN_LOCAL", "NEEDS_PLAYER_REPAIR", "NEEDS_TYPE_REPAIR"]);
 
   for (const row of indexRows) {
     const existsNow = (isRealKpId(row.kpId) && localKpIds.has(row.kpId))
       || (row.imdbId ? localImdbIds.has(row.imdbId) : false)
       || (row.vibixId !== null ? localVibixIds.has(row.vibixId) : false)
       || Boolean(row.importedMovieId)
-      || row.importStatus === "PRESENT"
-      || row.importStatus === "IMPORTED";
+      || presentStatuses.has(row.importStatus);
     if (existsNow) present += 1;
     if (row.importStatus === "IMPORTED") imported += 1;
+    if (row.importStatus === "AUTO_REPAIRED") autoRepaired += 1;
+    if (row.importStatus === "VERIFIED_OK") verifiedOk += 1;
+    if (row.importStatus === "SKIP_LOW_VALUE") lowValueSkipped += 1;
     if (row.indexSource === "links") playableIndex += 1;
-    if (!existsNow && row.importStatus === "MISSING" && row.indexSource === "links") missing += 1;
+    if (!existsNow && missingStatuses.has(row.importStatus) && row.indexSource === "links") missing += 1;
     if (row.importStatus === "FAILED") failed += 1;
     if (row.importStatus === "DETAIL_MISSING") detailMissing += 1;
     if (!existsNow && row.indexSource !== "links" && ["RAW_KPID", "UNKNOWN", "MISSING"].includes(row.importStatus)) rawOnly += 1;
@@ -924,7 +1146,7 @@ export async function getVibixCatalogDashboardData() {
     my,
     snapshots,
     referenceCounts,
-    index: { total: indexRows.length, playable: playableIndex, rawOnly, missing, present, imported, failed, detailMissing, missingPreview },
+    index: { total: indexRows.length, playable: playableIndex, rawOnly, missing, present, imported, autoRepaired, verifiedOk, lowValueSkipped, failed, detailMissing, missingPreview },
     suggestedCategoryIds: VIBIX_CATEGORY_IDS,
     suggestedFilters: VIBIX_AUDIT_FILTERS.map((item) => ({
       ...item,

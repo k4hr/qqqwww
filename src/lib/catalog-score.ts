@@ -73,11 +73,29 @@ function isWeakFormat(movie: CatalogScoreMovie) {
   return shortMovie || includesAny(text, ["документаль", "documentary", "короткометраж", "short", "спецвыпуск", "special", "stand-up", "standup", "концерт", "телешоу", "talk show"]);
 }
 
-function isBlocked(movie: CatalogScoreMovie) {
+function isStrongMainstreamTitle(movie: CatalogScoreMovie) {
+  const rating = Math.max(movie.kpRating ?? 0, movie.imdbRating ?? 0, movie.tmdbRating ?? 0);
+  const votes = Math.max(movie.kpVotes ?? 0, movie.imdbVotes ?? 0, movie.tmdbVotes ?? 0);
+  return votes >= 50_000 || (votes >= 5_000 && rating >= 7.4) || franchiseBonus(movie) > 0;
+}
+
+function hasExplicitAdultSignal(movie: CatalogScoreMovie) {
   const text = `${movie.titleRu} ${movie.titleOriginal ?? ""} ${movie.description ?? ""} ${movie.vibixTags.join(" ")}`.toLocaleLowerCase("ru-RU");
-  return (movie.vibixLgbtContent ?? 0) > 0
-    || isAdultLikeTitle(movie)
-    || includesAny(text, ["adult", "erotic", "эротик", "порно", "porn", "lgbt", "лгбт"]);
+  return isAdultLikeTitle(movie) || includesAny(text, ["adult", "erotic", "эротик", "порно", "porn", "для взрослых"]);
+}
+
+function hasLgbtSignal(movie: CatalogScoreMovie) {
+  const text = `${movie.titleRu} ${movie.titleOriginal ?? ""} ${movie.description ?? ""} ${movie.vibixTags.join(" ")}`.toLocaleLowerCase("ru-RU");
+  return (movie.vibixLgbtContent ?? 0) > 0 || includesAny(text, ["lgbt", "лгбт"]);
+}
+
+function isBlocked(movie: CatalogScoreMovie) {
+  if (hasExplicitAdultSignal(movie)) return true;
+  // Vibix иногда ставит lgbt_content=1 на крупные mainstream-тайтлы
+  // вроде “Игры престолов”. Это не должно полностью выкидывать тайтл
+  // из публичного каталога; такой флаг учитываем только как soft-risk.
+  if (hasLgbtSignal(movie) && !isStrongMainstreamTitle(movie)) return true;
+  return false;
 }
 
 function isMassCountry(movie: CatalogScoreMovie) {
@@ -170,8 +188,8 @@ export function getCatalogBlockReasons(movie: CatalogScoreMovie, score = calcula
   if (!isValidHomePoster(movie.posterUrl)) reasons.push("missing_poster");
   if (!hasRussianTitle(movie)) reasons.push("english_title");
   if (!movie.isPublished || !movie.isCatalogAllowed) reasons.push("not_catalog_allowed");
-  if ((movie.vibixLgbtContent ?? 0) > 0) reasons.push("lgbt_content");
-  if (isAdultLikeTitle(movie)) reasons.push("adult_title");
+  if (hasLgbtSignal(movie) && !isStrongMainstreamTitle(movie)) reasons.push("lgbt_content");
+  if (hasExplicitAdultSignal(movie)) reasons.push("adult_title");
   if (isBlocked(movie)) reasons.push("blocked_genre");
   if (isWeakFormat(movie)) reasons.push("short_documentary_special");
   if (Math.max(movie.kpVotes ?? 0, movie.imdbVotes ?? 0, movie.tmdbVotes ?? 0) <= 0) reasons.push("missing_votes");

@@ -14,7 +14,7 @@ import {
   refreshVibixReferences,
 } from "@/lib/vibix-catalog/catalog-audit";
 import type { VibixCatalogType } from "@/lib/vibix";
-import { cancelVibixCatalogMagicJob, runVibixCatalogMagicJobIteration, startVibixCatalogMagicJob } from "@/lib/vibix-catalog/catalog-magic-sync";
+import { cancelVibixCatalogMagicJob, runVibixCatalogMagicJobIteration, startVibixCatalogMagicJob, startVibixCoverageRepairJob } from "@/lib/vibix-catalog/catalog-magic-sync";
 
 function numberField(formData: FormData, name: string, fallback: number, min: number, max: number) {
   const value = Number(formData.get(name));
@@ -67,6 +67,11 @@ export async function runVibixCatalogMagicOnceAction() {
 export async function cancelVibixCatalogMagicAction() {
   const job = await cancelVibixCatalogMagicJob();
   redirectWithResult({ ok: true, message: job ? "Волшебная загрузка остановлена." : "Активной волшебной загрузки нет.", details: job });
+}
+
+export async function startVibixCoverageRepairAction() {
+  const job = await startVibixCoverageRepairJob();
+  redirectWithResult({ ok: true, message: `Автопочинка важных тайтлов запущена. Статус: ${job.status}, этап: ${job.currentStage}. Worker продолжит сам.`, details: job });
 }
 
 
