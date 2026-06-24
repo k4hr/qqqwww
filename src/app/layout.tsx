@@ -5,6 +5,7 @@ import "./globals.css";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { VibixUnion } from "@/components/vibix-union";
+import { MobileZoomLock } from "@/components/mobile-zoom-lock";
 import { getVibixAdSettings, getVibixAddTypesAttribute } from "@/lib/vibix-ads";
 
 export const viewport: Viewport = {
@@ -35,6 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ru">
       <body className="site-shell">
+        <MobileZoomLock />
         <Script id="redfilm-vibix-player-sdk" src="https://graphicslab.io/sdk/v2/rendex-sdk.min.js" strategy="afterInteractive" />
         <Script id="yandex-metrika" strategy="afterInteractive">
           {`
