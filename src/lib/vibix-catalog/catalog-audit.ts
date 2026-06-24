@@ -782,7 +782,7 @@ export async function verifyAndRepairImportantVibixCoverage(options: { limit?: n
         continue;
       }
 
-      const videoToSave = { ...raw, category_id: row.categoryId } as Parameters<typeof saveVibixVideo>[0];
+      const videoToSave = { ...(raw as Record<string, unknown>), category_id: row.categoryId } as unknown as Parameters<typeof saveVibixVideo>[0];
       const saved = await saveVibixVideo(videoToSave, exactLocal?.id);
       const movieId = "movieId" in saved ? saved.movieId : exactLocal?.id ?? null;
 
