@@ -104,18 +104,53 @@ function addUnique(target: string[], value: string | null | undefined) {
   if (normalized && !target.includes(normalized)) target.push(normalized);
 }
 
+function addQueryShapeVariants(target: string[], value: string) {
+  const normalized = normalizeSearchQuery(value);
+  if (!normalized) return;
+
+  addUnique(target, normalized);
+  addUnique(target, transliterateSearchQuery(normalized));
+
+  // Реальные названия часто хранятся как “Человек-паук” / “Spider-Man”,
+  // а пользователь пишет “человек паук” / “spider man”. Для Prisma contains/startsWith
+  // это разные строки, поэтому добавляем формы с пробелом, дефисом и compact-вариант.
+  if (normalized.includes(" ")) {
+    addUnique(target, normalized.replace(/\s+/g, "-"));
+    addUnique(target, normalized.replace(/\s+/g, ""));
+  }
+  if (normalized.includes("-")) {
+    addUnique(target, normalized.replace(/-+/g, " "));
+    addUnique(target, normalized.replace(/-+/g, ""));
+  }
+}
+
+function addAliasVariants(target: string[], normalized: string) {
+  for (const alias of SEARCH_ALIASES[normalized] ?? []) addQueryShapeVariants(target, alias);
+
+  for (const token of tokenizeSearchQuery(normalized)) {
+    for (const alias of SEARCH_ALIASES[token] ?? []) addQueryShapeVariants(target, alias);
+  }
+
+  // Важный autocomplete-case: пользователь ввёл “человек п”, “игра пр”,
+  // “ходячие м”, но ещё не дописал точный алиас. Подтягиваем полный алиас
+  // и его англ. варианты, иначе выдача забивается “Человек против...” и т.п.
+  if (normalized.length >= 4) {
+    for (const [aliasKey, aliases] of Object.entries(SEARCH_ALIASES)) {
+      if (aliasKey.length >= 4 && aliasKey.startsWith(normalized)) {
+        addQueryShapeVariants(target, aliasKey);
+        for (const alias of aliases) addQueryShapeVariants(target, alias);
+      }
+    }
+  }
+}
+
 function buildSearchVariants(query: string) {
   const variants: string[] = [];
   const normalized = normalizeSearchQuery(query);
-  addUnique(variants, normalized);
-  addUnique(variants, transliterateSearchQuery(normalized));
+  addQueryShapeVariants(variants, normalized);
+  addAliasVariants(variants, normalized);
 
-  for (const alias of SEARCH_ALIASES[normalized] ?? []) addUnique(variants, alias);
-  for (const token of tokenizeSearchQuery(normalized)) {
-    for (const alias of SEARCH_ALIASES[token] ?? []) addUnique(variants, alias);
-  }
-
-  return variants.slice(0, 12);
+  return variants.slice(0, 24);
 }
 
 function isShortSingleToken(query: string) {
@@ -158,6 +193,17 @@ function titleFieldWhere(value: string, relaxedContains: boolean): Prisma.MovieW
   return where;
 }
 
+function titleTokenAndWhere(value: string): Prisma.MovieWhereInput[] {
+  const normalized = normalizeSearchQuery(value);
+  const tokens = tokenizeSearchQuery(normalized).filter((token) => token.length >= 3);
+  if (tokens.length < 2) return [];
+
+  const fields: SearchTextField[] = ["titleRu", "titleOriginal", "slug"];
+  return fields.map((field) => ({
+    AND: tokens.map((token) => textFieldWhere(field, { contains: token, mode: "insensitive" })),
+  }));
+}
+
 function idWhere(query: string): Prisma.MovieWhereInput[] {
   const normalized = normalizeSearchQuery(query);
   const compact = normalized.replace(/\s+/g, "");
@@ -189,7 +235,10 @@ export function buildSearchWhere(query: string): Prisma.MovieWhereInput {
   const relaxedContains = !isShortSingleToken(query);
   const OR = [
     ...idWhere(query),
-    ...variants.flatMap((variant) => titleFieldWhere(variant, relaxedContains)),
+    ...variants.flatMap((variant) => [
+      ...titleFieldWhere(variant, relaxedContains),
+      ...titleTokenAndWhere(variant),
+    ]),
     ...metadataWhere(query),
   ];
   return OR.length ? { OR } : {};

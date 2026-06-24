@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 
 type Suggestion = { id: string; title: string; year: number; type: string; posterUrl: string | null; href: string };
 
@@ -12,6 +14,8 @@ export function SearchAutocomplete({ mobile = false }: { mobile?: boolean }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const close = (event: PointerEvent) => {
@@ -44,21 +48,30 @@ export function SearchAutocomplete({ mobile = false }: { mobile?: boolean }) {
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
-    }, 320);
+    }, 220);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
   }, [query]);
 
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalized = query.trim();
+    if (!normalized) return;
+    setOpen(false);
+    inputRef.current?.blur();
+    router.push(`/search?q=${encodeURIComponent(normalized)}`);
+  }
+
   const shellClass = mobile
     ? "relative w-full"
     : "relative ml-auto w-[clamp(190px,22vw,310px)] shrink-0 max-[899px]:hidden";
 
   return <div ref={rootRef} className={shellClass}>
-    <form action="/search" className="flex h-11 w-full items-center rounded-2xl border border-white/10 bg-white/[.05] px-4 transition focus-within:border-[#e50914]/80">
-      <input name="q" value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => results.length && setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }} autoComplete="off" aria-label="Поиск по сайту" placeholder="Поиск по сайту..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#71717a]" />
-      <Search size={18} className="shrink-0 text-[#e50914]" />
+    <form onSubmit={submitSearch} action="/search" className="flex h-11 w-full items-center rounded-2xl border border-white/10 bg-white/[.05] px-4 transition focus-within:border-[#e50914]/80">
+      <input ref={inputRef} name="q" value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => results.length && setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }} autoComplete="off" enterKeyHint="search" aria-label="Поиск по сайту" placeholder="Поиск по сайту..." className="min-w-0 flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-[#71717a] min-[900px]:text-sm" />
+      <button type="submit" aria-label="Найти" className="ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#e50914] transition hover:bg-white/[.06]"><Search size={18} /></button>
     </form>
     {open && (loading || results.length > 0) ? <div className="absolute inset-x-0 top-[calc(100%+8px)] z-[90] max-h-[min(420px,60vh)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0b0b0f]/[.98] p-2 shadow-[0_24px_70px_rgba(0,0,0,.75)] backdrop-blur-xl">
       {loading ? Array.from({ length: 3 }, (_, index) => <div key={index} className="grid min-h-14 grid-cols-[38px_minmax(0,1fr)] items-center gap-3 p-2"><div className="skeleton h-12 rounded-md" /><div className="space-y-2"><div className="skeleton h-3 w-4/5 rounded" /><div className="skeleton h-3 w-2/5 rounded" /></div></div>) : results.map((movie) => <Link key={movie.id} href={movie.href} onClick={() => setOpen(false)} className="grid min-h-14 grid-cols-[38px_minmax(0,1fr)] items-center gap-3 rounded-xl p-2 transition hover:bg-white/[.07]">
