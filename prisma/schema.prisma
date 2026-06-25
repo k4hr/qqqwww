@@ -561,6 +561,11 @@ model SeoLandingPage {
   isIndexable     Boolean  @default(true)
   sitemapIncluded Boolean  @default(true)
   status          String   @default("ACTIVE")
+  aiStatus        String   @default("NOT_GENERATED")
+  aiModel         String?
+  aiDraftJson     Json?
+  aiGeneratedAt   DateTime?
+  aiError         String?  @db.Text
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

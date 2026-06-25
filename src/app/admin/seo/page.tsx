@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSeoAdminStats } from "@/lib/seo/keyword-engine";
-import { importWordstatCsvAction, rebuildEmbeddedWordstatAction } from "./actions";
+import { generateAiSeoPageAction, generateTopAiSeoPagesAction, importWordstatCsvAction, rebuildEmbeddedWordstatAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +44,22 @@ export default async function AdminSeoPage({ searchParams }: Props) {
     {result ? <pre className="mb-5 overflow-auto rounded-xl bg-[#111] p-4 text-xs text-white">{JSON.stringify(result, null, 2)}</pre> : null}
 
     <section className="admin-panel mb-5 p-5">
+      <h2 className="text-xl font-black">AI SEO Builder</h2>
+      <p className="mt-2 text-sm text-neutral-600">OpenAI API получает подготовленный контекст из базы REDFILM: запрос, тип страницы, реальные фильмы, жанры, рейтинги, актёров и ссылки. AI пишет текст и структуру, а backend валидирует результат и не даёт выдумывать фильмы.</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+        <form action={generateAiSeoPageAction} className="grid gap-2 md:grid-cols-[1fr_auto]">
+          <input name="slug" placeholder="Например: filmy-marvel-po-poryadku" className="min-h-11 rounded-lg border border-[#ddd] bg-white px-3" />
+          <button type="submit" className="rounded-xl bg-[#e50914] px-5 py-3 font-black text-white">AI пересобрать страницу</button>
+        </form>
+        <form action={generateTopAiSeoPagesAction} className="flex gap-2">
+          <input name="limit" type="number" min={1} max={30} defaultValue={10} className="w-24 min-h-11 rounded-lg border border-[#ddd] bg-white px-3" />
+          <button type="submit" className="rounded-xl bg-[#222] px-5 py-3 font-black text-white">AI топ страниц</button>
+        </form>
+      </div>
+      <p className="mt-2 text-xs text-neutral-500">Нужны Railway Variables: OPENAI_API_KEY и, опционально, OPENAI_SEO_MODEL. Без ключа AI-кнопки покажут ошибку, обычный Wordstat Engine продолжит работать.</p>
+    </section>
+
+    <section className="admin-panel mb-5 p-5">
       <h2 className="text-xl font-black">Импорт Wordstat CSV</h2>
       <p className="mt-2 text-sm text-neutral-600">Загрузи CSV из Яндекс Вордстат или вставь содержимое. Система очистит мусор, сгруппирует запросы и создаст SeoLandingPage.</p>
 
@@ -73,7 +89,7 @@ export default async function AdminSeoPage({ searchParams }: Props) {
       <section className="admin-panel p-5">
         <h2 className="text-xl font-black">SEO-страницы</h2>
         <div className="mt-3 space-y-2 text-sm">
-          {pages.map((item) => <div key={item.id} className="rounded-lg border border-[#eee] bg-white p-3"><Link href={`/collections/${item.slug}`} className="font-bold text-[#e50914]" target="_blank">{item.h1}</Link><br /><span className="text-neutral-500">{item.type} · min {item.minItems} · спрос {item.totalDemand.toLocaleString("ru-RU")}</span></div>)}
+          {pages.map((item) => <div key={item.id} className="rounded-lg border border-[#eee] bg-white p-3"><Link href={`/collections/${item.slug}`} className="font-bold text-[#e50914]" target="_blank">{item.h1}</Link><br /><span className="text-neutral-500">{item.type} · AI {item.aiStatus} · min {item.minItems} · спрос {item.totalDemand.toLocaleString("ru-RU")}</span><form action={generateAiSeoPageAction} className="mt-2"><input type="hidden" name="slug" value={item.slug} /><button type="submit" className="rounded-lg border border-[#e50914] px-3 py-1 text-xs font-bold text-[#e50914]">AI пересобрать</button></form></div>)}
           {!pages.length ? <div className="text-neutral-500">SEO-страницы ещё не созданы.</div> : null}
         </div>
       </section>

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ContentType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { buildFranchiseWhere, getFranchiseConfig } from "@/lib/seo/franchise-orders";
 
 export type SeoIntent = "BASE" | "YEAR" | "FILMY_PRO" | "MULTIKI_PRO" | "FRANCHISE" | "EXCLUDED" | "UNKNOWN";
 
@@ -27,6 +28,7 @@ const GENERATED_LANDING_TYPES = [
   "ANIME_YEAR",
   "MOVIE_YEAR",
   "FRANCHISE",
+  "FRANCHISE_ORDER",
 ];
 
 const CYR_TO_LAT: Record<string, string> = {
@@ -190,8 +192,9 @@ export function buildClusterForQuery(query: string) {
 
   if (intent === "FRANCHISE") {
     const slug = /марвел|marvel|мстители|avengers/.test(normalized) ? "filmy-marvel-po-poryadku" : "filmy-franshizy";
-    const title = slug === "filmy-marvel-po-poryadku" ? "Фильмы Marvel по порядку" : "Популярные кинофраншизы";
-    return { key: slug, targetSlug: slug, intent, targetType: "FRANCHISE", title, mainQuery: title.toLowerCase() };
+    const config = getFranchiseConfig(slug);
+    const title = config?.h1 ?? (slug === "filmy-marvel-po-poryadku" ? "Фильмы Marvel по порядку" : "Популярные кинофраншизы");
+    return { key: slug, targetSlug: slug, intent, targetType: config ? "FRANCHISE_ORDER" : "FRANCHISE", title, mainQuery: title.toLowerCase() };
   }
 
   const slug = /мульт|мультик/.test(normalized) ? "multfilmy-smotret-online" : /сериал/.test(normalized) ? "serialy-smotret-online" : /аниме/.test(normalized) ? "anime-smotret-online" : "filmy-smotret-online";
@@ -200,16 +203,47 @@ export function buildClusterForQuery(query: string) {
 }
 
 export function buildLandingText(cluster: { title: string; mainQuery: string; targetSlug: string; targetType: string }, variants: string[], totalDemand: number) {
+  const config = getFranchiseConfig(cluster.targetSlug);
+  if (config) {
+    return {
+      title: config.title,
+      h1: config.h1,
+      description: config.description,
+      introText: config.intro,
+      keywordVariants: variants.slice(0, 40),
+    };
+  }
+
   const title = `${cluster.title} смотреть онлайн — REDFILM`;
   const h1 = cluster.title;
-  const description = `${cluster.title}: подборка доступных фильмов и сериалов REDFILM с описаниями, рейтингами и плеером. Смотрите онлайн в хорошем качестве.`;
-  const introText = `Страница создана на основе поискового спроса Wordstat и каталога REDFILM. Здесь собраны доступные тайтлы по теме «${cluster.title.toLowerCase()}»: фильмы, сериалы, мультфильмы или аниме с плеером, постерами, рейтингами и внутренними ссылками. Суммарный спрос кластера: ${totalDemand.toLocaleString("ru-RU")}.`;
+  const description = `${cluster.title}: подборка REDFILM с фильмами, сериалами и мультфильмами по теме. Смотрите онлайн в хорошем качестве.`;
+  const introText = landingIntroForCluster(cluster);
   return { title, h1, description, introText, keywordVariants: variants.slice(0, 40) };
+}
+
+function landingIntroForCluster(cluster: { title: string; mainQuery: string; targetSlug: string; targetType: string }) {
+  const title = cluster.title.toLowerCase();
+  if (cluster.targetType === "BASE") {
+    if (cluster.targetSlug.startsWith("serial")) return "В разделе собраны сериалы REDFILM с плеером, постерами, рейтингами и удобной навигацией по жанрам, годам и подборкам.";
+    if (cluster.targetSlug.startsWith("mult")) return "В разделе собраны мультфильмы REDFILM: новинки, семейные истории, приключения и популярные анимационные фильмы для просмотра онлайн.";
+    if (cluster.targetSlug.startsWith("anime")) return "В разделе собраны аниме REDFILM с доступным плеером, постерами, рейтингами и быстрым переходом к похожим тайтлам.";
+    return "В разделе собраны фильмы REDFILM для онлайн-просмотра: новинки, популярные картины, жанровые подборки и проверенные хиты с рейтингами.";
+  }
+  if (cluster.targetType === "CARTOON_COLLECTION") {
+    return `Подборка для тех, кто ищет ${title}. Здесь собраны мультфильмы и анимационные истории из каталога REDFILM, которые подходят по теме, названию, описанию и жанрам.`;
+  }
+  if (cluster.targetType.endsWith("YEAR")) {
+    return `Собрали доступные на REDFILM тайтлы за выбранный год: новинки, популярные фильмы, сериалы и анимацию с постерами, рейтингами и быстрым переходом к просмотру.`;
+  }
+  return `Подборка REDFILM по теме «${title}»: фильмы и сериалы с плеером, постерами, рейтингами и ссылками на похожие страницы.`;
 }
 
 export function whereForSeoLanding(filter: unknown): Prisma.MovieWhereInput {
   const value = typeof filter === "object" && filter ? filter as Record<string, unknown> : {};
   const targetType = String(value.targetType ?? "COLLECTION");
+  const slug = String(value.slug ?? value.targetSlug ?? "").trim();
+  const franchiseWhere = targetType === "FRANCHISE_ORDER" || targetType === "FRANCHISE" ? buildFranchiseWhere(slug) : null;
+  if (franchiseWhere) return franchiseWhere;
   const topic = String(value.topic ?? "").trim();
   const year = Number(value.year);
   const words = topic ? topic.split(/\s+/).filter((word) => word.length >= 3).slice(0, 4) : [];
@@ -228,7 +262,7 @@ function filterForCluster(cluster: ReturnType<typeof buildClusterForQuery>) {
   if (!cluster) return undefined;
   const topic = cluster.intent === "FILMY_PRO" || cluster.intent === "MULTIKI_PRO" ? cluster.mainQuery.replace(/^фильмы про |^мультики про /, "") : undefined;
   const year = cluster.intent === "YEAR" ? yearFromQuery(cluster.mainQuery) : undefined;
-  return { targetType: cluster.targetType, topic, year };
+  return { targetType: cluster.targetType, targetSlug: cluster.targetSlug, topic, year };
 }
 
 async function resetGeneratedSeoPages() {

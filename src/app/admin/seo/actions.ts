@@ -3,11 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { importEmbeddedWordstatFiles, importWordstatKeywords } from "@/lib/seo/keyword-engine";
+import { generateAiSeoLandingPage, generateTopAiSeoLandingPages } from "@/lib/seo/ai-builder";
 
 function redirectWithResult(result: unknown) {
   revalidatePath("/admin/seo");
   revalidatePath("/sitemap-index.xml");
   revalidatePath("/sitemaps/collections.xml");
+  revalidatePath("/collections", "layout");
   const encoded = Buffer.from(JSON.stringify(result)).toString("base64url");
   redirect(`/admin/seo?result=${encoded}`);
 }
@@ -29,4 +31,27 @@ export async function importWordstatCsvAction(formData: FormData) {
 export async function rebuildEmbeddedWordstatAction() {
   const result = await importEmbeddedWordstatFiles({ replace: true });
   redirectWithResult({ ok: true, message: "Встроенные Wordstat CSV пересобраны без дублей.", result });
+}
+
+
+export async function generateAiSeoPageAction(formData: FormData) {
+  const slug = String(formData.get("slug") ?? "").trim();
+  if (!slug) redirectWithResult({ ok: false, message: "Не указан slug SEO-страницы." });
+  try {
+    const result = await generateAiSeoLandingPage(slug);
+    revalidatePath(`/collections/${slug}`);
+    redirectWithResult({ ok: true, message: `AI SEO-страница пересобрана: ${slug}`, result });
+  } catch (error) {
+    redirectWithResult({ ok: false, message: error instanceof Error ? error.message : String(error), slug });
+  }
+}
+
+export async function generateTopAiSeoPagesAction(formData: FormData) {
+  const limit = Number(formData.get("limit") ?? 10);
+  try {
+    const result = await generateTopAiSeoLandingPages(Number.isFinite(limit) ? limit : 10);
+    redirectWithResult({ ok: true, message: "AI пересобрал SEO-страницы.", result });
+  } catch (error) {
+    redirectWithResult({ ok: false, message: error instanceof Error ? error.message : String(error) });
+  }
 }
