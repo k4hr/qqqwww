@@ -17,19 +17,13 @@ import { getPopularMovies, getRecentPopularityStats } from "@/lib/popularity";
 import { takeUniqueMovies } from "@/lib/recommendation-dedupe";
 import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
 import { buildAudienceCandidateWhere, sortAudienceMovies } from "@/lib/similar";
-import { countryPath, genrePath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
-import { filmIntro, whyWatchText } from "@/lib/seo-text";
+import { countryPath, genrePath, similarPath, watchPath, yearPath } from "@/lib/seo-links";
 import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from "@/lib/seo/schema";
 import { watchSeoDescription, watchSeoH1, watchSeoTitle } from "@/lib/seo/meta";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }> };
-
-function shortDescription(description: string) {
-  const normalized = description.trim();
-  return normalized.length > 180 ? `${normalized.slice(0, 177).trimEnd()}...` : normalized;
-}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const movie = await getSeoMovieBySlug((await params).slug);
@@ -131,20 +125,6 @@ export default async function WatchPage({ params }: Props) {
       <PlayerBlock movie={movie} />
       <VibixBanner slot="movie_below_player" size="680x250" />
       <VibixFlyrollSlot slot="movie_below_player" />
-
-      <section className="mf-panel mt-8 p-5 sm:p-6">
-        <h2 className="text-2xl font-black text-white">О чём {movie.titleRu}</h2>
-        <div className="mt-3 space-y-3 text-sm leading-relaxed text-[#b7b7c0] sm:text-base">
-          {filmIntro(movie).map((text) => <p key={text}>{text}</p>)}
-          <p>{whyWatchText(movie)}</p>
-        </div>
-        <div className="mt-5 flex flex-wrap gap-2">
-          {primaryGenre ? <Link href={genrePath(primaryGenre)} className="mf-btn">{primaryGenre.name}</Link> : null}
-          <Link href={yearPath(movie)} className="mf-btn">{movie.year} год</Link>
-          {countries[0] ? <Link href={countryPath(countries[0])} className="mf-btn">{countries[0]}</Link> : null}
-          <Link href={similarPath(movie)} className="mf-btn">Похожие фильмы</Link>
-        </div>
-      </section>
 
       <section className="mt-8">
         <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">Похожие фильмы</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>
