@@ -79,11 +79,24 @@ export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
   const fallbackCandidates = await prisma.movie.findMany({
     where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { notIn: usedIds }, type: movie.type }] },
     include: movieSeoInclude,
-    orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }],
-    take: 160,
+    orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
+    take: 260,
   });
-  const fallbackRanked = sortSimilarMovies(movie, fallbackCandidates, limit - ranked.length);
-  return [...ranked, ...fallbackRanked].slice(0, limit);
+  const fallbackRanked = sortSimilarMovies(movie, fallbackCandidates, limit - ranked.length, 40);
+  const combined = [...ranked, ...fallbackRanked];
+  if (combined.length >= Math.min(limit, 4)) return combined.slice(0, limit);
+
+  // Last safety net for watch pages: every public title should have at least a few related cards.
+  // This intentionally runs after the stricter similarity engine and only fills empty/near-empty blocks.
+  const relaxedUsedIds = [movie.id, ...combined.map((item) => item.id)];
+  const relaxedCandidates = await prisma.movie.findMany({
+    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { notIn: relaxedUsedIds } }] },
+    include: movieSeoInclude,
+    orderBy: [{ topScore: "desc" }, { popularScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
+    take: 220,
+  });
+  const relaxedRanked = sortSimilarMovies(movie, relaxedCandidates, limit - combined.length, 0);
+  return [...combined, ...relaxedRanked].slice(0, limit);
 }
 
 export async function findFranchiseParts(movie: Pick<SeoMovie, "titleRu">) {

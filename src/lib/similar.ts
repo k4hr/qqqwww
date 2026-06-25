@@ -21,7 +21,7 @@ export function calculateSimilarity(source: MovieWithSimilarityRelations, candid
   return { score: result.score, reasons: result.reasons };
 }
 
-export function sortSimilarMovies(source: MovieWithSimilarityRelations, candidates: MovieWithSimilarityRelations[], limit = 10) {
+export function sortSimilarMovies(source: MovieWithSimilarityRelations, candidates: MovieWithSimilarityRelations[], limit = 10, minScore = 180) {
   const sourceProfile = buildSimilarityProfile(source);
   return candidates
     .map((candidate) => {
@@ -30,11 +30,11 @@ export function sortSimilarMovies(source: MovieWithSimilarityRelations, candidat
       return {
         ...candidate,
         similarityScore: result.score,
-        similarityReasons: result.reasons,
+        similarityReasons: result.reasons.length ? result.reasons : ["похожий жанр, аудитория или рейтинг"],
         similarityBucket: result.bucket,
       } satisfies SimilarMovieResult;
     })
-    .filter((movie) => movie.similarityScore >= 180)
+    .filter((movie) => movie.similarityScore >= minScore)
     .sort((a, b) => {
       const scoreDiff = b.similarityScore - a.similarityScore;
       if (scoreDiff) return scoreDiff;

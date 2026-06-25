@@ -11,7 +11,10 @@ export function PlayerBlock({ movie }: Props) {
     <section className="cinema-glow mf-panel mt-6 overflow-hidden">
       <div className="relative flex min-w-0 flex-col gap-2 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <h2 className="min-w-0 break-words text-base font-bold text-white sm:text-lg">Смотреть онлайн {movie.titleRu} ({movie.year})</h2>
-        <span className="shrink-0 text-[11px] font-bold uppercase tracking-[0.14em] text-[#e50914] sm:text-xs">REDFILM</span>
+        <div className="shrink-0 text-left sm:text-right">
+          <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-[#e50914] sm:text-xs">REDFILM</span>
+          <span className="mt-1 block text-[11px] font-semibold leading-snug text-white sm:text-xs">Не работает плеер? Придется отключить VPN.</span>
+        </div>
       </div>
 
       <div className="relative bg-black text-white">

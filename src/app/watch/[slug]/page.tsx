@@ -65,13 +65,13 @@ export default async function WatchPage({ params }: Props) {
     getRecentPopularityStats(7),
   ]);
   const excluded = new Set([movie.id]);
-  const selectBlock = <T extends { id: string }>(items: T[], count = 6) => {
+  const selectBlock = <T extends { id: string }>(items: T[], count = 6, minCount = 4) => {
     const selected = takeUniqueMovies(items, count, excluded);
-    if (selected.length < 4) return [];
+    if (selected.length < minCount) return [];
     selected.forEach((item) => excluded.add(item.id));
     return selected;
   };
-  const similar = selectBlock(similarCandidates);
+  const similar = selectBlock(similarCandidates, 6, 1);
   const watchedTogether = selectBlock(sortAudienceMovies(movie, audienceCandidates, 20).length ? sortAudienceMovies(movie, audienceCandidates, 20) : getPopularMovies(genreCandidates, popularityStats, 20));
   const moreInGenre = selectBlock(genreCandidates);
   const sameYear = selectBlock(yearCandidates);
