@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSeoAdminStats } from "@/lib/seo/keyword-engine";
-import { importWordstatCsvAction } from "./actions";
+import { importWordstatCsvAction, rebuildEmbeddedWordstatAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +31,11 @@ export default async function AdminSeoPage({ searchParams }: Props) {
       <Link href="/admin" className="font-bold text-[#e50914]">Назад</Link>
     </div>
 
-    <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+    <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
       <Stat title="Ключей" value={stats.keywords} />
       <Stat title="Активных" value={stats.activeKeywords} />
       <Stat title="Исключено" value={stats.excludedKeywords} />
+      <Stat title="На проверке" value={stats.reviewKeywords} />
       <Stat title="Кластеров" value={stats.clusters} />
       <Stat title="Страниц" value={stats.pages} />
       <Stat title="В sitemap" value={stats.indexablePages} />
@@ -45,11 +46,18 @@ export default async function AdminSeoPage({ searchParams }: Props) {
     <section className="admin-panel mb-5 p-5">
       <h2 className="text-xl font-black">Импорт Wordstat CSV</h2>
       <p className="mt-2 text-sm text-neutral-600">Загрузи CSV из Яндекс Вордстат или вставь содержимое. Система очистит мусор, сгруппирует запросы и создаст SeoLandingPage.</p>
-      <form action={importWordstatCsvAction} className="mt-4 grid gap-3">
+
+      <form action={rebuildEmbeddedWordstatAction} className="mt-4">
+        <button type="submit" className="rounded-xl bg-[#e50914] px-5 py-3 font-black text-white">Пересобрать встроенные CSV без дублей</button>
+        <p className="mt-2 text-xs text-neutral-500">Использует файлы из src/data/wordstat, удаляет старый Wordstat-импорт и пересоздаёт ключи, кластеры и страницы.</p>
+      </form>
+
+      <form action={importWordstatCsvAction} className="mt-5 grid gap-3 border-t border-[#eee] pt-5">
         <input name="source" defaultValue="wordstat" className="min-h-11 rounded-lg border border-[#ddd] bg-white px-3" />
+        <label className="flex items-center gap-2 text-sm text-neutral-700"><input name="replace" type="checkbox" /> Очистить старый Wordstat-импорт перед загрузкой</label>
         <input name="csvFile" type="file" accept=".csv,text/csv,text/plain" className="min-h-11 rounded-lg border border-[#ddd] bg-white px-3 py-2" />
         <textarea name="csvText" rows={8} placeholder="Можно вставить CSV сюда..." className="rounded-lg border border-[#ddd] bg-white p-3 font-mono text-sm" />
-        <button type="submit" className="rounded-xl bg-[#e50914] px-5 py-3 font-black text-white">Импортировать и создать кластеры</button>
+        <button type="submit" className="rounded-xl bg-[#333] px-5 py-3 font-black text-white">Импортировать загруженный CSV</button>
       </form>
     </section>
 
