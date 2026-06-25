@@ -59,7 +59,10 @@ async function getCachedSimilarSeoMovies(movie: SeoMovie, limit: number): Promis
     });
   }
 
-  return results.slice(0, limit);
+  // Старые cached similarity могли быть рассчитаны слишком мягко.
+  // Перед показом на странице пересчитываем их текущим строгим алгоритмом,
+  // чтобы рядом с боевиком не появлялась случайная комедия только из-за общего fallback.
+  return sortSimilarMovies(movie, results, limit, 180);
 }
 
 export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
@@ -70,33 +73,35 @@ export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
     where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), buildSimilarityCandidateWhere(movie)] },
     include: movieSeoInclude,
     orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
-    take: 450,
+    take: 650,
   });
-  const ranked = sortSimilarMovies(movie, candidates, limit);
+  const ranked = sortSimilarMovies(movie, candidates, limit, 180);
   if (ranked.length >= Math.min(limit, 6)) return ranked;
 
   const usedIds = [movie.id, ...ranked.map((item) => item.id)];
-  const fallbackCandidates = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { notIn: usedIds }, type: movie.type }] },
-    include: movieSeoInclude,
-    orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
-    take: 260,
-  });
-  const fallbackRanked = sortSimilarMovies(movie, fallbackCandidates, limit - ranked.length, 40);
-  const combined = [...ranked, ...fallbackRanked];
-  if (combined.length >= Math.min(limit, 4)) return combined.slice(0, limit);
+  const genreIds = movie.genres.map((item) => item.genreId);
+  const fallbackCandidates = genreIds.length
+    ? await prisma.movie.findMany({
+        where: {
+          AND: [
+            vibixPublicMovieWhere,
+            buildDefaultCatalogCountryWhere(),
+            { id: { notIn: usedIds }, type: movie.type },
+            { genres: { some: { genreId: { in: genreIds } } } },
+            { year: { gte: movie.year - 18, lte: movie.year + 18 } },
+          ],
+        },
+        include: movieSeoInclude,
+        orderBy: [{ popularScore: "desc" }, { topScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
+        take: 420,
+      })
+    : [];
 
-  // Last safety net for watch pages: every public title should have at least a few related cards.
-  // This intentionally runs after the stricter similarity engine and only fills empty/near-empty blocks.
-  const relaxedUsedIds = [movie.id, ...combined.map((item) => item.id)];
-  const relaxedCandidates = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { notIn: relaxedUsedIds } }] },
-    include: movieSeoInclude,
-    orderBy: [{ topScore: "desc" }, { popularScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
-    take: 220,
-  });
-  const relaxedRanked = sortSimilarMovies(movie, relaxedCandidates, limit - combined.length, 0);
-  return [...combined, ...relaxedRanked].slice(0, limit);
+  // Важное правило: не добиваем блок случайными популярными тайтлами.
+  // Если точной смысловой связи нет, лучше показать меньше карточек, чем под
+  // «Пчеловодом» вывести «Операцию Ы» или другой нерелевантный фильм.
+  const fallbackRanked = sortSimilarMovies(movie, fallbackCandidates, limit - ranked.length, 140);
+  return [...ranked, ...fallbackRanked].slice(0, limit);
 }
 
 export async function findFranchiseParts(movie: Pick<SeoMovie, "titleRu">) {
