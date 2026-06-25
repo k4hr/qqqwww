@@ -35,6 +35,14 @@ const CYR_TO_LAT: Record<string, string> = {
 
 type WordstatRow = { query: string; impressions: number };
 
+const INT4_MAX = 2_000_000_000;
+
+function int4(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(Math.floor(value), INT4_MAX);
+}
+
+
 export function normalizeSeoQuery(query: string) {
   return query
     .toLowerCase()
@@ -95,7 +103,7 @@ function parseCsvLine(line: string) {
 
 function parseImpressions(value: string) {
   const number = Number(String(value ?? "").replace(/[^0-9]+/g, ""));
-  return Number.isFinite(number) ? number : 0;
+  return int4(Number.isFinite(number) ? number : 0);
 }
 
 export function parseWordstatCsv(text: string): WordstatRow[] {
@@ -264,7 +272,7 @@ export async function importWordstatRows(rowsInput: WordstatRow[], source = "wor
 
     if (cluster) {
       const prev = clusterMap.get(cluster.key) ?? { cluster, totalDemand: 0, variants: [] };
-      prev.totalDemand += row.impressions;
+      prev.totalDemand = int4(prev.totalDemand + row.impressions);
       if (!prev.variants.includes(normalizedQuery)) prev.variants.push(normalizedQuery);
       clusterMap.set(cluster.key, prev);
     }
@@ -273,18 +281,19 @@ export async function importWordstatRows(rowsInput: WordstatRow[], source = "wor
   let clusters = 0;
   let pages = 0;
   for (const item of clusterMap.values()) {
-    const landing = buildLandingText(item.cluster, item.variants, item.totalDemand);
+    const totalDemand = int4(item.totalDemand);
+    const landing = buildLandingText(item.cluster, item.variants, totalDemand);
     const filterJson = filterForCluster(item.cluster) ?? {};
     await prisma.seoCluster.upsert({
       where: { key: item.cluster.key },
-      update: { title: item.cluster.title, intent: item.cluster.intent, mainQuery: item.cluster.mainQuery, totalDemand: item.totalDemand, targetType: item.cluster.targetType, targetSlug: item.cluster.targetSlug, variantsJson: item.variants, status: "ACTIVE" },
-      create: { key: item.cluster.key, title: item.cluster.title, intent: item.cluster.intent, mainQuery: item.cluster.mainQuery, totalDemand: item.totalDemand, targetType: item.cluster.targetType, targetSlug: item.cluster.targetSlug, variantsJson: item.variants, status: "ACTIVE" },
+      update: { title: item.cluster.title, intent: item.cluster.intent, mainQuery: item.cluster.mainQuery, totalDemand, targetType: item.cluster.targetType, targetSlug: item.cluster.targetSlug, variantsJson: item.variants, status: "ACTIVE" },
+      create: { key: item.cluster.key, title: item.cluster.title, intent: item.cluster.intent, mainQuery: item.cluster.mainQuery, totalDemand, targetType: item.cluster.targetType, targetSlug: item.cluster.targetSlug, variantsJson: item.variants, status: "ACTIVE" },
     });
     clusters++;
     await prisma.seoLandingPage.upsert({
       where: { slug: item.cluster.targetSlug },
-      update: { ...landing, type: item.cluster.targetType, mainQuery: item.cluster.mainQuery, totalDemand: item.totalDemand, filterJson: filterJson as Prisma.InputJsonValue, isIndexable: true, sitemapIncluded: true, status: "ACTIVE" },
-      create: { slug: item.cluster.targetSlug, type: item.cluster.targetType, ...landing, mainQuery: item.cluster.mainQuery, totalDemand: item.totalDemand, filterJson: filterJson as Prisma.InputJsonValue, minItems: item.cluster.intent === "BASE" ? 12 : 6, status: "ACTIVE", isIndexable: true, sitemapIncluded: true },
+      update: { ...landing, type: item.cluster.targetType, mainQuery: item.cluster.mainQuery, totalDemand, filterJson: filterJson as Prisma.InputJsonValue, isIndexable: true, sitemapIncluded: true, status: "ACTIVE" },
+      create: { slug: item.cluster.targetSlug, type: item.cluster.targetType, ...landing, mainQuery: item.cluster.mainQuery, totalDemand, filterJson: filterJson as Prisma.InputJsonValue, minItems: item.cluster.intent === "BASE" ? 12 : 6, status: "ACTIVE", isIndexable: true, sitemapIncluded: true },
     });
     pages++;
   }
