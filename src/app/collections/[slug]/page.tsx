@@ -21,20 +21,22 @@ export async function generateMetadata({ params }: Props) {
   const topic = getSeoTopic(slug);
   if (topic) return { title: `${topic[1]} смотреть онлайн — REDFILM`, description: `${topic[1]}: тематическая подборка доступных фильмов и сериалов с рейтингами и описаниями.`, alternates: { canonical: `/collections/${slug}` } };
   const collection = getCollection(slug);
-  if (!collection && !topic) {
-    const landing = await prisma.seoLandingPage.findFirst({ where: { slug, status: "ACTIVE", isIndexable: true } }).catch(() => null);
-    if (landing) return { title: landing.title, description: landing.description, alternates: { canonical: `/collections/${slug}` } };
-    const trendCategories = await prisma.trendCandidate.findMany({ where: { status: "AVAILABLE", movieId: { not: null } }, select: { sourceCategory: true }, distinct: ["sourceCategory"], take: 200 });
-    const category = trendCategories.find((item) => trendCategorySlug(item.sourceCategory) === slug)?.sourceCategory;
-    if (!category) return {};
-    const name = trendCategoryTitle(category);
-    return { title: `${name} смотреть онлайн — REDFILM`, description: `Автоматическая подборка REDFILM: ${name}.`, alternates: { canonical: `/collections/${slug}` } };
+  if (collection) {
+    return {
+      title: collection.title,
+      description: collection.description,
+      alternates: { canonical: `/collections/${slug}` },
+    };
   }
-  return {
-    title: collection.title,
-    description: collection.description,
-    alternates: { canonical: `/collections/${slug}` },
-  };
+
+  const landing = await prisma.seoLandingPage.findFirst({ where: { slug, status: "ACTIVE", isIndexable: true } }).catch(() => null);
+  if (landing) return { title: landing.title, description: landing.description, alternates: { canonical: `/collections/${slug}` } };
+
+  const trendCategories = await prisma.trendCandidate.findMany({ where: { status: "AVAILABLE", movieId: { not: null } }, select: { sourceCategory: true }, distinct: ["sourceCategory"], take: 200 });
+  const category = trendCategories.find((item) => trendCategorySlug(item.sourceCategory) === slug)?.sourceCategory;
+  if (!category) return {};
+  const name = trendCategoryTitle(category);
+  return { title: `${name} смотреть онлайн — REDFILM`, description: `Автоматическая подборка REDFILM: ${name}.`, alternates: { canonical: `/collections/${slug}` } };
 }
 
 export default async function CollectionPage({ params }: Props) {
