@@ -1,6 +1,7 @@
 import type { Movie } from "@prisma/client";
 import { extractCountries } from "@/lib/catalog-filters";
 import { siteUrl, similarPath, watchPath } from "@/lib/seo-links";
+import { isPublicPersonName } from "@/lib/person-quality";
 
 type GenreItem = { genre: { name: string; slug?: string } };
 type CastItem = { person: { nameRu: string; nameOriginal?: string | null }; role?: string | null };
@@ -19,7 +20,7 @@ function ratingSchema(movie: SeoSchemaMovie) {
 
 export function movieJsonLd(movie: SeoSchemaMovie) {
   const countries = extractCountries(movie.country);
-  const people = (movie.cast ?? []).slice(0, 12);
+  const people = (movie.cast ?? []).filter((item) => isPublicPersonName(item.person.nameRu)).slice(0, 12);
   return compact({
     "@context": "https://schema.org",
     "@type": movie.type === "SERIES" ? "TVSeries" : "Movie",

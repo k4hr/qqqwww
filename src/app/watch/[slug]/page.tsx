@@ -17,11 +17,10 @@ import { getPopularMovies, getRecentPopularityStats } from "@/lib/popularity";
 import { takeUniqueMovies } from "@/lib/recommendation-dedupe";
 import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
 import { buildAudienceCandidateWhere, sortAudienceMovies } from "@/lib/similar";
-import { countryPath, genrePath, personPath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
+import { countryPath, genrePath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
 import { filmIntro, whyWatchText } from "@/lib/seo-text";
 import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from "@/lib/seo/schema";
 import { watchSeoDescription, watchSeoH1, watchSeoTitle } from "@/lib/seo/meta";
-import { isPublicCastLink } from "@/lib/person-quality";
 
 export const dynamic = "force-dynamic";
 
@@ -144,7 +143,6 @@ export default async function WatchPage({ params }: Props) {
           <Link href={yearPath(movie)} className="mf-btn">{movie.year} год</Link>
           {countries[0] ? <Link href={countryPath(countries[0])} className="mf-btn">{countries[0]}</Link> : null}
           <Link href={similarPath(movie)} className="mf-btn">Похожие фильмы</Link>
-          {movie.cast?.filter(isPublicCastLink).slice(0, 5).map((item) => <Link key={item.personId} href={personPath(item.person.nameRu)} className="mf-btn">Фильмы с {item.person.nameRu}</Link>)}
         </div>
       </section>
 
