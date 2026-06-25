@@ -100,7 +100,7 @@ function parseImpressions(value: string) {
 
 export function parseWordstatCsv(text: string): WordstatRow[] {
   const rows: WordstatRow[] = [];
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const lines = text.replace(/^\uFEFF/, "").split(/\r\n|\n|\r/);
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
