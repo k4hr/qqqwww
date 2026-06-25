@@ -23,7 +23,8 @@
     "similarity:worker": "tsx src/scripts/similarity-worker.ts",
     "vibix:catalog-worker": "tsx src/scripts/vibix-catalog-worker.ts",
     "seo:import-wordstat": "tsx src/scripts/import-wordstat-seo.ts",
-    "seo:ai-top": "tsx src/scripts/generate-ai-seo-pages.ts"
+    "seo:ai-top": "tsx src/scripts/generate-ai-seo-pages.ts",
+    "seo:autopilot": "tsx src/scripts/seo-autopilot.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

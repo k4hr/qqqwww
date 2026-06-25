@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { importEmbeddedWordstatFiles, importWordstatKeywords } from "@/lib/seo/keyword-engine";
 import { generateAiSeoLandingPage, generateTopAiSeoLandingPages } from "@/lib/seo/ai-builder";
+import { runSeoAutopilot } from "@/lib/seo/autopilot";
 
 function redirectWithResult(result: unknown) {
   revalidatePath("/admin/seo");
@@ -51,6 +52,19 @@ export async function generateTopAiSeoPagesAction(formData: FormData) {
   try {
     const result = await generateTopAiSeoLandingPages(Number.isFinite(limit) ? limit : 10);
     redirectWithResult({ ok: true, message: "AI пересобрал SEO-страницы.", result });
+  } catch (error) {
+    redirectWithResult({ ok: false, message: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+export async function runSeoAutopilotAction(formData: FormData) {
+  const aiLimit = Number(formData.get("aiLimit") ?? 5);
+  try {
+    const result = await runSeoAutopilot({ aiLimit: Number.isFinite(aiLimit) ? aiLimit : 5, rebuildWordstat: true });
+    revalidatePath("/admin/seo");
+    revalidatePath("/sitemap-index.xml");
+    revalidatePath("/sitemaps/collections.xml");
+    redirectWithResult({ ok: true, message: "SEO Autopilot завершил сборку страниц.", result });
   } catch (error) {
     redirectWithResult({ ok: false, message: error instanceof Error ? error.message : String(error) });
   }

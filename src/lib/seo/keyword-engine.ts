@@ -3,6 +3,8 @@ import path from "node:path";
 import { ContentType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildFranchiseWhere, getFranchiseConfig } from "@/lib/seo/franchise-orders";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
+import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 
 export type SeoIntent = "BASE" | "YEAR" | "FILMY_PRO" | "MULTIKI_PRO" | "FRANCHISE" | "EXCLUDED" | "UNKNOWN";
 
@@ -258,6 +260,59 @@ export function whereForSeoLanding(filter: unknown): Prisma.MovieWhereInput {
   return { AND: [typeWhere, yearWhere, textWhere].filter((item) => Object.keys(item).length) };
 }
 
+
+function landingStateForCluster(cluster: NonNullable<ReturnType<typeof buildClusterForQuery>>) {
+  if (cluster.targetType === "BASE") {
+    return { status: "REDIRECT", isIndexable: false, sitemapIncluded: false, minItems: 12 };
+  }
+  if (cluster.targetType === "FRANCHISE_ORDER") {
+    return { status: "ACTIVE", isIndexable: true, sitemapIncluded: true, minItems: 3 };
+  }
+  return { status: "ACTIVE", isIndexable: true, sitemapIncluded: true, minItems: cluster.intent === "BASE" ? 12 : 6 };
+}
+
+async function countMoviesForSeoLanding(page: { slug: string; type: string; filterJson: Prisma.JsonValue | null }) {
+  if (page.type === "BASE") return 0;
+  const config = getFranchiseConfig(page.slug);
+  const where = whereForSeoLanding(config ? { targetType: page.type, targetSlug: page.slug } : page.filterJson);
+  return prisma.movie.count({ where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), where] } }).catch(() => 0);
+}
+
+export async function applySeoLandingQualityGate(limit = 10000) {
+  const pages = await prisma.seoLandingPage.findMany({
+    where: { type: { in: GENERATED_LANDING_TYPES } },
+    select: { id: true, slug: true, type: true, filterJson: true, minItems: true, status: true },
+    orderBy: [{ totalDemand: "desc" }, { updatedAt: "desc" }],
+    take: Math.max(1, Math.min(limit, 10000)),
+  });
+
+  let active = 0;
+  let thin = 0;
+  let redirects = 0;
+  let checked = 0;
+
+  for (const page of pages) {
+    checked++;
+    if (page.type === "BASE") {
+      await prisma.seoLandingPage.update({ where: { id: page.id }, data: { status: "REDIRECT", isIndexable: false, sitemapIncluded: false } });
+      redirects++;
+      continue;
+    }
+
+    const items = await countMoviesForSeoLanding(page);
+    const minItems = page.type === "FRANCHISE_ORDER" ? Math.min(page.minItems, 3) : page.minItems;
+    if (items < minItems) {
+      await prisma.seoLandingPage.update({ where: { id: page.id }, data: { status: "THIN", isIndexable: false, sitemapIncluded: false } });
+      thin++;
+    } else {
+      await prisma.seoLandingPage.update({ where: { id: page.id }, data: { status: "ACTIVE", isIndexable: true, sitemapIncluded: true, aiError: null } });
+      active++;
+    }
+  }
+
+  return { checked, active, thin, redirects };
+}
+
 function filterForCluster(cluster: ReturnType<typeof buildClusterForQuery>) {
   if (!cluster) return undefined;
   const topic = cluster.intent === "FILMY_PRO" || cluster.intent === "MULTIKI_PRO" ? cluster.mainQuery.replace(/^фильмы про |^мультики про /, "") : undefined;
@@ -324,10 +379,11 @@ export async function importWordstatRows(rowsInput: WordstatRow[], source = "wor
       create: { key: item.cluster.key, title: item.cluster.title, intent: item.cluster.intent, mainQuery: item.cluster.mainQuery, totalDemand, targetType: item.cluster.targetType, targetSlug: item.cluster.targetSlug, variantsJson: item.variants, status: "ACTIVE" },
     });
     clusters++;
+    const state = landingStateForCluster(item.cluster);
     await prisma.seoLandingPage.upsert({
       where: { slug: item.cluster.targetSlug },
-      update: { ...landing, type: item.cluster.targetType, mainQuery: item.cluster.mainQuery, totalDemand, filterJson: filterJson as Prisma.InputJsonValue, isIndexable: true, sitemapIncluded: true, status: "ACTIVE" },
-      create: { slug: item.cluster.targetSlug, type: item.cluster.targetType, ...landing, mainQuery: item.cluster.mainQuery, totalDemand, filterJson: filterJson as Prisma.InputJsonValue, minItems: item.cluster.intent === "BASE" ? 12 : 6, status: "ACTIVE", isIndexable: true, sitemapIncluded: true },
+      update: { ...landing, type: item.cluster.targetType, mainQuery: item.cluster.mainQuery, totalDemand, filterJson: filterJson as Prisma.InputJsonValue, minItems: state.minItems, isIndexable: state.isIndexable, sitemapIncluded: state.sitemapIncluded, status: state.status },
+      create: { slug: item.cluster.targetSlug, type: item.cluster.targetType, ...landing, mainQuery: item.cluster.mainQuery, totalDemand, filterJson: filterJson as Prisma.InputJsonValue, minItems: state.minItems, status: state.status, isIndexable: state.isIndexable, sitemapIncluded: state.sitemapIncluded },
     });
     pages++;
   }
@@ -350,7 +406,8 @@ export async function importEmbeddedWordstatFiles(options?: { replace?: boolean 
   }
 
   const result = await importWordstatRows(rows, "wordstat", { replace: options?.replace ?? true });
-  return { files: files.length, ...result };
+  const quality = await applySeoLandingQualityGate();
+  return { files: files.length, ...result, quality };
 }
 
 export async function getSeoAdminStats() {

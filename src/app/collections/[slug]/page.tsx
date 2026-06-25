@@ -45,13 +45,15 @@ export default async function CollectionPage({ params }: Props) {
   const { slug } = await params;
   const collection = getCollection(slug);
   const topic = getSeoTopic(slug);
-  const landing = !collection && !topic ? await prisma.seoLandingPage.findFirst({ where: { slug, status: "ACTIVE", isIndexable: true } }).catch(() => null) : null;
-  if (landing?.type === "BASE") {
+  const seoLanding = !collection && !topic ? await prisma.seoLandingPage.findUnique({ where: { slug } }).catch(() => null) : null;
+  if (seoLanding?.type === "BASE" || seoLanding?.status === "REDIRECT") {
     if (slug.startsWith("serial")) permanentRedirect("/series");
     if (slug.startsWith("mult")) permanentRedirect("/cartoons");
     if (slug.startsWith("anime")) permanentRedirect("/anime");
     permanentRedirect("/films");
   }
+  const landing = seoLanding?.status === "ACTIVE" && seoLanding.isIndexable ? seoLanding : null;
+  if (seoLanding && !landing) notFound();
   const franchiseConfig = landing ? getFranchiseConfig(slug) : null;
   const aiDraft = landing ? readAiSeoDraft(landing.aiDraftJson) : null;
   const landingFilter = landing ? whereForSeoLanding(franchiseConfig ? { targetType: landing.type, targetSlug: slug } : landing.filterJson) : null;
@@ -69,6 +71,7 @@ export default async function CollectionPage({ params }: Props) {
     take: franchiseConfig ? 96 : 48,
   }));
   if (franchiseConfig) movies = sortMoviesByFranchiseOrder(slug, movies).slice(0, 48);
+  if (!movies.length) notFound();
   if (topic && !trendCategory && movies.length < 8) notFound();
   if (landing && movies.length < landing.minItems) notFound();
   if (trendCategory && !movies.length) notFound();
@@ -87,15 +90,9 @@ export default async function CollectionPage({ params }: Props) {
         <p className="mt-3 max-w-4xl leading-relaxed text-[#a1a1aa]">{description}</p>
       </section>
 
-      {movies.length ? (
-        <div className="movie-grid">
-          {movies.map((movie) => <MovieCard key={movie.slug} movie={movie} />)}
-        </div>
-      ) : (
-        <div className="glass-panel rounded-3xl p-8 text-[#a1a1aa]">
-          Каталог обновляется. Фильмы скоро появятся.
-        </div>
-      )}
+      <div className="movie-grid">
+        {movies.map((movie) => <MovieCard key={movie.slug} movie={movie} />)}
+      </div>
       {franchiseConfig ? <section className="mf-panel mt-7 p-5 sm:p-6"><h2 className="text-xl font-black text-white">Как смотреть по порядку</h2><p className="mt-3 max-w-4xl leading-relaxed text-[#a1a1aa]">На странице сначала показываются фильмы, найденные в каталоге REDFILM, а порядок строится по хронологии и известным веткам киновселенной. Если какой-то части нет в каталоге, она не выводится пустой карточкой.</p></section> : null}
 
       {aiDraft?.sections?.length ? <section className="mf-panel mt-7 space-y-6 p-5 sm:p-6">{aiDraft.sections.map((section) => {

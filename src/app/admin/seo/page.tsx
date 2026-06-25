@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSeoAdminStats } from "@/lib/seo/keyword-engine";
-import { generateAiSeoPageAction, generateTopAiSeoPagesAction, importWordstatCsvAction, rebuildEmbeddedWordstatAction } from "./actions";
+import { generateAiSeoPageAction, generateTopAiSeoPagesAction, importWordstatCsvAction, rebuildEmbeddedWordstatAction, runSeoAutopilotAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,17 @@ export default async function AdminSeoPage({ searchParams }: Props) {
     </div>
 
     {result ? <pre className="mb-5 overflow-auto rounded-xl bg-[#111] p-4 text-xs text-white">{JSON.stringify(result, null, 2)}</pre> : null}
+
+    <section className="admin-panel mb-5 border-2 border-[#e50914]/30 p-5">
+      <h2 className="text-xl font-black">SEO Autopilot</h2>
+      <p className="mt-2 text-sm text-neutral-600">Одна кнопка: пересобирает встроенный Wordstat без дублей, чистит пустые и мусорные страницы, ставит redirect для широких запросов, прогоняет Quality Gate и запускает OpenAI для лучших страниц.</p>
+      <form action={runSeoAutopilotAction} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label className="text-sm text-neutral-600">AI страниц за запуск</label>
+        <input name="aiLimit" type="number" min={0} max={30} defaultValue={5} className="w-28 min-h-11 rounded-lg border border-[#ddd] bg-white px-3" />
+        <button type="submit" className="rounded-xl bg-[#e50914] px-5 py-3 font-black text-white">Собрать SEO-страницы автоматически</button>
+      </form>
+      <p className="mt-2 text-xs text-neutral-500">Для первого запуска поставь 3–5 AI-страниц. Если OPENAI_API_KEY не задан, Autopilot всё равно очистит мусор, создаст кластеры и качественные indexable-страницы без AI-текста.</p>
+    </section>
 
     <section className="admin-panel mb-5 p-5">
       <h2 className="text-xl font-black">AI SEO Builder</h2>
@@ -89,7 +100,7 @@ export default async function AdminSeoPage({ searchParams }: Props) {
       <section className="admin-panel p-5">
         <h2 className="text-xl font-black">SEO-страницы</h2>
         <div className="mt-3 space-y-2 text-sm">
-          {pages.map((item) => <div key={item.id} className="rounded-lg border border-[#eee] bg-white p-3"><Link href={`/collections/${item.slug}`} className="font-bold text-[#e50914]" target="_blank">{item.h1}</Link><br /><span className="text-neutral-500">{item.type} · AI {item.aiStatus} · min {item.minItems} · спрос {item.totalDemand.toLocaleString("ru-RU")}</span><form action={generateAiSeoPageAction} className="mt-2"><input type="hidden" name="slug" value={item.slug} /><button type="submit" className="rounded-lg border border-[#e50914] px-3 py-1 text-xs font-bold text-[#e50914]">AI пересобрать</button></form></div>)}
+          {pages.map((item) => <div key={item.id} className="rounded-lg border border-[#eee] bg-white p-3"><Link href={`/collections/${item.slug}`} className="font-bold text-[#e50914]" target="_blank">{item.h1}</Link><br /><span className="text-neutral-500">{item.type} · статус {item.status} · AI {item.aiStatus} · min {item.minItems} · спрос {item.totalDemand.toLocaleString("ru-RU")}</span><form action={generateAiSeoPageAction} className="mt-2"><input type="hidden" name="slug" value={item.slug} /><button type="submit" className="rounded-lg border border-[#e50914] px-3 py-1 text-xs font-bold text-[#e50914]">AI пересобрать</button></form></div>)}
           {!pages.length ? <div className="text-neutral-500">SEO-страницы ещё не созданы.</div> : null}
         </div>
       </section>
