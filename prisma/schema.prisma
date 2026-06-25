@@ -506,3 +506,67 @@ model ExternalArticleMention {
   @@index([detectedYear])
   @@index([mentionScore])
 }
+model SeoKeyword {
+  id              String   @id @default(cuid())
+  query           String
+  normalizedQuery String
+  impressions     Int      @default(0)
+  source          String   @default("wordstat")
+  intent          String   @default("UNKNOWN")
+  clusterKey      String?
+  status          String   @default("ACTIVE")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([normalizedQuery, source])
+  @@index([status])
+  @@index([clusterKey])
+  @@index([intent])
+  @@index([impressions])
+}
+
+model SeoCluster {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  title        String
+  intent       String
+  mainQuery    String
+  totalDemand  Int      @default(0)
+  targetType   String   @default("COLLECTION")
+  targetSlug   String
+  status       String   @default("ACTIVE")
+  variantsJson Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([intent])
+  @@index([status])
+  @@index([targetSlug])
+  @@index([totalDemand])
+}
+
+model SeoLandingPage {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  type            String   @default("COLLECTION")
+  title           String
+  h1              String
+  description     String   @db.Text
+  introText       String   @db.Text
+  filterJson      Json?
+  mainQuery       String?
+  keywordVariants String[] @default([])
+  totalDemand     Int      @default(0)
+  minItems        Int      @default(8)
+  isIndexable     Boolean  @default(true)
+  sitemapIncluded Boolean  @default(true)
+  status          String   @default("ACTIVE")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([isIndexable, sitemapIncluded])
+  @@index([totalDemand])
+}
+

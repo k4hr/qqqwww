@@ -17,7 +17,10 @@ import { getPopularMovies, getRecentPopularityStats } from "@/lib/popularity";
 import { takeUniqueMovies } from "@/lib/recommendation-dedupe";
 import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
 import { buildAudienceCandidateWhere, sortAudienceMovies } from "@/lib/similar";
-import { countryPath, genrePath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
+import { countryPath, genrePath, personPath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
+import { filmIntro, whyWatchText } from "@/lib/seo-text";
+import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from "@/lib/seo/schema";
+import { watchSeoDescription, watchSeoH1, watchSeoTitle } from "@/lib/seo/meta";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +34,8 @@ function shortDescription(description: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const movie = await getSeoMovieBySlug((await params).slug);
   if (!movie) return {};
-  const title = `${movie.titleRu} (${movie.year}) смотреть онлайн бесплатно — REDFILM`;
-  const description = `Смотрите ${movie.titleRu} (${movie.year}) онлайн в хорошем качестве на REDFILM. ${shortDescription(movie.description)}`;
+  const title = watchSeoTitle(movie);
+  const description = watchSeoDescription(movie);
   const canonical = watchPath(movie);
   const image = movie.backdropUrl || movie.posterUrl;
 
@@ -82,20 +85,16 @@ export default async function WatchPage({ params }: Props) {
   return (
     <div className="container py-5 sm:py-7">
       <AnalyticsEvent type="page_view" movieId={movie.id} />
-      <JsonLd data={{
-        "@context": "https://schema.org",
-        "@type": "Movie",
-        name: movie.titleRu,
-        alternateName: movie.titleOriginal || undefined,
-        datePublished: String(movie.year),
-        image: movie.posterUrl || movie.backdropUrl || undefined,
-        description,
-        genre: movie.genres.map((item) => item.genre.name),
-        countryOfOrigin: countries.map((name) => ({ "@type": "Country", name })),
-        aggregateRating: rating ? { "@type": "AggregateRating", ratingValue: rating, bestRating: 10, worstRating: 0 } : undefined,
-        potentialAction: { "@type": "WatchAction", target: siteUrl(watchPath(movie)) },
-        url: siteUrl(watchPath(movie)),
-      }} />
+      <JsonLd data={[
+        movieJsonLd(movie),
+        videoObjectJsonLd(movie),
+        breadcrumbJsonLd([
+          { name: "REDFILM", url: "/" },
+          { name: movie.type === "SERIES" ? "Сериалы" : movie.type === "ANIME" ? "Аниме" : movie.type === "CARTOON" ? "Мультфильмы" : "Фильмы", url: movie.type === "SERIES" ? "/series" : movie.type === "ANIME" ? "/anime" : movie.type === "CARTOON" ? "/cartoons" : "/films" },
+          { name: movie.titleRu, url: watchPath(movie) },
+        ]),
+        itemListJsonLd(`Похожие фильмы к ${movie.titleRu}`, similarPath(movie), similar),
+      ]} />
 
       <nav className="mb-5 flex min-w-0 flex-wrap items-center gap-2 break-words text-sm text-[#7d7d87]" aria-label="Хлебные крошки">
         <Link href="/" className="hover:text-white">REDFILM</Link><span>/</span>
@@ -112,7 +111,7 @@ export default async function WatchPage({ params }: Props) {
           </div>
           <div className="min-w-0">
             <span className="mf-badge">{movie.quality || "HD"}</span>
-            <h1 className="mt-3 break-words text-[clamp(1.55rem,6vw,3rem)] font-black tracking-[-.03em] text-white">Смотреть онлайн {movie.titleRu} ({movie.year})</h1>
+            <h1 className="mt-3 break-words text-[clamp(1.55rem,6vw,3rem)] font-black tracking-[-.03em] text-white">{watchSeoH1(movie)}</h1>
             <p className="line-clamp-3 mt-3 max-w-3xl text-sm leading-relaxed text-[#b9b9c0] sm:text-base">{description}</p>
             <dl className="mt-5 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
               <Fact label="Год"><Link href={yearPath(movie)}>{movie.year}</Link></Fact>
@@ -132,6 +131,21 @@ export default async function WatchPage({ params }: Props) {
       <PlayerBlock movie={movie} />
       <VibixBanner slot="movie_below_player" size="680x250" />
       <VibixFlyrollSlot slot="movie_below_player" />
+
+      <section className="mf-panel mt-8 p-5 sm:p-6">
+        <h2 className="text-2xl font-black text-white">О чём {movie.titleRu}</h2>
+        <div className="mt-3 space-y-3 text-sm leading-relaxed text-[#b7b7c0] sm:text-base">
+          {filmIntro(movie).map((text) => <p key={text}>{text}</p>)}
+          <p>{whyWatchText(movie)}</p>
+        </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {primaryGenre ? <Link href={genrePath(primaryGenre)} className="mf-btn">{primaryGenre.name}</Link> : null}
+          <Link href={yearPath(movie)} className="mf-btn">{movie.year} год</Link>
+          {countries[0] ? <Link href={countryPath(countries[0])} className="mf-btn">{countries[0]}</Link> : null}
+          <Link href={similarPath(movie)} className="mf-btn">Похожие фильмы</Link>
+          {movie.cast?.slice(0, 5).map((item) => <Link key={item.personId} href={personPath(item.person.nameRu)} className="mf-btn">Фильмы с {item.person.nameRu}</Link>)}
+        </div>
+      </section>
 
       <section className="mt-8">
         <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">Похожие фильмы</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>

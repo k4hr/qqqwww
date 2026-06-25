@@ -32,6 +32,7 @@ export default async function AdminPage({ searchParams }: Props) {
           <Link href="/admin/catalog" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">КАТАЛОГ</Link>
           <Link href="/admin/ads" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">РЕКЛАМА</Link>
           <Link href="/admin/similarity" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">Похожие</Link>
+          <Link href="/admin/seo" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">SEO</Link>
           <Link href="/admin/trends" className="bg-[#333] text-white font-bold px-5 py-3 rounded-sm">Trend Engine</Link>
           <Link href="/admin/analytics" className="bg-[#333] text-white font-bold px-5 py-3 rounded-sm">Аналитика</Link>
         </div>

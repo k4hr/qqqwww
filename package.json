@@ -21,7 +21,8 @@
     "vibix:update-once": "tsx src/scripts/vibix-update-once.ts",
     "similarity:recalculate": "tsx src/scripts/recalculate-similarities.ts",
     "similarity:worker": "tsx src/scripts/similarity-worker.ts",
-    "vibix:catalog-worker": "tsx src/scripts/vibix-catalog-worker.ts"
+    "vibix:catalog-worker": "tsx src/scripts/vibix-catalog-worker.ts",
+    "seo:import-wordstat": "tsx src/scripts/import-wordstat-seo.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
