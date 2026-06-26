@@ -15,6 +15,31 @@ const transliteration: Record<string, string> = {
 const WORD_BOUNDARY_PATTERN = /[\s:;,.!?()\[\]{}<>«»"'`~|\\/\-_+–—]/;
 const SHORT_TOKEN_MAX_PREFIX_EXTRA = 2;
 
+
+const SEARCH_INTENT_STOP_WORDS = new Set([
+  "смотреть", "посмотреть", "смотри", "смотрим", "смотрет", "smotret", "watch",
+  "онлайн", "online", "бесплатно", "бесплатный", "free", "без", "регистрации",
+  "фильм", "фильмы", "фильма", "кино", "кинo", "movie", "movies",
+  "сериал", "сериалы", "сериала", "series", "serial", "tv",
+  "мультфильм", "мультфильмы", "мультик", "мультики", "cartoon",
+  "аниме", "anime", "дорама", "дорамы",
+  "хорошем", "хорошее", "хорошего", "качестве", "качество", "качеством", "quality",
+  "озвучке", "озвучка", "дубляже", "дубляж", "русской", "русский", "русском",
+  "полностью", "целиком", "подряд", "все", "весь", "вся", "всe",
+  "hd", "fullhd", "fhd", "uhd", "webdl", "webrip", "bdrip", "hdrip", "1080", "1080p", "720", "720p", "4k",
+]);
+
+const SEARCH_INTENT_PHRASE_PATTERNS: RegExp[] = [
+  /\b(?:s\s?\d{1,2}|season\s*\d{1,2}|sezon\s*\d{1,2})\b/gi,
+  /\b(?:e\s?\d{1,3}|episode\s*\d{1,3}|epizod\s*\d{1,3})\b/gi,
+  /\b\d{1,2}\s*x\s*\d{1,3}\b/gi,
+  /\b\d{1,3}\s*(?:й|ый|ой|ий|ая|я)?\s*(?:сезон|сезона|сезоне|сезоны|серия|серии|серий|эпизод|эпизода|эпизоды)\b/gi,
+  /\b(?:сезон|сезона|сезоне|сезоны|серия|серии|серий|эпизод|эпизода|эпизоды)\s*\d{1,3}\b/gi,
+  /\b(?:все|вся|весь|all)\s+(?:сезоны|сезона|серии|серий|episodes|seasons)\b/gi,
+  /\b(?:смотреть|посмотреть|watch)\s+(?:онлайн|online)\b/gi,
+  /\b(?:в|во)\s+(?:хорошем|hd|fullhd|fhd|4k)\s+качестве\b/gi,
+];
+
 // Небольшой словарь нужен не для “Тора”, а для всей логики рус/англ франшиз.
 // Поиск всё равно сначала ранжирует точные title matches, а алиасы только помогают найти оригинальные названия.
 const SEARCH_ALIASES: Record<string, string[]> = {
@@ -91,6 +116,30 @@ export function normalizeSearchQuery(query: string) {
   return normalizeRawSearchText(query);
 }
 
+
+export function normalizeSearchIntentQuery(query: string) {
+  const normalized = normalizeSearchQuery(query);
+  if (!normalized) return "";
+
+  let cleaned = ` ${normalized} `;
+  for (const pattern of SEARCH_INTENT_PHRASE_PATTERNS) cleaned = cleaned.replace(pattern, " ");
+
+  cleaned = cleaned
+    .replace(/\b(?:hd|fullhd|fhd|uhd|4k)\s*(?:резка|rip|quality)?\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const tokens = cleaned.split(" ").filter((token) => {
+    if (!token) return false;
+    if (SEARCH_INTENT_STOP_WORDS.has(token)) return false;
+    if (/^(?:19|20)\d{2}$/.test(token)) return true;
+    return true;
+  });
+
+  const intent = tokens.join(" ").trim();
+  return intent || normalized;
+}
+
 export function tokenizeSearchQuery(query: string) {
   return Array.from(new Set(normalizeSearchQuery(query).split(" ").filter((token) => token.length >= 2)));
 }
@@ -147,10 +196,19 @@ function addAliasVariants(target: string[], normalized: string) {
 function buildSearchVariants(query: string) {
   const variants: string[] = [];
   const normalized = normalizeSearchQuery(query);
-  addQueryShapeVariants(variants, normalized);
-  addAliasVariants(variants, normalized);
+  const intent = normalizeSearchIntentQuery(normalized);
 
-  return variants.slice(0, 24);
+  addQueryShapeVariants(variants, intent);
+  addAliasVariants(variants, intent);
+
+  // Сохраняем исходную форму как слабую запасную ветку: это помогает редким названиям,
+  // где слова вроде "сезон" или "серия" действительно являются частью тайтла.
+  if (normalized !== intent) {
+    addQueryShapeVariants(variants, normalized);
+    addAliasVariants(variants, normalized);
+  }
+
+  return variants.slice(0, 32);
 }
 
 function isShortSingleToken(query: string) {
@@ -230,16 +288,20 @@ function metadataWhere(query: string): Prisma.MovieWhereInput[] {
 }
 
 export function buildSearchWhere(query: string): Prisma.MovieWhereInput {
-  const variants = buildSearchVariants(query);
+  const normalized = normalizeSearchQuery(query);
+  const intent = normalizeSearchIntentQuery(normalized);
+  const variants = buildSearchVariants(normalized);
   if (!variants.length) return {};
-  const relaxedContains = !isShortSingleToken(query);
+  const relaxedContains = !isShortSingleToken(intent);
   const OR = [
-    ...idWhere(query),
+    ...idWhere(intent),
+    ...(intent !== normalized ? idWhere(normalized) : []),
     ...variants.flatMap((variant) => [
       ...titleFieldWhere(variant, relaxedContains),
       ...titleTokenAndWhere(variant),
     ]),
-    ...metadataWhere(query),
+    ...metadataWhere(intent),
+    ...(intent !== normalized ? metadataWhere(normalized) : []),
   ];
   return OR.length ? { OR } : {};
 }
@@ -346,12 +408,13 @@ function scoreOneTextField(text: string, variant: string, tokens: string[], exac
 
 export function scoreSearchResult(movie: SearchMovie, query: string) {
   const normalized = normalizeSearchQuery(query);
+  const intent = normalizeSearchIntentQuery(normalized);
   const variants = buildSearchVariants(normalized);
-  const tokens = tokenizeSearchQuery(normalized);
-  if (!normalized || !tokens.length || !variants.length) return 0;
+  const tokens = tokenizeSearchQuery(intent);
+  if (!intent || !tokens.length || !variants.length) return 0;
 
   let score = 0;
-  const idQuery = normalized.replace(/\s+/g, "");
+  const idQuery = intent.replace(/\s+/g, "");
   if (idQuery && idQuery === normalizeSearchQuery(movie.kinopoiskId ?? "")) score += 260;
   if (idQuery && idQuery === normalizeSearchQuery(movie.imdbId ?? "")) score += 260;
   if (idQuery && idQuery === normalizeSearchQuery(movie.tmdbId ?? "")) score += 190;
@@ -359,7 +422,7 @@ export function scoreSearchResult(movie: SearchMovie, query: string) {
 
   for (const variant of variants) {
     const variantTokens = tokenizeSearchQuery(variant);
-    const aliasPenalty = variant === normalized ? 0 : 18;
+    const aliasPenalty = variant === intent ? 0 : 18;
     score += Math.max(0, scoreOneTextField(movie.titleRu, variant, variantTokens, 210, 165, 132) - aliasPenalty);
     score += Math.max(0, scoreOneTextField(movie.titleOriginal ?? "", variant, variantTokens, 185, 145, 112) - aliasPenalty);
     score += Math.max(0, scoreOneTextField(movie.slug, variant, variantTokens, 135, 105, 85) - aliasPenalty);
@@ -368,14 +431,14 @@ export function scoreSearchResult(movie: SearchMovie, query: string) {
   if (tokens.some((token) => token === String(movie.year))) score += 40;
 
   // Жанры/страны — только вторичный поиск. Они не должны обгонять совпадения по названию.
-  if (normalized.length >= 4) {
+  if (intent.length >= 4) {
     const genreWords = movie.genres.flatMap((item) => splitWords(item.genre.name));
     if (tokens.some((token) => genreWords.includes(token))) score += 18;
-    if (movie.country && phraseAtWordBoundary(normalizeSearchQuery(movie.country), normalized)) score += 12;
+    if (movie.country && phraseAtWordBoundary(normalizeSearchQuery(movie.country), intent)) score += 12;
   }
 
   // Защита от мусора типа “тор” внутри “доктор/торонто/история/шторм”.
-  if (isShortSingleToken(normalized) && score < 70) return 0;
+  if (isShortSingleToken(intent) && score < 70) return 0;
 
   if (score <= 0) return 0;
   if (movie.vibixAvailable) score += 8;
@@ -408,8 +471,9 @@ function uniqueMovies(movies: SearchMovie[]) {
 
 export async function searchMovies(query: string, filters: SearchFilters = {}, limit = 48) {
   const normalized = normalizeSearchQuery(query);
-  const baseWhere = filterWhere(filters, Boolean(normalized));
-  if (!normalized) return [];
+  const intent = normalizeSearchIntentQuery(normalized);
+  const baseWhere = filterWhere(filters, Boolean(intent));
+  if (!intent) return [];
 
   const take = Math.min(320, Math.max(100, limit * 10));
   const strictWhere = buildSearchWhere(normalized);
@@ -421,7 +485,7 @@ export async function searchMovies(query: string, filters: SearchFilters = {}, l
   });
 
   // Для длинных запросов можно добрать metadata-результаты, но они всё равно будут ниже title matches по score.
-  if (!isShortSingleToken(normalized) && candidates.length < Math.min(16, limit)) {
+  if (!isShortSingleToken(intent) && candidates.length < Math.min(16, limit)) {
     const relaxedVariants = buildSearchVariants(normalized).filter((variant) => variant.length >= 4);
     if (relaxedVariants.length) {
       const relaxed = await prisma.movie.findMany({
@@ -447,7 +511,7 @@ export async function searchMovies(query: string, filters: SearchFilters = {}, l
   }
 
   return candidates
-    .map((movie) => ({ movie, score: scoreSearchResult(movie, normalized) }))
+    .map((movie) => ({ movie, score: scoreSearchResult(movie, intent) }))
     .filter((item) => item.score >= 70)
     .sort((a, b) => b.score - a.score || popularityBoost(b.movie) - popularityBoost(a.movie) || (b.movie.year ?? 0) - (a.movie.year ?? 0))
     .slice(0, limit)
