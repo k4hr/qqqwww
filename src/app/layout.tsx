@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://redfilm.win"),
   title: "REDFILM — фильмы и сериалы онлайн",
-  description: "Каталог фильмов и сериалов REDFILM с описаниями и рейтингами.",
+  description: "Онлайн кинотеатр со всеми фильмами и сериалами. Постоянное обновление каталога, смотрите все новинки здесь!",
   manifest: "/site.webmanifest",
   icons: {
     icon: [
