@@ -1,7 +1,10 @@
 "use server";
 
+import { ContentType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { calculateCatalogScore } from "@/lib/catalog-score";
+import { calculateHomeQuality } from "@/lib/home-quality-score";
 import { prisma } from "@/lib/prisma";
 import {
   getVibixVideoByImdbIdResult,
@@ -32,6 +35,19 @@ function decodeVideo(value: FormDataEntryValue | null): VibixVideo | null {
   } catch {
     return null;
   }
+}
+
+
+function attachSourceCategory(video: VibixVideo, categoryId: number | null, categoryLabel: string | null): VibixVideo {
+  if (!categoryId) return video;
+  const record = video as VibixVideo & Record<string, unknown>;
+  const category = { id: categoryId, category_id: categoryId, name: categoryLabel ?? undefined, name_rus: categoryLabel ?? undefined };
+  return {
+    ...record,
+    category_id: record.category_id ?? categoryId,
+    category: record.category ?? category,
+    categories: record.categories ?? [category],
+  } as VibixVideo;
 }
 
 function resultUrl(result: unknown) {
@@ -73,9 +89,12 @@ async function enrichBeforeImport(base: VibixVideo, sourceType: VibixCatalogType
 export async function importVibixBrowserItemAction(formData: FormData) {
   const video = decodeVideo(formData.get("videoJson"));
   const sourceType = formData.get("sourceType") === "serial" ? "serial" : "movie";
+  const sourceCategoryId = intValue(formData.get("sourceCategoryId"));
+  const sourceCategoryLabel = stringValue(formData.get("sourceCategoryLabel"));
   if (!video) redirect(resultUrl({ ok: false, message: "Не удалось прочитать запись Vibix из формы." }));
 
-  const enrichment = await enrichBeforeImport(video, sourceType);
+  const videoWithCategory = attachSourceCategory(video, sourceCategoryId, sourceCategoryLabel);
+  const enrichment = await enrichBeforeImport(videoWithCategory, sourceType);
   if (enrichment.rateLimited) {
     redirect(resultUrl({ ok: false, message: enrichment.message, details: { attempts: enrichment.attempts, video: enrichment.video } }));
   }
@@ -94,6 +113,58 @@ export async function importVibixBrowserItemAction(formData: FormData) {
   redirect(resultUrl({
     ok: saved.status !== "skipped",
     message: saved.status === "skipped" ? `Не добавлено: ${saved.reason}` : `Добавлено/обновлено: ${title}`,
-    details: { saved, movie, watchUrl: movie?.slug ? `/watch/${movie.slug}` : null, attempts: enrichment.attempts, video: enrichment.video },
+    details: { saved, movie, watchUrl: movie?.slug ? `/watch/${movie.slug}` : null, sourceCategoryId, sourceCategoryLabel, attempts: enrichment.attempts, video: enrichment.video },
   }));
 }
+
+function decodeMovieIds(value: FormDataEntryValue | null) {
+  const raw = stringValue(value);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item) => stringValue(item)).filter((item): item is string => Boolean(item));
+  } catch {
+    return [];
+  }
+}
+
+export async function moveVibixBrowserPageMoviesToAnimeAction(formData: FormData) {
+  const ids = Array.from(new Set(decodeMovieIds(formData.get("movieIds")))).slice(0, 200);
+  if (!ids.length) redirect(resultUrl({ ok: false, message: "На этой странице нет фильмов для переноса в аниме." }));
+
+  const movies = await prisma.movie.findMany({
+    where: { id: { in: ids } },
+    include: { genres: { include: { genre: true } } },
+  });
+
+  let moved = 0;
+  const examples: Array<{ title: string; year: number; slug: string }> = [];
+  for (const movie of movies) {
+    if (movie.type === ContentType.ANIME) continue;
+    const typedMovie = { ...movie, type: ContentType.ANIME };
+    const homeScore = calculateHomeQuality(typedMovie);
+    const catalogScore = calculateCatalogScore(typedMovie);
+    await prisma.movie.update({
+      where: { id: movie.id },
+      data: {
+        type: ContentType.ANIME,
+        ...homeScore,
+        ...catalogScore,
+        lastQualitySyncAt: new Date(),
+        lastCatalogScoreAt: new Date(),
+        similarityDirty: true,
+        similarityDirtyReason: "admin_vibix_page_anime_reclassify",
+      },
+    });
+    moved += 1;
+    if (examples.length < 12) examples.push({ title: movie.titleRu, year: movie.year, slug: movie.slug });
+  }
+
+  revalidatePath("/admin/catalog");
+  revalidatePath("/admin/catalog/vibix");
+  revalidatePath("/films");
+  revalidatePath("/anime");
+  redirect(resultUrl({ ok: true, message: `Перенесено в аниме с текущей страницы Vibix: ${moved}.`, details: { requested: ids.length, moved, examples } }));
+}
+

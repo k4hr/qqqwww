@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getVibixVideoLinks, searchVibixVideosResult, type VibixCatalogType, type VibixVideo } from "@/lib/vibix";
 import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
-import { importVibixBrowserItemAction } from "./actions";
+import { importVibixBrowserItemAction, moveVibixBrowserPageMoviesToAnimeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +33,7 @@ type LocalMovieMatch = {
   isPublicVisible: boolean;
   vibixIframeUrl: string | null;
   vibixEmbedCode: string | null;
+  type: string;
 };
 
 const CATEGORY_OPTIONS = [
@@ -83,7 +84,9 @@ function titleOf(video: VibixVideo) {
   return stringValue(video.name_rus) || stringValue(video.name) || stringValue(video.name_original) || stringValue(video.name_eng) || `Vibix ${video.id ?? "—"}`;
 }
 
-function kindOf(video: VibixVideo) {
+function kindOf(video: VibixVideo, categoryId?: number | null) {
+  if (categoryId === 18) return "Аниме";
+  if (categoryId === 14 || categoryId === 21) return "Мультфильм";
   const value = stringValue(video.type)?.toLowerCase() ?? "";
   if (["series", "serial", "tv", "show"].includes(value)) return "Сериал";
   return "Фильм";
@@ -141,6 +144,7 @@ async function getLocalMatches(videos: VibixVideo[]) {
       isPublicVisible: true,
       vibixIframeUrl: true,
       vibixEmbedCode: true,
+      type: true,
     },
   });
 
@@ -181,6 +185,9 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
         categoryIds: categoryOption.categoryId ? [categoryOption.categoryId] : undefined,
       });
   const localMaps = await getLocalMatches(response.data);
+  const pageAnimeCandidateIds = categoryOption.categoryId === VIBIX_CATEGORY_IDS.anime
+    ? Array.from(new Set(response.data.map((video) => matchLocal(video, localMaps)).filter((movie): movie is LocalMovieMatch => Boolean(movie && movie.type === "MOVIE")).map((movie) => movie.id)))
+    : [];
   const total = response.meta?.total ?? null;
   const lastPage = response.meta?.lastPage ?? null;
 
@@ -237,6 +244,19 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
         <Link href="/admin/catalog" className="flex h-12 items-center justify-center rounded-xl bg-[#333] px-5 font-bold text-white lg:col-span-2">Каталог REDFILM</Link>
       </form>
 
+      {pageAnimeCandidateIds.length ? (
+        <form action={moveVibixBrowserPageMoviesToAnimeAction} className="mt-4 rounded-2xl border border-[#e50914]/25 bg-[#fff5f5] p-4 text-sm text-[#222]">
+          <input type="hidden" name="movieIds" value={JSON.stringify(pageAnimeCandidateIds)} />
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="font-black">На этой странице есть аниме, которые лежат в разделе “Фильмы”</div>
+              <div className="mt-1 text-neutral-600">Нажми кнопку — эти {pageAnimeCandidateIds.length} тайтлов будут перенесены в раздел “Аниме”.</div>
+            </div>
+            <button className="h-11 rounded-xl bg-[#e50914] px-5 font-black text-white">Перенести страницу в аниме</button>
+          </div>
+        </form>
+      ) : null}
+
       {response.rateLimited ? (
         <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Vibix вернул rate limit. Подожди немного и повтори.</div>
       ) : null}
@@ -276,6 +296,8 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
                     ) : (
                       <form action={importVibixBrowserItemAction}>
                         <input type="hidden" name="sourceType" value={sourceType} />
+                        <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
+                        <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
                         <input type="hidden" name="videoJson" value={encodedVideo(video)} />
                         <button className="h-10 rounded-xl bg-[#e50914] px-4 text-xs font-black text-white disabled:bg-neutral-400" disabled={!hasPlayer}>Добавить</button>
                       </form>
@@ -290,7 +312,7 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
                     {stringValue(video.name_original) || stringValue(video.name_eng) ? <div className="mt-1 text-xs text-neutral-500">{stringValue(video.name_original) || stringValue(video.name_eng)}</div> : null}
                     {stringValue(video.quality) ? <span className="mt-2 inline-flex rounded-lg bg-[#e50914] px-2 py-1 text-xs font-bold text-white">{video.quality}</span> : null}
                   </td>
-                  <td className="p-3">{kindOf(video)}</td>
+                  <td className="p-3">{kindOf(video, categoryOption.categoryId)}</td>
                   <td className="p-3">{video.year ?? "—"}</td>
                   <td className="max-w-[260px] p-3 text-xs">{compactList(video.genre)}</td>
                   <td className="p-3 text-xs">

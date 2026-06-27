@@ -10,6 +10,7 @@ import {
   diagnoseVibixManualImportAction,
   importMissingFromVibixAction,
   importVibixTitleManuallyAction,
+  moveMoviesToAnimeAction,
   recalculateCatalogKindsAction,
   restartVibixCatalogMagicAction,
   runVibixCatalogMagicOnceAction,
@@ -271,9 +272,12 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-2xl font-black text-[#222]">Перераспределение категорий</h2>
-            <p className="mt-1 text-sm text-neutral-500">Использует точные Vibix ID: category 18 anime, 14 cartoon, genre 25 anime, 3 animation.</p>
+            <p className="mt-1 text-sm text-neutral-500">Если аниме случайно попало в “Фильмы”, нажми перенос: кнопка найдёт MOVIE-записи с Vibix category 18 / жанром anime / японской анимацией и переведёт их в раздел “Аниме”.</p>
           </div>
-          <form action={recalculateCatalogKindsAction}><button className="h-12 rounded-xl bg-[#e50914] px-5 font-bold text-white">Пересчитать каталог и типы</button></form>
+          <div className="flex flex-wrap gap-2">
+            <form action={moveMoviesToAnimeAction}><button className="h-12 rounded-xl bg-[#e50914] px-5 font-bold text-white">Перенести аниме из фильмов</button></form>
+            <form action={recalculateCatalogKindsAction}><button className="h-12 rounded-xl bg-[#333] px-5 font-bold text-white">Пересчитать каталог и типы</button></form>
+          </div>
         </div>
       </section>
 

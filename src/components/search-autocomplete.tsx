@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { resolveSearchRedirectPath } from "@/lib/search-route-intents";
 
 type Suggestion = { id: string; title: string; year: number; type: string; posterUrl: string | null; href: string };
 
@@ -61,7 +62,8 @@ export function SearchAutocomplete({ mobile = false }: { mobile?: boolean }) {
     if (!normalized) return;
     setOpen(false);
     inputRef.current?.blur();
-    router.push(`/search?q=${encodeURIComponent(normalized)}`);
+    const routeIntent = resolveSearchRedirectPath(normalized);
+    router.push(routeIntent?.href ?? `/search?q=${encodeURIComponent(normalized)}`);
   }
 
   const shellClass = mobile
@@ -76,7 +78,7 @@ export function SearchAutocomplete({ mobile = false }: { mobile?: boolean }) {
     {open && (loading || results.length > 0) ? <div className="absolute inset-x-0 top-[calc(100%+8px)] z-[90] max-h-[min(420px,60vh)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0b0b0f]/[.98] p-2 shadow-[0_24px_70px_rgba(0,0,0,.75)] backdrop-blur-xl">
       {loading ? Array.from({ length: 3 }, (_, index) => <div key={index} className="grid min-h-14 grid-cols-[38px_minmax(0,1fr)] items-center gap-3 p-2"><div className="skeleton h-12 rounded-md" /><div className="space-y-2"><div className="skeleton h-3 w-4/5 rounded" /><div className="skeleton h-3 w-2/5 rounded" /></div></div>) : results.map((movie) => <Link key={movie.id} href={movie.href} onClick={() => setOpen(false)} className="grid min-h-14 grid-cols-[38px_minmax(0,1fr)] items-center gap-3 rounded-xl p-2 transition hover:bg-white/[.07]">
         <div className="relative h-12 overflow-hidden rounded-md bg-[#18181f]">{movie.posterUrl ? <img src={movie.posterUrl} alt="" className="h-full w-full object-cover" /> : null}</div>
-        <div className="min-w-0"><div className="truncate text-sm font-bold text-white">{movie.title}</div><div className="mt-1 text-xs text-[#8d8d97]">{movie.year} · {movie.type === "SERIES" ? "Сериал" : "Фильм"}</div></div>
+        <div className="min-w-0"><div className="truncate text-sm font-bold text-white">{movie.title}</div><div className="mt-1 text-xs text-[#8d8d97]">{movie.year} · {movie.type === "SERIES" ? "Сериал" : movie.type === "ANIME" ? "Аниме" : movie.type === "CARTOON" ? "Мультфильм" : "Фильм"}</div></div>
       </Link>)}
     </div> : null}
   </div>;

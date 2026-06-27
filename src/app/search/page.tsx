@@ -1,4 +1,5 @@
 import { ContentType } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { AnalyticsEvent } from "@/components/analytics-event";
 import { CountryFilter } from "@/components/country-filter";
 import { MovieCard } from "@/components/movie-card";
@@ -7,6 +8,7 @@ import { buildHomeCatalogWhere } from "@/lib/catalog-safety";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { prisma } from "@/lib/prisma";
 import { normalizeSearchQuery, searchMovies } from "@/lib/search";
+import { resolveSearchRedirectPath } from "@/lib/search-route-intents";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Поиск фильмов и сериалов — REDFILM", description: "Умный поиск доступных фильмов и сериалов по всей базе REDFILM.", alternates: { canonical: "/search" }, robots: { index: false, follow: true } };
@@ -16,6 +18,8 @@ type Props = { searchParams: Promise<{ q?: string; country?: string; type?: stri
 export default async function SearchPage({ searchParams }: Props) {
   const params = await searchParams;
   const query = normalizeSearchQuery(params.q ?? "").slice(0, 160);
+  const routeIntent = resolveSearchRedirectPath(query);
+  if (routeIntent) redirect(routeIntent.href);
   const selectedCountry = normalizeCatalogCountry(params.country ?? (query ? "all" : "main"));
   const filters = { country: selectedCountry, type: params.type, year: params.year, genre: params.genre };
   const [genres, searchedMovies] = await Promise.all([

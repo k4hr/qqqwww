@@ -1,8 +1,12 @@
 "use server";
 
+import { ContentType, type Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { recalculateAllCatalogScores } from "@/lib/catalog-score";
+import { calculateCatalogScore, recalculateAllCatalogScores } from "@/lib/catalog-score";
+import { classifyCatalogKind } from "@/lib/catalog-kind";
+import { calculateHomeQuality } from "@/lib/home-quality-score";
+import { prisma } from "@/lib/prisma";
 import {
   buildVibixCatalogIndexBatch,
   buildVibixPlayableLinksIndexBatch,
@@ -15,6 +19,7 @@ import {
 } from "@/lib/vibix-catalog/catalog-audit";
 import type { VibixCatalogType } from "@/lib/vibix";
 import { cancelVibixCatalogMagicJob, runVibixCatalogMagicJobIteration, startVibixCatalogMagicJob, startVibixCoverageRepairJob } from "@/lib/vibix-catalog/catalog-magic-sync";
+import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
 
 function numberField(formData: FormData, name: string, fallback: number, min: number, max: number) {
   const value = Number(formData.get(name));
@@ -46,6 +51,104 @@ function redirectWithResult(result: unknown) {
   revalidatePath("/admin/catalog");
   const encoded = Buffer.from(JSON.stringify(result)).toString("base64url");
   redirect(`/admin/catalog?result=${encoded}`);
+}
+
+
+
+type AnimeRepairMovie = Prisma.MovieGetPayload<{ include: { genres: { include: { genre: true } } } }>;
+
+function hasAnimeGenreMarker(movie: AnimeRepairMovie) {
+  const text = movie.genres.map((item) => `${item.genre.name} ${item.genre.slug ?? ""}`).join(" ").toLocaleLowerCase("ru-RU");
+  return text.includes("аниме") || text.includes("anime");
+}
+
+function hasJapanAnimationMarker(movie: AnimeRepairMovie) {
+  const country = (movie.country ?? "").toLocaleLowerCase("ru-RU");
+  const genres = movie.genres.map((item) => `${item.genre.name} ${item.genre.slug ?? ""}`).join(" ").toLocaleLowerCase("ru-RU");
+  return (country.includes("япон") || country.includes("japan"))
+    && (genres.includes("мульт") || genres.includes("анимац") || genres.includes("animation") || genres.includes("cartoon"));
+}
+
+function hasAnimeTag(movie: AnimeRepairMovie) {
+  return movie.vibixTags.some((tag) => {
+    const normalized = tag.toLocaleLowerCase("ru-RU").replaceAll("ё", "е");
+    return normalized === "аниме" || normalized === "anime" || ["ova", "ona", "oav", "shounen", "shonen", "seinen", "shoujo", "shojo", "josei"].includes(normalized);
+  });
+}
+
+export async function moveMoviesToAnimeAction() {
+  const animeIndexes = await prisma.vibixCatalogIndex.findMany({
+    where: { categoryId: VIBIX_CATEGORY_IDS.anime },
+    select: { importedMovieId: true, kpId: true, imdbId: true, vibixId: true },
+    take: 100_000,
+  });
+  const indexedMovieIds = new Set(animeIndexes.map((item) => item.importedMovieId).filter((value): value is string => Boolean(value)));
+  const indexedKpIds = new Set(animeIndexes.map((item) => item.kpId).filter(Boolean));
+  const indexedImdbIds = new Set(animeIndexes.map((item) => item.imdbId).filter((value): value is string => Boolean(value)));
+  const indexedVibixIds = new Set(animeIndexes.map((item) => item.vibixId).filter((value): value is number => value !== null && value !== undefined));
+
+  let cursor: string | undefined;
+  const result = { scanned: 0, moved: 0, byVibixIndex: 0, byClassifier: 0, byGenre: 0, byJapanAnimation: 0, byTag: 0, examples: [] as Array<{ title: string; year: number; slug: string; reason: string }> };
+
+  while (true) {
+    const movies = await prisma.movie.findMany({
+      where: { type: ContentType.MOVIE, isPublished: true },
+      include: { genres: { include: { genre: true } } },
+      orderBy: { id: "asc" },
+      take: 250,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    if (!movies.length) break;
+
+    for (const movie of movies) {
+      result.scanned += 1;
+      const matchedByIndex = indexedMovieIds.has(movie.id)
+        || Boolean(movie.kinopoiskId && indexedKpIds.has(movie.kinopoiskId))
+        || Boolean(movie.imdbId && indexedImdbIds.has(movie.imdbId))
+        || Boolean(movie.vibixId !== null && indexedVibixIds.has(movie.vibixId));
+      const matchedByGenre = hasAnimeGenreMarker(movie);
+      const matchedByJapanAnimation = hasJapanAnimationMarker(movie);
+      const matchedByTag = hasAnimeTag(movie);
+      const matchedByClassifier = classifyCatalogKind(movie) === ContentType.ANIME;
+
+      if (!matchedByIndex && !matchedByGenre && !matchedByJapanAnimation && !matchedByTag && !matchedByClassifier) continue;
+
+      const typedMovie = { ...movie, type: ContentType.ANIME };
+      const homeScore = calculateHomeQuality(typedMovie);
+      const catalogScore = calculateCatalogScore(typedMovie);
+      await prisma.movie.update({
+        where: { id: movie.id },
+        data: {
+          type: ContentType.ANIME,
+          ...homeScore,
+          ...catalogScore,
+          lastQualitySyncAt: new Date(),
+          lastCatalogScoreAt: new Date(),
+          similarityDirty: true,
+          similarityDirtyReason: "admin_anime_reclassify",
+        },
+      });
+
+      result.moved += 1;
+      if (matchedByIndex) result.byVibixIndex += 1;
+      else if (matchedByClassifier) result.byClassifier += 1;
+      else if (matchedByGenre) result.byGenre += 1;
+      else if (matchedByJapanAnimation) result.byJapanAnimation += 1;
+      else if (matchedByTag) result.byTag += 1;
+      if (result.examples.length < 12) {
+        const reason = matchedByIndex ? "vibix_category_18" : matchedByClassifier ? "catalog_classifier" : matchedByGenre ? "anime_genre" : matchedByJapanAnimation ? "japan_animation" : "anime_tag";
+        result.examples.push({ title: movie.titleRu, year: movie.year, slug: movie.slug, reason });
+      }
+    }
+
+    cursor = movies.at(-1)!.id;
+  }
+
+  revalidatePath("/admin/catalog");
+  revalidatePath("/admin/catalog/vibix");
+  revalidatePath("/films");
+  revalidatePath("/anime");
+  redirectWithResult({ ok: true, message: `Перенесено в раздел аниме: ${result.moved}.`, details: result });
 }
 
 
