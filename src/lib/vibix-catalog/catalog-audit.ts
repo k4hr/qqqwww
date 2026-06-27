@@ -5,6 +5,7 @@ import {
   getVibixReferenceItems,
   getVibixVideoByImdbIdResult,
   getVibixVideoByKpIdResult,
+  getVibixVideoByVibixIdResult,
   getVibixVideoLinks,
   sleep,
   VIBIX_LINK_FIELDS,
@@ -987,6 +988,10 @@ export async function diagnoseVibixManualImport(input: {
     const lookup = await getVibixVideoByImdbIdResult(imdbId);
     sources.imdb = { found: Boolean(lookup.video), rateLimited: lookup.rateLimited, requestFailed: lookup.requestFailed, error: lookup.error };
   }
+  if (vibixId !== null && vibixId !== undefined) {
+    const lookup = await getVibixVideoByVibixIdResult(vibixId, { type: sourceType });
+    sources.vibixId = { found: Boolean(lookup.video), rateLimited: lookup.rateLimited, requestFailed: lookup.requestFailed, error: lookup.error, attempts: lookup.attempts, sample: lookup.video };
+  }
   if (kpId) {
     const links = await getVibixVideoLinks({ type: sourceType, page: 1, limit: 20, kpIds: [kpId] });
     sources.linksByKp = { found: links.data.length, rateLimited: links.rateLimited, requestFailed: links.requestFailed, error: links.error, sample: links.data.slice(0, 3) };
@@ -1045,9 +1050,24 @@ export async function importVibixTitleManually(input: {
     if (lookup.video) video = lookup.video;
   }
 
-  if (!video && kpId) {
-    const links = await getVibixVideoLinks({ type: sourceType, page: 1, limit: 20, kpIds: [kpId] });
-    attempts.push(`links:kp:${kpId}:${links.data.length}`);
+  if (!video && manualVibixId !== null && manualVibixId !== undefined) {
+    const lookup = await getVibixVideoByVibixIdResult(manualVibixId, { type: sourceType });
+    attempts.push(...lookup.attempts.map((attempt) => `vibixId:${manualVibixId}:${attempt}`));
+    if (lookup.rateLimited) return { ok: false, message: "Vibix rate limit on Vibix ID lookup", details: { lookup, attempts } };
+    if (lookup.video) video = lookup.video;
+  }
+
+  if (!video && !kpId && manualVibixId !== null && manualVibixId !== undefined) {
+    const lookup = await getVibixVideoByKpIdResult(manualVibixId);
+    attempts.push(`kp_from_embed_id:${manualVibixId}:${lookup.video ? "found" : lookup.rateLimited ? "rate_limited" : lookup.requestFailed ? "request_failed" : "not_found"}`);
+    if (lookup.rateLimited) return { ok: false, message: "Vibix rate limit on KP fallback lookup", details: { lookup, attempts } };
+    if (lookup.video) video = lookup.video;
+  }
+
+  if (!video && (kpId || manualVibixId !== null && manualVibixId !== undefined)) {
+    const lookupKpId = kpId ?? String(manualVibixId);
+    const links = await getVibixVideoLinks({ type: sourceType, page: 1, limit: 20, kpIds: [lookupKpId] });
+    attempts.push(`links:kp:${lookupKpId}:${links.data.length}`);
     if (links.rateLimited) return { ok: false, message: "Vibix rate limit on /links lookup", details: { links, attempts } };
     if (links.data[0]) video = links.data[0];
   }

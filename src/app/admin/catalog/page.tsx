@@ -65,7 +65,10 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
           <h1 className="break-words text-[clamp(1.75rem,6vw,2.5rem)] font-black text-[#222]">КАТАЛОГ</h1>
           <p className="mt-2 max-w-4xl text-neutral-600">Контроль покрытия базы: что есть у REDFILM, что есть у Vibix, чего не хватает и что нужно догрузить.</p>
         </div>
-        <Link href="/admin/vibix" className="rounded-xl bg-[#333] px-5 py-3 text-center font-bold text-white">Vibix sync</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/catalog/vibix" className="rounded-xl bg-[#e50914] px-5 py-3 text-center font-bold text-white">Смотреть VIBIX</Link>
+          <Link href="/admin/vibix" className="rounded-xl bg-[#333] px-5 py-3 text-center font-bold text-white">Vibix sync</Link>
+        </div>
       </div>
 
       {actionResult ? (
@@ -122,26 +125,31 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
 
 
       <section className="admin-panel mt-5 border-2 border-sky-200 bg-sky-50 p-5">
-        <h2 className="text-2xl font-black text-[#222]">Точечный импорт / диагностика Vibix</h2>
-        <p className="mt-2 text-sm text-sky-950">
-          Для важных тайтлов, которые есть в Vibix, но не видны на REDFILM. Пример: Игра престолов — type serial/series, KP ID 464963, IMDb tt0944947, Vibix ID 269.
-        </p>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-[#222]">Точечный импорт по Vibix embed</h2>
+            <p className="mt-2 max-w-4xl text-sm text-sky-950">
+              Вставь код из Vibix/Rendex, нажми импорт — REDFILM вытащит <b>data-type</b> и <b>data-id</b>, попробует получить детали из Vibix и добавит/обновит тайтл.
+            </p>
+          </div>
+          <Link href="/admin/catalog/vibix" className="rounded-xl bg-[#e50914] px-5 py-3 text-center font-bold text-white">Смотреть VIBIX</Link>
+        </div>
         <form className="mt-4 grid gap-3 lg:grid-cols-6" action={importVibixTitleManuallyAction}>
-          <Select label="Тип" name="manualType" options={[["serial", "Сериал / series"], ["movie", "Фильм / movie"]]} />
-          <TextInput label="KP ID" name="kpId" defaultValue="464963" />
-          <TextInput label="IMDb ID" name="imdbId" defaultValue="tt0944947" />
-          <Input label="Vibix ID" name="vibixId" defaultValue="269" min="1" max="10000000" />
-          <Input label="Год fallback" name="year" defaultValue="2011" min="1880" max="2200" />
-          <TextInput label="Название fallback" name="title" defaultValue="Игра престолов" />
           <label className="text-sm font-bold text-[#333] lg:col-span-6">
-            Embed code fallback
-            <textarea className="mt-2 min-h-20 w-full rounded-xl border border-[#ddd] bg-white px-4 py-3 text-[#222]" name="embedCode" defaultValue={'<ins data-publisher-id="678353780" data-type="series" data-id="269"></ins>'} />
+            Vibix embed code
+            <textarea className="mt-2 min-h-24 w-full rounded-xl border border-[#ddd] bg-white px-4 py-3 font-mono text-sm text-[#222]" name="embedCode" defaultValue={'<ins data-publisher-id="678353780" data-type="series" data-id="7712"></ins>'} />
           </label>
-          <button className="h-12 rounded-xl bg-[#e50914] px-5 font-bold text-white lg:col-span-3">Импортировать / обновить тайтл</button>
-          <button className="h-12 rounded-xl border border-[#333] bg-white px-5 font-bold text-[#222] lg:col-span-3" formAction={diagnoseVibixManualImportAction}>Только проверить, почему не видно</button>
+          <Select label="Тип fallback" name="manualType" options={[["serial", "Авто/сериал"], ["movie", "Фильм"]]} />
+          <Input label="Vibix ID fallback" name="vibixId" defaultValue="" min="1" max="10000000" />
+          <TextInput label="KP ID fallback" name="kpId" />
+          <TextInput label="IMDb ID fallback" name="imdbId" />
+          <Input label="Год fallback" name="year" defaultValue="" min="1880" max="2200" />
+          <TextInput label="Название fallback" name="title" />
+          <button className="h-12 rounded-xl bg-[#e50914] px-5 font-bold text-white lg:col-span-3">Импортировать по embed</button>
+          <button className="h-12 rounded-xl border border-[#333] bg-white px-5 font-bold text-[#222] lg:col-span-3" formAction={diagnoseVibixManualImportAction}>Только проверить</button>
         </form>
         <div className="mt-4 rounded-2xl border border-sky-200 bg-white p-4 text-sm text-sky-950">
-          Алгоритм: сначала проверяет REDFILM по KP/IMDb/Vibix ID, потом Vibix detail <b>/kp</b>, <b>/imdb</b>, fallback <b>/links?kp_id[]=...</b>. Если Vibix detail не даёт embed, берёт embed из поля выше и сохраняет нормальный player.
+          Если Vibix по <b>data-id</b> отдаёт полные данные — название, год, постер, жанры и плеер подтянутся автоматически. Если Vibix по ID не отдаст details, заполни fallback название/год вручную.
         </div>
       </section>
 

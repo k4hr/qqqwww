@@ -98,6 +98,7 @@ type VibixLinksParams = {
   tagIds?: number[];
   voiceoverIds?: number[];
   kpIds?: Array<number | string>;
+  vibixIds?: Array<number | string>;
   fields?: readonly string[];
   existKpId?: boolean | null;
   noAds?: boolean;
@@ -489,6 +490,10 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
     const normalized = String(kpId ?? "").trim();
     if (/^\d+$/.test(normalized)) query.append("kp_id[]", normalized);
   }
+  for (const vibixId of params.vibixIds ?? []) {
+    const normalized = String(vibixId ?? "").trim();
+    if (/^\d+$/.test(normalized)) query.append("id[]", normalized);
+  }
 
   if (params.existKpId !== undefined && params.existKpId !== null) query.set("exist_kp_id", params.existKpId ? "true" : "false");
   if (params.noAds !== undefined && params.noAds !== null) query.set("no_ads", params.noAds ? "true" : "false");
@@ -507,6 +512,44 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
     invalidItems: rawItems.length - data.length,
     error: response.error,
   } satisfies VibixVideoPage;
+}
+
+
+export async function getVibixVideoByVibixIdResult(
+  vibixId: string | number,
+  options: { type?: VibixCatalogType } = {},
+): Promise<VibixVideoLookupResult & { attempts: string[] }> {
+  const normalizedId = String(vibixId ?? "").trim();
+  const attempts: string[] = [];
+  if (!/^\d+$/.test(normalizedId)) {
+    return { video: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error: { status: 400, statusText: "Bad Request", bodyPreview: "Invalid Vibix ID" }, attempts };
+  }
+
+  const candidatePaths = [`/id/${encodeURIComponent(normalizedId)}`, `/${encodeURIComponent(normalizedId)}`];
+  for (const path of candidatePaths) {
+    const response = await vibixRequest(path);
+    attempts.push(`${path}:${response.rateLimited ? "rate_limited" : response.requestFailed ? `http_${response.error?.status ?? "failed"}` : "ok"}`);
+    if (response.rateLimited) {
+      return { video: null, rateLimited: true, retryAfterMs: response.retryAfterMs, requestFailed: response.requestFailed, error: response.error, attempts };
+    }
+    if (!response.requestFailed) {
+      const video = extractSingle(response.data);
+      if (video) return { video, rateLimited: false, retryAfterMs: null, requestFailed: false, error: null, attempts };
+    }
+  }
+
+  const links = await getVibixVideoLinks({
+    type: options.type ?? "movie",
+    page: 1,
+    limit: 20,
+    vibixIds: [normalizedId],
+  });
+  attempts.push(`/links:id[]:${links.rateLimited ? "rate_limited" : links.requestFailed ? `http_${links.error?.status ?? "failed"}` : links.data.length}`);
+  if (links.rateLimited) return { video: null, rateLimited: true, retryAfterMs: links.retryAfterMs, requestFailed: links.requestFailed, error: links.error, attempts };
+  if (links.requestFailed) return { video: null, rateLimited: false, retryAfterMs: null, requestFailed: true, error: links.error, attempts };
+
+  const exact = links.data.find((item) => String(item.id ?? "").trim() === normalizedId) ?? links.data[0] ?? null;
+  return { video: exact, rateLimited: false, retryAfterMs: null, requestFailed: false, error: null, attempts };
 }
 
 export async function getVibixVideoByKpIdResult(kpId: string | number): Promise<VibixVideoLookupResult> {
@@ -550,6 +593,35 @@ export async function getVibixReferenceItems(kind: VibixReferenceKind): Promise<
     rateLimited: response.rateLimited,
     retryAfterMs: response.retryAfterMs,
     requestFailed: response.requestFailed,
+    error: response.error,
+  };
+}
+
+
+export async function searchVibixVideosResult(
+  name: string,
+  options: { year?: number; type?: VibixCatalogType; limit?: number } = {},
+): Promise<VibixVideoPage> {
+  const query = new URLSearchParams({
+    name: name.trim(),
+    page: "1",
+    limit: String(normalizeVibixLimit(options.limit ?? 20)),
+  });
+  const response = await vibixRequest("/search", query, "POST");
+  const rawItems = extractItems(response.data);
+  const videos = rawItems.map(normalizeVideo).filter((item): item is VibixVideo => item !== null);
+  const data = videos.filter((item) => {
+    const sameType = !options.type || item.type === options.type || (options.type === "serial" && ["series", "serial"].includes(String(item.type ?? "").toLowerCase()));
+    const sameYear = !options.year || numberValue(item.year) === options.year;
+    return sameType && sameYear;
+  });
+  return {
+    data,
+    meta: extractMeta(response.data),
+    rateLimited: response.rateLimited,
+    retryAfterMs: response.retryAfterMs,
+    requestFailed: response.requestFailed,
+    invalidItems: rawItems.length - videos.length,
     error: response.error,
   };
 }
