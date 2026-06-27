@@ -86,7 +86,7 @@ function kindOf(video: VibixVideo) {
   return "Фильм";
 }
 
-function compactList(value: unknown) {
+function compactList(value: unknown): string {
   if (!value) return "—";
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
