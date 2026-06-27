@@ -31,6 +31,7 @@ type LocalMovieMatch = {
   vibixAvailable: boolean;
   isPublished: boolean;
   isPublicVisible: boolean;
+  isCatalogAllowed: boolean;
   vibixIframeUrl: string | null;
   vibixEmbedCode: string | null;
   type: string;
@@ -142,6 +143,7 @@ async function getLocalMatches(videos: VibixVideo[]) {
       vibixAvailable: true,
       isPublished: true,
       isPublicVisible: true,
+      isCatalogAllowed: true,
       vibixIframeUrl: true,
       vibixEmbedCode: true,
       type: true,
