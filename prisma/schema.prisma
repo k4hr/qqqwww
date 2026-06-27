@@ -102,6 +102,8 @@ model Movie {
   genres          MovieGenre[]
   cast            MovieCast[]
   providerLinks   ProviderLink[]
+  telegramFavorites TelegramFavorite[]
+  telegramHistory TelegramWatchHistory[]
 
   @@index([type, year])
   @@index([isPublished])
@@ -281,6 +283,66 @@ model MovieSimilarity {
   @@index([sourceMovieId, score])
   @@index([targetMovieId])
   @@index([bucket])
+}
+
+model TelegramUser {
+  id           String   @id @default(cuid())
+  telegramId   String   @unique
+  username     String?
+  firstName    String?
+  lastName     String?
+  languageCode String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastSeenAt   DateTime?
+
+  favorites    TelegramFavorite[]
+  history      TelegramWatchHistory[]
+  searches     TelegramSearchLog[]
+}
+
+model TelegramFavorite {
+  id             String   @id @default(cuid())
+  telegramUserId String
+  movieId        String
+  createdAt      DateTime @default(now())
+
+  user  TelegramUser @relation(fields: [telegramUserId], references: [id], onDelete: Cascade)
+  movie Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([telegramUserId, movieId])
+  @@index([telegramUserId])
+  @@index([movieId])
+}
+
+model TelegramWatchHistory {
+  id              String   @id @default(cuid())
+  telegramUserId  String
+  movieId         String
+  progressSeconds Int      @default(0)
+  lastWatchedAt   DateTime @default(now())
+
+  user  TelegramUser @relation(fields: [telegramUserId], references: [id], onDelete: Cascade)
+  movie Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([telegramUserId, movieId])
+  @@index([telegramUserId])
+  @@index([movieId])
+  @@index([lastWatchedAt])
+}
+
+model TelegramSearchLog {
+  id              String   @id @default(cuid())
+  telegramUserId  String?
+  query           String
+  normalizedQuery String?
+  resultCount     Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  user TelegramUser? @relation(fields: [telegramUserId], references: [id], onDelete: SetNull)
+
+  @@index([telegramUserId])
+  @@index([createdAt])
 }
 
 model SimilarityJob {
