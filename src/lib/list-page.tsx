@@ -24,6 +24,13 @@ type Props = {
   page?: number;
 };
 
+function normalizeSort(sort?: string): "fresh" | "popular" | "top" | "year" {
+  if (sort === "new" || sort === "latest") return "fresh";
+  if (sort === "rating") return "top";
+  if (sort === "popular" || sort === "top" || sort === "year" || sort === "fresh") return sort;
+  return "fresh";
+}
+
 function filterHref({ sort, country, year, type, genre, page }: { sort?: string; country?: string; year?: string | number; type?: string; genre?: string; page?: number }) {
   const params = new URLSearchParams();
   if (sort) params.set("sort", sort);
@@ -40,7 +47,8 @@ export async function ListPage({ title, type, year, yearFilter, genreSlug, filte
   const typeParam = showTypeFilter ? type : undefined;
   const yearParam = yearFilter ?? year;
   const selectedGenre = genreSlug ?? filterGenreSlug;
-  const movies = await getCatalogMovies({ type, year, yearFilter, genreSlug: selectedGenre, countrySlug: country, sort, page: safePage, pageSize: 48 });
+  const currentSort = normalizeSort(sort);
+  const movies = await getCatalogMovies({ type, year, yearFilter, genreSlug: selectedGenre, countrySlug: country, sort: currentSort, page: safePage, pageSize: 48 });
   const genreOptions = CATALOG_GENRES.slice(0, 14);
 
   return (
@@ -51,15 +59,15 @@ export async function ListPage({ title, type, year, yearFilter, genreSlug, filte
         {description ? (Array.isArray(description) ? description : [description]).map((text) => <p key={text} className="mt-3 max-w-4xl leading-relaxed text-[#a9a9b2]">{text}</p>) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <FilterLink href={filterHref({ sort: "fresh", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Новинки" active={!sort || sort === "new" || sort === "latest" || sort === "fresh"} />
-          <FilterLink href={filterHref({ sort: "popular", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Популярные" active={sort === "popular"} />
-          <FilterLink href={filterHref({ sort: "top", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="ТОП" active={sort === "top" || sort === "rating"} />
-          <FilterLink href={filterHref({ sort: "year", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="По году" active={sort === "year"} />
+          <FilterLink href={filterHref({ sort: "fresh", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Новинки" active={currentSort === "fresh"} />
+          <FilterLink href={filterHref({ sort: "popular", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Популярные" active={currentSort === "popular"} />
+          <FilterLink href={filterHref({ sort: "top", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="ТОП" active={currentSort === "top"} />
+          <FilterLink href={filterHref({ sort: "year", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="По году" active={currentSort === "year"} />
         </div>
-        {showTypeFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort, country, year: yearParam, genre: selectedGenre })} label="Все типы" active={!type} /><FilterLink href={filterHref({ sort, country, year: yearParam, type: "MOVIE", genre: selectedGenre })} label="Фильмы" active={type === "MOVIE"} /><FilterLink href={filterHref({ sort, country, year: yearParam, type: "SERIES", genre: selectedGenre })} label="Сериалы" active={type === "SERIES"} /><FilterLink href={filterHref({ sort, country, year: yearParam, type: "CARTOON", genre: selectedGenre })} label="Мультфильмы" active={type === "CARTOON"} /><FilterLink href={filterHref({ sort, country, year: yearParam, type: "ANIME", genre: selectedGenre })} label="Аниме" active={type === "ANIME"} /></div> : null}
-        {showYearFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort, country, type: typeParam, genre: selectedGenre })} label="Все годы" active={!yearFilter} />{Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((item) => <FilterLink key={item} href={filterHref({ sort, country, year: item, type: typeParam, genre: selectedGenre })} label={String(item)} active={yearFilter === String(item)} />)}</div> : null}
-        {showGenreFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort, country, year: yearParam, type: typeParam })} label="Все жанры" active={!filterGenreSlug} />{genreOptions.map((item) => <FilterLink key={item.slug} href={filterHref({ sort, country, year: yearParam, type: typeParam, genre: item.slug })} label={item.label} active={genreLabel(filterGenreSlug) === item.label} />)}</div> : null}
-        {showCountryFilter ? <CountryFilter country={country} preserve={{ sort, year: yearParam ? String(yearParam) : undefined, type: typeParam, genre: selectedGenre }} /> : null}
+        {showTypeFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, genre: selectedGenre })} label="Все типы" active={!type} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "MOVIE", genre: selectedGenre })} label="Фильмы" active={type === "MOVIE"} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "SERIES", genre: selectedGenre })} label="Сериалы" active={type === "SERIES"} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "CARTOON", genre: selectedGenre })} label="Мультфильмы" active={type === "CARTOON"} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "ANIME", genre: selectedGenre })} label="Аниме" active={type === "ANIME"} /></div> : null}
+        {showYearFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort: currentSort, country, type: typeParam, genre: selectedGenre })} label="Все годы" active={!yearFilter} />{Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((item) => <FilterLink key={item} href={filterHref({ sort: currentSort, country, year: item, type: typeParam, genre: selectedGenre })} label={String(item)} active={yearFilter === String(item)} />)}</div> : null}
+        {showGenreFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: typeParam })} label="Все жанры" active={!filterGenreSlug} />{genreOptions.map((item) => <FilterLink key={item.slug} href={filterHref({ sort: currentSort, country, year: yearParam, type: typeParam, genre: item.slug })} label={item.label} active={genreLabel(filterGenreSlug) === item.label} />)}</div> : null}
+        {showCountryFilter ? <CountryFilter country={country} preserve={{ sort: currentSort, year: yearParam ? String(yearParam) : undefined, type: typeParam, genre: selectedGenre }} /> : null}
       </div>
 
       {movies.length ? (
@@ -73,7 +81,7 @@ export async function ListPage({ title, type, year, yearFilter, genreSlug, filte
           Каталог обновляется. Фильмы скоро появятся.
         </div>
       )}
-      {(safePage > 1 || movies.length === 48) ? <nav className="mt-7 flex items-center justify-center gap-3" aria-label="Пагинация">{safePage > 1 ? <Link href={filterHref({ sort, country, year: yearParam, type: typeParam, genre: selectedGenre, page: safePage - 1 })} className="mf-btn">Назад</Link> : null}<span className="mf-pill min-h-11">Страница {safePage}</span>{movies.length === 48 ? <Link href={filterHref({ sort, country, year: yearParam, type: typeParam, genre: selectedGenre, page: safePage + 1 })} className="mf-btn">Далее</Link> : null}</nav> : null}
+      {(safePage > 1 || movies.length === 48) ? <nav className="mt-7 flex items-center justify-center gap-3" aria-label="Пагинация">{safePage > 1 ? <Link href={filterHref({ sort: currentSort, country, year: yearParam, type: typeParam, genre: selectedGenre, page: safePage - 1 })} className="mf-btn">Назад</Link> : null}<span className="mf-pill min-h-11">Страница {safePage}</span>{movies.length === 48 ? <Link href={filterHref({ sort: currentSort, country, year: yearParam, type: typeParam, genre: selectedGenre, page: safePage + 1 })} className="mf-btn">Далее</Link> : null}</nav> : null}
     </div>
   );
 }
@@ -82,6 +90,7 @@ function FilterLink({ href, label, active }: { href: string; label: string; acti
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={active ? "mf-btn mf-btn-primary" : "mf-btn"}
     >
       {label}
