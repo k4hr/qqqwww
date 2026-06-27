@@ -2,8 +2,32 @@ import type { Genre, Movie } from "@prisma/client";
 import { buildCollectionSlug, buildFilmSeoSlug, buildSimilarSlug, buildWatchSlug, normalizeSlug } from "@/lib/seo-slugs";
 import { extractCountries } from "@/lib/catalog-filters";
 
+export const CANONICAL_SITE_ORIGIN = "https://redfilm.win";
+export const CANONICAL_SITE_HOST = "redfilm.win";
+
+export function canonicalSiteOrigin() {
+  const raw = (
+    process.env.SITE_URL
+    || process.env.NEXT_PUBLIC_SITE_URL
+    || process.env.NEXT_PUBLIC_APP_URL
+    || CANONICAL_SITE_ORIGIN
+  ).trim();
+
+  try {
+    const url = new URL(raw);
+    const host = url.host.toLowerCase();
+    if (host === "redfilm.online" || host === "www.redfilm.online" || host === "www.redfilm.win" || host === "redfilm.win") {
+      return CANONICAL_SITE_ORIGIN;
+    }
+  } catch {
+    // Invalid env values should not leak into canonical URLs.
+  }
+
+  return CANONICAL_SITE_ORIGIN;
+}
+
 export function siteUrl(path = "") {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || "https://redfilm.win").replace(/\/$/, "");
+  const base = canonicalSiteOrigin().replace(/\/$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 

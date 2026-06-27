@@ -2,13 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 
 export function middleware(request: NextRequest) {
   const host = request.headers.get("host") || "";
+  const normalizedHost = host.toLowerCase().split(":")[0];
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+  const canonicalRedirectHosts = new Set(["redfilm.online", "www.redfilm.online", "www.redfilm.win"]);
+
+  if (!isLocalhost && canonicalRedirectHosts.has(normalizedHost)) {
+    return NextResponse.redirect(`https://redfilm.win${request.nextUrl.pathname}${request.nextUrl.search}`, 301);
+  }
 
   if (!isLocalhost && forwardedProto === "http") {
-    const url = request.nextUrl.clone();
-    url.protocol = "https:";
-    return NextResponse.redirect(url, 301);
+    if (normalizedHost === "redfilm.win") {
+      return NextResponse.redirect(`https://redfilm.win${request.nextUrl.pathname}${request.nextUrl.search}`, 301);
+    }
   }
 
   if (request.nextUrl.pathname.startsWith("/admin") || request.nextUrl.pathname.startsWith("/api/admin")) {

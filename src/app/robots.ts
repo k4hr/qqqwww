@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { siteUrl } from "@/lib/seo-links";
+import { CANONICAL_SITE_HOST, siteUrl } from "@/lib/seo-links";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -13,6 +13,6 @@ export default function robots(): MetadataRoute.Robots {
       siteUrl("/sitemaps/static.xml"),
       siteUrl("/sitemaps/collections.xml"),
     ],
-    host: siteUrl("/").replace(/\/$/, ""),
+    host: CANONICAL_SITE_HOST,
   };
 }
