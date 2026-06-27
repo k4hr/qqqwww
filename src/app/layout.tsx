@@ -24,13 +24,14 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
   icons: {
     icon: [
-      { url: "/favicon.svg", type: "image/svg+xml", sizes: "120x120" },
-      { url: "/favicon-120.png", type: "image/png", sizes: "120x120" },
-      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
-      { url: "/favicon.ico", type: "image/x-icon", sizes: "any" },
+      { url: "/favicon.ico?v=6", type: "image/x-icon", sizes: "any" },
+      { url: "/favicon-32.png?v=6", type: "image/png", sizes: "32x32" },
+      { url: "/favicon-16.png?v=6", type: "image/png", sizes: "16x16" },
+      { url: "/favicon-120.png?v=6", type: "image/png", sizes: "120x120" },
+      { url: "/favicon.svg?v=6", type: "image/svg+xml", sizes: "120x120" },
     ],
-    shortcut: [{ url: "/favicon.ico", type: "image/x-icon" }],
-    apple: [{ url: "/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
+    shortcut: [{ url: "/favicon.ico?v=6", type: "image/x-icon" }],
+    apple: [{ url: "/apple-touch-icon.png?v=6", type: "image/png", sizes: "180x180" }],
   },
 };
 

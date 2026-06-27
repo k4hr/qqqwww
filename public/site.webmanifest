@@ -1,0 +1,28 @@
+{
+  "name": "REDFILM",
+  "short_name": "REDFILM",
+  "description": "Каталог фильмов, сериалов, мультфильмов и аниме REDFILM.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "/favicon-120.png?v=6",
+      "sizes": "120x120",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon.png?v=6",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png?v=6",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}
