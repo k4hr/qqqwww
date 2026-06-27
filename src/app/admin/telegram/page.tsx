@@ -29,7 +29,11 @@ export default async function AdminTelegramPage({ searchParams }: Props) {
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Telegram Mini App</h1>
+<<<<<<< HEAD
           <p className="mt-1 text-neutral-600">Webhook, обычный Mini App URL и статистика Telegram-пользователей REDFILM.</p>
+=======
+          <p className="mt-1 text-neutral-600">Webhook, Mini App URL и статистика Telegram-пользователей REDFILM.</p>
+>>>>>>> f1dfcac89a507e51aea244136d8ffd51e6b84be5
         </div>
         <Link href="/admin" className="font-bold text-[#e50914]">Назад</Link>
       </div>
@@ -46,10 +50,13 @@ export default async function AdminTelegramPage({ searchParams }: Props) {
           <Info label="Webhook URL" value={getTelegramWebhookUrl()} />
           <Info label="Test player" value="https://redfilm.win/tg-test-player" />
         </div>
+<<<<<<< HEAD
 
         <p className="mt-4 rounded-xl border border-[#e50914]/20 bg-[#fff5f5] p-3 text-sm font-semibold text-[#5f1b1f]">
           Telegram Mini App открывает обычную мобильную версию REDFILM. TelegramWebAppBridge автоматически включает fullscreen, safe-area отступы и отключение вертикальных свайпов, когда сайт открыт внутри Telegram.
         </p>
+=======
+>>>>>>> f1dfcac89a507e51aea244136d8ffd51e6b84be5
         <div className="mt-5 flex flex-wrap gap-3">
           <form action={setTelegramWebhookAction}><button className="rounded-xl bg-[#e50914] px-5 py-3 font-black text-white">setWebhook</button></form>
           <form action={getTelegramWebhookInfoAction}><button className="rounded-xl bg-[#222] px-5 py-3 font-black text-white">getWebhookInfo</button></form>

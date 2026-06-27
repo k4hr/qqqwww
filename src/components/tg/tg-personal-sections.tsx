@@ -27,8 +27,13 @@ export function TgPersonalSections() {
 
   return (
     <>
+<<<<<<< HEAD
       {history.length ? <PersonalBlock title="Продолжить просмотр" href="/history" items={history.slice(0, 3)} /> : null}
       {favorites.length ? <PersonalBlock title="Избранное" href="/favorites" items={favorites.slice(0, 3)} /> : null}
+=======
+      {history.length ? <PersonalBlock title="Продолжить просмотр" href="/tg/history" items={history.slice(0, 3)} /> : null}
+      {favorites.length ? <PersonalBlock title="Избранное" href="/tg/favorites" items={favorites.slice(0, 3)} /> : null}
+>>>>>>> f1dfcac89a507e51aea244136d8ffd51e6b84be5
     </>
   );
 }

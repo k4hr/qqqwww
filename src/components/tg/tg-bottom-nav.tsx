@@ -4,10 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
+<<<<<<< HEAD
   { href: "/", label: "Главная" },
   { href: "/search", label: "Поиск" },
   { href: "/favorites", label: "Избранное" },
   { href: "/history", label: "История" },
+=======
+  { href: "/tg", label: "Главная" },
+  { href: "/tg/search", label: "Поиск" },
+  { href: "/tg/favorites", label: "Избранное" },
+  { href: "/tg/history", label: "История" },
+>>>>>>> f1dfcac89a507e51aea244136d8ffd51e6b84be5
 ];
 
 export function TgBottomNav() {

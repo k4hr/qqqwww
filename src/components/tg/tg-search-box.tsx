@@ -10,7 +10,11 @@ export function TgSearchBox({ defaultValue = "" }: { defaultValue?: string }) {
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = query.trim();
+<<<<<<< HEAD
     router.push(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
+=======
+    router.push(trimmed ? `/tg/search?q=${encodeURIComponent(trimmed)}` : "/tg/search");
+>>>>>>> f1dfcac89a507e51aea244136d8ffd51e6b84be5
   }
 
   return (

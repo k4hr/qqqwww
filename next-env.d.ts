@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "name": "redfilm",
   "version": "0.1.0",
@@ -48,3 +49,11 @@
     "eslint-config-next": "^16.0.0"
   }
 }
+=======
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+import "./.next/types/routes.d.ts";
+
+// NOTE: This file should not be edited
+// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
+>>>>>>> f1dfcac89a507e51aea244136d8ffd51e6b84be5

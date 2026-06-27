@@ -22,7 +22,11 @@ export function compactTgMovie(movie: Pick<TgMovie, "id" | "slug" | "titleRu" | 
     kpRating: movie.kpRating,
     imdbRating: movie.imdbRating,
     description: movie.description,
+<<<<<<< HEAD
     href: watchPath(movie),
+=======
+    href: `/tg/watch/${movie.slug}`,
+>>>>>>> f1dfcac89a507e51aea244136d8ffd51e6b84be5
     siteHref: watchPath(movie),
     genres: movie.genres.map((item) => ({ slug: item.genre.slug, name: item.genre.name })),
   };
