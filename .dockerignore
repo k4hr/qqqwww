@@ -1,9 +1,10 @@
+.git
+.github
 node_modules
 .next
 .env
 .env*.local
 .DS_Store
 *.log
-prisma/dev.db
 tsconfig.tsbuildinfo
 *.tsbuildinfo
