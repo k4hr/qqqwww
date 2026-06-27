@@ -28,7 +28,7 @@ function uniqTags(tags: string[]) {
 }
 
 async function forceOneMovieToAnime(movie: ForceAnimeMovie, reason: string) {
-  const tags = uniqTags([...(movie.vibixTags ?? []), "anime", "аниме"]);
+  const tags = uniqTags([...(movie.vibixTags ?? []), "anime", "аниме", "redfilm:force-anime"]);
   const typedMovie = {
     ...movie,
     type: ContentType.ANIME,

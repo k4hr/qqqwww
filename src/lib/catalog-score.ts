@@ -89,6 +89,12 @@ function hasLgbtSignal(movie: CatalogScoreMovie) {
   return (movie.vibixLgbtContent ?? 0) > 0 || includesAny(text, ["lgbt", "лгбт"]);
 }
 
+function isForcedAnime(movie: CatalogScoreMovie) {
+  if (movie.type !== ContentType.ANIME) return false;
+  const tags = movie.vibixTags.map((tag) => tag.toLocaleLowerCase("ru-RU").replaceAll("ё", "е"));
+  return tags.includes("redfilm:force-anime") || tags.includes("admin_force_anime") || tags.includes("force-anime");
+}
+
 function isBlocked(movie: CatalogScoreMovie) {
   if (hasExplicitAdultSignal(movie)) return true;
   // Vibix иногда ставит lgbt_content=1 на крупные mainstream-тайтлы
@@ -128,7 +134,9 @@ export function calculateCatalogScore(movie: CatalogScoreMovie): CatalogScoreRes
   const blocked = isBlocked(movie);
   const massGenre = isMassGenre(movie);
   const massCountry = isMassCountry(movie);
-  const safeBase = movie.isPublished && movie.isCatalogAllowed && !blocked && player && poster && russianTitle;
+  const forcedAnime = isForcedAnime(movie);
+  const posterRequired = !forcedAnime;
+  const safeBase = movie.isPublished && movie.isCatalogAllowed && !blocked && player && russianTitle && (!posterRequired || poster);
 
   let catalogScore = 0;
   catalogScore += poster ? 18 : -25;
@@ -144,11 +152,13 @@ export function calculateCatalogScore(movie: CatalogScoreMovie): CatalogScoreRes
   catalogScore += weakFormat ? -18 : 0;
   catalogScore += blocked ? -60 : 0;
   catalogScore = clamp(catalogScore);
+  if (forcedAnime) catalogScore = Math.max(catalogScore, 60);
 
   let popularScore = catalogScore * 0.42 + rating * 6 + Math.min(36, logVotes * 7) + recency + (massGenre ? 8 : 0) + (massCountry ? 5 : 0) + franchiseBonus(movie);
   if (weakFormat) popularScore -= 28;
   if (!votes && rating < 7) popularScore -= 12;
   popularScore = clamp(popularScore);
+  if (forcedAnime) popularScore = Math.max(popularScore, 48);
 
   let topScore = catalogScore * 0.35 + rating * 8 + Math.min(42, logVotes * 8.2) + franchiseBonus(movie) + (backdrop ? 4 : 0);
   if (movie.year <= currentYear - 4 && rating >= 7) topScore += 8;
@@ -159,11 +169,12 @@ export function calculateCatalogScore(movie: CatalogScoreMovie): CatalogScoreRes
   if (!freshYear) freshScore -= 18;
   if (weakFormat && votes < 10_000) freshScore -= 12;
   freshScore = clamp(freshScore);
+  if (forcedAnime) freshScore = Math.max(freshScore, 55);
 
   const isPublicVisible = safeBase && catalogScore >= 36;
-  const isPopularEligible = isPublicVisible && !weakFormat && popularScore >= 50 && (votes >= 50 || rating >= 6.7 || movie.views > 0);
+  const isPopularEligible = isPublicVisible && !weakFormat && (forcedAnime || (popularScore >= 50 && (votes >= 50 || rating >= 6.7 || movie.views > 0)));
   const isTopEligible = isPublicVisible && !weakFormat && topScore >= 60 && rating >= 6.8 && (votes >= 500 || franchiseBonus(movie) > 0);
-  const isFreshEligible = isPublicVisible && freshYear && freshScore >= 48 && (votes >= 1 || rating >= 5.5 || movie.vibixAvailable);
+  const isFreshEligible = isPublicVisible && (forcedAnime || (freshYear && freshScore >= 48 && (votes >= 1 || rating >= 5.5 || movie.vibixAvailable)));
 
   return {
     catalogScore,
@@ -185,7 +196,7 @@ function toNumber(value: unknown) {
 export function getCatalogBlockReasons(movie: CatalogScoreMovie, score = calculateCatalogScore(movie)): CatalogBlockReason[] {
   const reasons: CatalogBlockReason[] = [];
   if (!hasCatalogPlayer(movie)) reasons.push("missing_player");
-  if (!isValidHomePoster(movie.posterUrl)) reasons.push("missing_poster");
+  if (!isValidHomePoster(movie.posterUrl) && !isForcedAnime(movie)) reasons.push("missing_poster");
   if (!hasRussianTitle(movie)) reasons.push("english_title");
   if (!movie.isPublished || !movie.isCatalogAllowed) reasons.push("not_catalog_allowed");
   if (hasLgbtSignal(movie) && !isStrongMainstreamTitle(movie)) reasons.push("lgbt_content");

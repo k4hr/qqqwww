@@ -21,6 +21,7 @@ import { buildAudienceCandidateWhere, sortAudienceMovies } from "@/lib/similar";
 import { countryPath, genrePath, similarPath, watchPath, yearPath } from "@/lib/seo-links";
 import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from "@/lib/seo/schema";
 import { watchSeoDescription, watchSeoH1, watchSeoTitle } from "@/lib/seo/meta";
+import { getContentTypeLabel, getContentTypePath, getContentTypePluralLabel } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,10 @@ export default async function WatchPage({ params }: Props) {
   const sameCountry = sameYear.length ? [] : selectBlock(countryCandidates);
   const description = movie.description.trim() || "Описание скоро появится";
   const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
+  const contentTypePath = getContentTypePath(movie.type);
+  const contentTypePlural = getContentTypePluralLabel(movie.type);
+  const contentTypeSingleLower = getContentTypeLabel(movie.type).toLocaleLowerCase("ru-RU");
+  const similarTitle = movie.type === "ANIME" ? "Похожие аниме" : movie.type === "CARTOON" ? "Похожие мультфильмы" : movie.type === "SERIES" ? "Похожие сериалы" : "Похожие фильмы";
 
   return (
     <div className="container py-5 sm:py-7">
@@ -85,15 +90,15 @@ export default async function WatchPage({ params }: Props) {
         videoObjectJsonLd(movie),
         breadcrumbJsonLd([
           { name: "REDFILM", url: "/" },
-          { name: movie.type === "SERIES" ? "Сериалы" : movie.type === "ANIME" ? "Аниме" : movie.type === "CARTOON" ? "Мультфильмы" : "Фильмы", url: movie.type === "SERIES" ? "/series" : movie.type === "ANIME" ? "/anime" : movie.type === "CARTOON" ? "/cartoons" : "/films" },
+          { name: contentTypePlural, url: contentTypePath },
           { name: movie.titleRu, url: watchPath(movie) },
         ]),
-        itemListJsonLd(`Похожие фильмы к ${movie.titleRu}`, similarPath(movie), similar),
+        itemListJsonLd(`${similarTitle} к ${movie.titleRu}`, similarPath(movie), similar),
       ]} />
 
       <nav className="mb-5 flex min-w-0 flex-wrap items-center gap-2 break-words text-sm text-[#7d7d87]" aria-label="Хлебные крошки">
         <Link href="/" className="hover:text-white">REDFILM</Link><span>/</span>
-        <Link href={movie.type === "SERIES" ? "/series" : "/movies"} className="hover:text-white">{movie.type === "SERIES" ? "Сериалы" : "Фильмы"}</Link><span>/</span>
+        <Link href={contentTypePath} className="hover:text-white">{contentTypePlural}</Link><span>/</span>
         <span className="text-[#b5b5bd]">{movie.titleRu}</span>
       </nav>
 
@@ -129,13 +134,13 @@ export default async function WatchPage({ params }: Props) {
       <VibixFlyrollSlot slot="movie_below_player" />
 
       <section className="mt-8">
-        <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">Похожие фильмы</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>
+        <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">{similarTitle}</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>
         {similar.length ? <div className="movie-grid">{similar.map((item) => <MovieCard key={item.id} movie={item} />)}</div> : <div className="mf-panel p-5 text-[#a1a1aa]">Похожие фильмы скоро появятся.</div>}
       </section>
-      {watchedTogether.length ? <SectionGrid title="С этим фильмом смотрят" href={primaryGenre ? genrePath(primaryGenre) : "/top"} movies={watchedTogether} showSorts={false} mobileCarousel /> : null}
+      {watchedTogether.length ? <SectionGrid title={`С этим ${contentTypeSingleLower} смотрят`} href={primaryGenre ? genrePath(primaryGenre) : "/top"} movies={watchedTogether} showSorts={false} mobileCarousel /> : null}
       {moreInGenre.length && primaryGenre ? <SectionGrid title={`Ещё в жанре ${primaryGenre.name}`} href={genrePath(primaryGenre)} movies={moreInGenre} showSorts={false} mobileCarousel /> : null}
-      {sameYear.length ? <SectionGrid title={`Фильмы ${movie.year} года`} href={yearPath(movie)} movies={sameYear} showSorts={false} mobileCarousel /> : null}
-      {sameCountry.length && countries[0] ? <SectionGrid title={`Фильмы ${countries[0]}`} href={countryPath(countries[0])} movies={sameCountry} showSorts={false} mobileCarousel /> : null}
+      {sameYear.length ? <SectionGrid title={`${contentTypePlural} ${movie.year} года`} href={yearPath(movie)} movies={sameYear} showSorts={false} mobileCarousel /> : null}
+      {sameCountry.length && countries[0] ? <SectionGrid title={`${contentTypePlural} ${countries[0]}`} href={countryPath(countries[0])} movies={sameCountry} showSorts={false} mobileCarousel /> : null}
       <VibixBanner slot="movie_bottom" size="680x200" />
     </div>
   );

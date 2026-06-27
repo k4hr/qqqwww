@@ -1,6 +1,6 @@
 import { ContentType, type Prisma } from "@prisma/client";
 import { buildCountryFilterWhere, normalizeCatalogCountry } from "@/lib/catalog-filters";
-import { vibixPublicMovieWhere } from "@/lib/movie-access";
+import { vibixPublicMovieWhere, vibixWatchMovieWhere } from "@/lib/movie-access";
 import { prisma } from "@/lib/prisma";
 
 const searchInclude = { genres: { include: { genre: true } } } as const;
@@ -456,7 +456,7 @@ function filterWhere(filters: SearchFilters, hasQuery: boolean): Prisma.MovieWhe
   const year = /^(19|20)\d{2}$/.test(filters.year ?? "") ? Number(filters.year) : undefined;
   return {
     AND: [
-      vibixPublicMovieWhere,
+      hasQuery ? vibixWatchMovieWhere : vibixPublicMovieWhere,
       buildCountryFilterWhere(normalizeCatalogCountry(filters.country ?? (hasQuery ? "all" : "main"))),
       ...(type ? [{ type }] : []),
       ...(year ? [{ year }] : []),
@@ -465,11 +465,21 @@ function filterWhere(filters: SearchFilters, hasQuery: boolean): Prisma.MovieWhe
   };
 }
 
+function hasActiveSearchFilter(filters: SearchFilters): boolean {
+  const country = normalizeCatalogCountry(filters.country ?? "all");
+  return Boolean(
+    (country !== "all" && country !== "main")
+    || Object.values(ContentType).includes(filters.type as ContentType)
+    || /^(19|20)\d{2}$/.test(filters.year ?? "")
+    || filters.genre,
+  );
+}
+
 function uniqueMovies(movies: SearchMovie[]) {
   return Array.from(new Map(movies.map((movie) => [movie.id, movie])).values());
 }
 
-export async function searchMovies(query: string, filters: SearchFilters = {}, limit = 48) {
+async function searchMoviesOnce(query: string, filters: SearchFilters, limit: number): Promise<SearchMovie[]> {
   const normalized = normalizeSearchQuery(query);
   const intent = normalizeSearchIntentQuery(normalized);
   const baseWhere = filterWhere(filters, Boolean(intent));
@@ -516,4 +526,20 @@ export async function searchMovies(query: string, filters: SearchFilters = {}, l
     .sort((a, b) => b.score - a.score || popularityBoost(b.movie) - popularityBoost(a.movie) || (b.movie.year ?? 0) - (a.movie.year ?? 0))
     .slice(0, limit)
     .map((item) => item.movie);
+}
+
+export async function searchMovies(query: string, filters: SearchFilters = {}, limit = 48) {
+  const normalized = normalizeSearchQuery(query);
+  const intent = normalizeSearchIntentQuery(normalized);
+  if (!intent) return [];
+
+  const primary = await searchMoviesOnce(normalized, filters, limit);
+  if (primary.length || !hasActiveSearchFilter(filters)) return primary;
+
+  // Пользователь часто приходит в поиск с уже выбранной страной/типом из фильтров.
+  // Если точное название есть в базе, не надо показывать “ничего не найдено” только из-за старого фильтра.
+  const countryRelaxed = await searchMoviesOnce(normalized, { ...filters, country: "all" }, limit);
+  if (countryRelaxed.length) return countryRelaxed;
+
+  return searchMoviesOnce(normalized, { country: "all" }, limit);
 }
