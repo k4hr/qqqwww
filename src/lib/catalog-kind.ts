@@ -199,9 +199,14 @@ export function classifyCatalogKind(input: CatalogKindInput): ContentType {
   const baseType = rawVibixTypeToBaseContentType(input.vibixType ?? input.raw?.type);
   const storedType = input.type;
 
+  // Для уже сохранённых карточек доверяем ручному типу из базы.
+  // Иначе админское действие “перенести в аниме” меняет type=ANIME,
+  // но листинг /anime снова выкидывает тайтл, если в жанрах Vibix нет слова “аниме”.
+  if (!input.raw && (storedType === ContentType.ANIME || storedType === ContentType.CARTOON)) {
+    return storedType;
+  }
+
   if (storedType === ContentType.ANIME) {
-    // Keep old ANIME records only when current data still contains a real anime signal.
-    // Otherwise restore the technical Vibix base type when possible.
     return baseType === ContentType.SERIES ? ContentType.SERIES : ContentType.MOVIE;
   }
 

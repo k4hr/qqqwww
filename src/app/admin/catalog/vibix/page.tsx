@@ -186,7 +186,7 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
       });
   const localMaps = await getLocalMatches(response.data);
   const pageAnimeCandidateIds = categoryOption.categoryId === VIBIX_CATEGORY_IDS.anime
-    ? Array.from(new Set(response.data.map((video) => matchLocal(video, localMaps)).filter((movie): movie is LocalMovieMatch => Boolean(movie && movie.type === "MOVIE")).map((movie) => movie.id)))
+    ? Array.from(new Set(response.data.map((video) => matchLocal(video, localMaps)).filter((movie): movie is LocalMovieMatch => Boolean(movie && (movie.type !== "ANIME" || !movie.isPublicVisible || !movie.isCatalogAllowed))).map((movie) => movie.id)))
     : [];
   const total = response.meta?.total ?? null;
   const lastPage = response.meta?.lastPage ?? null;
@@ -249,8 +249,8 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
           <input type="hidden" name="movieIds" value={JSON.stringify(pageAnimeCandidateIds)} />
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="font-black">На этой странице есть аниме, которые лежат в разделе “Фильмы”</div>
-              <div className="mt-1 text-neutral-600">Нажми кнопку — эти {pageAnimeCandidateIds.length} тайтлов будут перенесены в раздел “Аниме”.</div>
+              <div className="font-black">На этой странице есть аниме, которые не попали в раздел “Аниме”</div>
+              <div className="mt-1 text-neutral-600">Нажми кнопку — эти {pageAnimeCandidateIds.length} тайтлов будут принудительно перенесены и открыты в разделе “Аниме”.</div>
             </div>
             <button className="h-11 rounded-xl bg-[#e50914] px-5 font-black text-white">Перенести страницу в аниме</button>
           </div>
@@ -332,7 +332,13 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
                       <div>
                         <div className="font-black text-green-700">Уже есть</div>
                         <Link href={`/watch/${local.slug}`} className="mt-1 block max-w-[220px] truncate text-[#e50914] hover:underline">{local.titleRu} ({local.year})</Link>
-                        <div className="mt-1 text-neutral-500">watch: {localWatchAvailable ? "yes" : "no"}, public: {local.isPublicVisible ? "yes" : "no"}, vibix: {local.vibixAvailable ? "yes" : "no"}</div>
+                        <div className="mt-1 text-neutral-500">type: {local.type}, watch: {localWatchAvailable ? "yes" : "no"}, public: {local.isPublicVisible ? "yes" : "no"}, vibix: {local.vibixAvailable ? "yes" : "no"}</div>
+                        {categoryOption.categoryId === VIBIX_CATEGORY_IDS.anime && (local.type !== "ANIME" || !local.isPublicVisible || !local.isCatalogAllowed) ? (
+                          <form action={moveVibixBrowserPageMoviesToAnimeAction} className="mt-2">
+                            <input type="hidden" name="movieIds" value={JSON.stringify([local.id])} />
+                            <button className="rounded-lg bg-[#e50914] px-3 py-2 text-xs font-black text-white">В аниме</button>
+                          </form>
+                        ) : null}
                       </div>
                     ) : (
                       <div className={hasPlayer ? "font-bold text-red-700" : "font-bold text-neutral-500"}>{hasPlayer ? "Нет на сайте" : "Нет player"}</div>

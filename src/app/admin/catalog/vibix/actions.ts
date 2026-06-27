@@ -1,11 +1,10 @@
 "use server";
 
-import { ContentType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { calculateCatalogScore } from "@/lib/catalog-score";
-import { calculateHomeQuality } from "@/lib/home-quality-score";
+import { forceMovieToAnimeById, forceMoviesToAnimeByIds } from "@/lib/admin-anime-tools";
 import { prisma } from "@/lib/prisma";
+import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
 import {
   getVibixVideoByImdbIdResult,
   getVibixVideoByKpIdResult,
@@ -100,6 +99,10 @@ export async function importVibixBrowserItemAction(formData: FormData) {
   }
 
   const saved = await saveVibixVideo(enrichment.video);
+  const forceAnime = sourceCategoryId === VIBIX_CATEGORY_IDS.anime || sourceCategoryLabel?.toLocaleLowerCase("ru-RU").includes("аниме") === true || sourceCategoryLabel?.toLocaleLowerCase("ru-RU").includes("anime") === true;
+  if (forceAnime && "movieId" in saved) {
+    await forceMovieToAnimeById(saved.movieId, "admin_vibix_browser_anime_import");
+  }
   const movie = "movieId" in saved
     ? await prisma.movie.findUnique({ where: { id: saved.movieId }, select: { slug: true, titleRu: true, year: true, isPublicVisible: true, isCatalogAllowed: true, posterUrl: true, vibixIframeUrl: true, vibixEmbedCode: true } })
     : null;
@@ -133,38 +136,12 @@ export async function moveVibixBrowserPageMoviesToAnimeAction(formData: FormData
   const ids = Array.from(new Set(decodeMovieIds(formData.get("movieIds")))).slice(0, 200);
   if (!ids.length) redirect(resultUrl({ ok: false, message: "На этой странице нет фильмов для переноса в аниме." }));
 
-  const movies = await prisma.movie.findMany({
-    where: { id: { in: ids } },
-    include: { genres: { include: { genre: true } } },
-  });
-
-  let moved = 0;
-  const examples: Array<{ title: string; year: number; slug: string }> = [];
-  for (const movie of movies) {
-    if (movie.type === ContentType.ANIME) continue;
-    const typedMovie = { ...movie, type: ContentType.ANIME };
-    const homeScore = calculateHomeQuality(typedMovie);
-    const catalogScore = calculateCatalogScore(typedMovie);
-    await prisma.movie.update({
-      where: { id: movie.id },
-      data: {
-        type: ContentType.ANIME,
-        ...homeScore,
-        ...catalogScore,
-        lastQualitySyncAt: new Date(),
-        lastCatalogScoreAt: new Date(),
-        similarityDirty: true,
-        similarityDirtyReason: "admin_vibix_page_anime_reclassify",
-      },
-    });
-    moved += 1;
-    if (examples.length < 12) examples.push({ title: movie.titleRu, year: movie.year, slug: movie.slug });
-  }
+  const result = await forceMoviesToAnimeByIds(ids, "admin_vibix_page_anime_reclassify");
 
   revalidatePath("/admin/catalog");
   revalidatePath("/admin/catalog/vibix");
   revalidatePath("/films");
   revalidatePath("/anime");
-  redirect(resultUrl({ ok: true, message: `Перенесено в аниме с текущей страницы Vibix: ${moved}.`, details: { requested: ids.length, moved, examples } }));
+  redirect(resultUrl({ ok: true, message: `Перенесено в аниме с текущей страницы Vibix: ${result.moved}.`, details: result }));
 }
 

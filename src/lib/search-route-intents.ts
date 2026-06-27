@@ -15,7 +15,7 @@ const POPULAR_WORDS = new Set(["популярное", "популярные", "
 const TOP_WORDS = new Set(["топ", "top", "лучшее", "лучшие", "rating", "рейтинг"]);
 
 const ROUTE_TERMS: Array<{ base: SearchRouteIntent["base"]; terms: Set<string> }> = [
-  { base: "/anime", terms: new Set(["аниме", "anime"]) },
+  { base: "/anime", terms: new Set(["аниме", "анимэ", "anime"]) },
   { base: "/cartoons", terms: new Set(["мультфильм", "мультфильмы", "мульт", "мультики", "мультик", "cartoon", "cartoons", "animation"]) },
   { base: "/series", terms: new Set(["сериал", "сериалы", "сериала", "series", "serial", "tv"]) },
   { base: "/films", terms: new Set(["фильм", "фильмы", "фильма", "кино", "movie", "movies", "film", "films"]) },
@@ -52,11 +52,15 @@ export function resolveSearchRedirectPath(query: string): SearchRouteIntent | nu
   const wantsTop = tokens.some((token) => TOP_WORDS.has(token));
   const knownModifier = (token: string) => Boolean(token === year || FRESH_WORDS.has(token) || POPULAR_WORDS.has(token) || TOP_WORDS.has(token));
 
+  const anyRouteTerm = new Set(ROUTE_TERMS.flatMap((route) => Array.from(route.terms)));
+
   for (const route of ROUTE_TERMS) {
     const hasRouteTerm = tokens.some((token) => route.terms.has(token));
     if (!hasRouteTerm) continue;
 
-    const hasOnlyRouteIntent = tokens.every((token) => route.terms.has(token) || knownModifier(token));
+    // “аниме фильмы”, “новинки аниме смотреть” и похожие запросы — это навигация,
+    // а не поиск тайтла с названием “аниме”. Приоритет задан порядком ROUTE_TERMS.
+    const hasOnlyRouteIntent = tokens.every((token) => route.terms.has(token) || anyRouteTerm.has(token) || knownModifier(token));
     if (!hasOnlyRouteIntent) return null;
 
     const sort = wantsTop ? "top" : wantsPopular ? "popular" : wantsFresh ? "fresh" : null;

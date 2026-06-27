@@ -3,9 +3,9 @@
 import { ContentType, type Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { calculateCatalogScore, recalculateAllCatalogScores } from "@/lib/catalog-score";
+import { recalculateAllCatalogScores } from "@/lib/catalog-score";
 import { classifyCatalogKind } from "@/lib/catalog-kind";
-import { calculateHomeQuality } from "@/lib/home-quality-score";
+import { forceMoviesToAnimeByIds } from "@/lib/admin-anime-tools";
 import { prisma } from "@/lib/prisma";
 import {
   buildVibixCatalogIndexBatch,
@@ -92,7 +92,14 @@ export async function moveMoviesToAnimeAction() {
 
   while (true) {
     const movies = await prisma.movie.findMany({
-      where: { type: ContentType.MOVIE, isPublished: true },
+      where: {
+        isPublished: true,
+        OR: [
+          { type: ContentType.MOVIE },
+          { type: ContentType.ANIME, isPublicVisible: false },
+          { type: ContentType.ANIME, isCatalogAllowed: false },
+        ],
+      },
       include: { genres: { include: { genre: true } } },
       orderBy: { id: "asc" },
       take: 250,
@@ -113,23 +120,9 @@ export async function moveMoviesToAnimeAction() {
 
       if (!matchedByIndex && !matchedByGenre && !matchedByJapanAnimation && !matchedByTag && !matchedByClassifier) continue;
 
-      const typedMovie = { ...movie, type: ContentType.ANIME };
-      const homeScore = calculateHomeQuality(typedMovie);
-      const catalogScore = calculateCatalogScore(typedMovie);
-      await prisma.movie.update({
-        where: { id: movie.id },
-        data: {
-          type: ContentType.ANIME,
-          ...homeScore,
-          ...catalogScore,
-          lastQualitySyncAt: new Date(),
-          lastCatalogScoreAt: new Date(),
-          similarityDirty: true,
-          similarityDirtyReason: "admin_anime_reclassify",
-        },
-      });
+      const forced = await forceMoviesToAnimeByIds([movie.id], "admin_anime_reclassify");
 
-      result.moved += 1;
+      result.moved += forced.moved;
       if (matchedByIndex) result.byVibixIndex += 1;
       else if (matchedByClassifier) result.byClassifier += 1;
       else if (matchedByGenre) result.byGenre += 1;
