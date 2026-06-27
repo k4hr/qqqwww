@@ -25,14 +25,6 @@ type TelegramWebApp = {
   offEvent?: (eventType: string, eventHandler: () => void) => void;
 };
 
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: TelegramWebApp;
-    };
-  }
-}
-
 function px(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? `${Math.max(0, value)}px` : "0px";
 }
@@ -73,7 +65,8 @@ export function TelegramWebAppBridge() {
 
     const run = () => {
       if (cancelled) return;
-      webApp = window.Telegram?.WebApp;
+      const telegramWindow = window as unknown as { Telegram?: { WebApp?: TelegramWebApp } };
+      webApp = telegramWindow.Telegram?.WebApp;
 
       if (!webApp) {
         attempts += 1;
