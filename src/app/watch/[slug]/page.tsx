@@ -10,6 +10,7 @@ import { PlayerBlock } from "@/components/player-block";
 import { VibixBanner, VibixFlyrollSlot } from "@/components/vibix-banner";
 import { AnalyticsEvent } from "@/components/analytics-event";
 import { WatchClientActions } from "@/components/watch-client-actions";
+import { TelegramWatchPromo } from "@/components/telegram-watch-promo";
 import { buildDefaultCatalogCountryWhere, extractCountries } from "@/lib/catalog-filters";
 import { prisma } from "@/lib/prisma";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
@@ -123,6 +124,7 @@ export default async function WatchPage({ params }: Props) {
       <VibixBanner slot="movie_above_player" size="728x90" />
       <VibixFlyrollSlot slot="movie_above_player" />
       <PlayerBlock movie={movie} />
+      <TelegramWatchPromo />
       <VibixBanner slot="movie_below_player" size="680x250" />
       <VibixFlyrollSlot slot="movie_below_player" />
 

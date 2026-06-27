@@ -521,3 +521,14 @@ html.is-telegram-webapp body {
 html.is-telegram-webapp header {
   padding-top: calc(max(var(--tg-content-safe-top, 0px), var(--tg-safe-top, 0px), env(safe-area-inset-top, 0px)) + 12px);
 }
+
+
+html.is-telegram-webapp .telegram-watch-promo {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .telegram-watch-promo {
+    margin-top: 12px;
+  }
+}
