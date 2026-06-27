@@ -112,8 +112,36 @@ function normalizeRawSearchText(value: string) {
     .replace(/\s+/g, " ");
 }
 
+function normalizeOrdinalSearchText(value: string) {
+  return ` ${normalizeRawSearchText(value)} `
+    .replace(/\b(\d{1,3})(?:й|ый|ой|ий|ая|я|го|ого|ому|ему)\b/g, "$1")
+    .replace(/\b(\d{1,3})\s+(?:й|ый|ой|ий|ая|я|го|ого|ому|ему)\b/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const RUSSIAN_STEM_ENDINGS = [
+  "иями", "ями", "ами", "ого", "его", "ому", "ему", "ыми", "ими",
+  "иях", "ах", "ях", "ией", "ия", "ие", "ий", "ый", "ой", "ая", "яя", "ое", "ее",
+  "ов", "ев", "ей", "ам", "ям", "ом", "ем", "ою", "ею", "а", "я", "ы", "и", "е", "у", "ю",
+];
+
+function russianStemToken(token: string) {
+  if (!/^[а-я]+$/.test(token) || token.length < 5) return token;
+  for (const ending of RUSSIAN_STEM_ENDINGS) {
+    if (token.endsWith(ending) && token.length - ending.length >= 3) return token.slice(0, -ending.length);
+  }
+  return token;
+}
+
+function stemSearchPhrase(value: string) {
+  const tokens = normalizeOrdinalSearchText(value).split(" ").filter(Boolean);
+  const stemmed = tokens.map((token) => (/^\d+$/.test(token) ? token : russianStemToken(token)));
+  return stemmed.join(" ").trim();
+}
+
 export function normalizeSearchQuery(query: string) {
-  return normalizeRawSearchText(query);
+  return normalizeOrdinalSearchText(query);
 }
 
 
@@ -129,8 +157,11 @@ export function normalizeSearchIntentQuery(query: string) {
     .replace(/\s+/g, " ")
     .trim();
 
+  cleaned = normalizeOrdinalSearchText(cleaned);
+
   const tokens = cleaned.split(" ").filter((token) => {
     if (!token) return false;
+    if (/^(?:й|ый|ой|ий|ая|я)$/.test(token)) return false;
     if (SEARCH_INTENT_STOP_WORDS.has(token)) return false;
     if (/^(?:19|20)\d{2}$/.test(token)) return true;
     return true;
@@ -141,7 +172,12 @@ export function normalizeSearchIntentQuery(query: string) {
 }
 
 export function tokenizeSearchQuery(query: string) {
-  return Array.from(new Set(normalizeSearchQuery(query).split(" ").filter((token) => token.length >= 2)));
+  return Array.from(new Set(
+    normalizeSearchQuery(query)
+      .split(" ")
+      .map((token) => russianStemToken(token))
+      .filter((token) => token.length >= 2 || /^\d+$/.test(token)),
+  ));
 }
 
 export function transliterateSearchQuery(query: string) {
@@ -201,6 +237,12 @@ function buildSearchVariants(query: string) {
   addQueryShapeVariants(variants, intent);
   addAliasVariants(variants, intent);
 
+  const stemmedIntent = stemSearchPhrase(intent);
+  if (stemmedIntent && stemmedIntent !== intent) {
+    addQueryShapeVariants(variants, stemmedIntent);
+    addAliasVariants(variants, stemmedIntent);
+  }
+
   // Сохраняем исходную форму как слабую запасную ветку: это помогает редким названиям,
   // где слова вроде "сезон" или "серия" действительно являются частью тайтла.
   if (normalized !== intent) {
@@ -253,8 +295,9 @@ function titleFieldWhere(value: string, relaxedContains: boolean): Prisma.MovieW
 
 function titleTokenAndWhere(value: string): Prisma.MovieWhereInput[] {
   const normalized = normalizeSearchQuery(value);
-  const tokens = tokenizeSearchQuery(normalized).filter((token) => token.length >= 3);
-  if (tokens.length < 2) return [];
+  const tokens = tokenizeSearchQuery(normalized).filter((token) => token.length >= 3 || /^\d+$/.test(token));
+  const wordTokens = tokens.filter((token) => !/^\d+$/.test(token));
+  if (tokens.length < 2 && wordTokens.length < 1) return [];
 
   const fields: SearchTextField[] = ["titleRu", "titleOriginal", "slug"];
   return fields.map((field) => ({
@@ -533,13 +576,24 @@ export async function searchMovies(query: string, filters: SearchFilters = {}, l
   const intent = normalizeSearchIntentQuery(normalized);
   if (!intent) return [];
 
-  const primary = await searchMoviesOnce(normalized, filters, limit);
-  if (primary.length || !hasActiveSearchFilter(filters)) return primary;
+  const batches: SearchMovie[][] = [];
+  batches.push(await searchMoviesOnce(normalized, filters, limit));
 
-  // Пользователь часто приходит в поиск с уже выбранной страной/типом из фильтров.
-  // Если точное название есть в базе, не надо показывать “ничего не найдено” только из-за старого фильтра.
-  const countryRelaxed = await searchMoviesOnce(normalized, { ...filters, country: "all" }, limit);
-  if (countryRelaxed.length) return countryRelaxed;
+  // Важно: если пользователь раньше кликнул страну/тип/жанр, поисковая форма
+  // сохраняет эти параметры. Для поиска по конкретному названию это не должно
+  // убивать выдачу: “13 воин” обязан найти “13-й воин”, даже если выбран другой
+  // фильтр страны или типа. Поэтому всегда добираем relaxed-проходы и потом
+  // пересортировываем общий список по релевантности названия.
+  if (hasActiveSearchFilter(filters)) {
+    batches.push(await searchMoviesOnce(normalized, { ...filters, country: "all" }, limit));
+    batches.push(await searchMoviesOnce(normalized, { country: "all" }, limit));
+  }
 
-  return searchMoviesOnce(normalized, { country: "all" }, limit);
+  const merged = uniqueMovies(batches.flat());
+  return merged
+    .map((movie) => ({ movie, score: scoreSearchResult(movie, intent) }))
+    .filter((item) => item.score >= 70)
+    .sort((a, b) => b.score - a.score || popularityBoost(b.movie) - popularityBoost(a.movie) || (b.movie.year ?? 0) - (a.movie.year ?? 0))
+    .slice(0, limit)
+    .map((item) => item.movie);
 }

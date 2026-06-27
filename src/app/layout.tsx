@@ -8,6 +8,7 @@ import { VibixUnion } from "@/components/vibix-union";
 import { MobileZoomLock } from "@/components/mobile-zoom-lock";
 import { TelegramWebAppBridge } from "@/components/telegram-webapp-bridge";
 import { getVibixAdSettings, getVibixAddTypesAttribute } from "@/lib/vibix-ads";
+import { siteUrl } from "@/lib/seo-links";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -18,7 +19,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://redfilm.win"),
+  metadataBase: new URL(siteUrl("/")),
   title: "REDFILM — фильмы и сериалы онлайн",
   description: "Онлайн кинотеатр со всеми фильмами и сериалами. Постоянное обновление каталога, смотрите все новинки здесь!",
   manifest: "/site.webmanifest",
