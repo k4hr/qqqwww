@@ -544,7 +544,6 @@ model SeoCluster {
   @@index([targetSlug])
   @@index([totalDemand])
 }
-
 model SeoLandingPage {
   id              String   @id @default(cuid())
   slug            String   @unique
@@ -574,4 +573,3 @@ model SeoLandingPage {
   @@index([isIndexable, sitemapIncluded])
   @@index([totalDemand])
 }
-
