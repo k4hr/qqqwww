@@ -29,7 +29,10 @@ type LocalMovieMatch = {
   kinopoiskId: string | null;
   imdbId: string | null;
   vibixAvailable: boolean;
+  isPublished: boolean;
   isPublicVisible: boolean;
+  vibixIframeUrl: string | null;
+  vibixEmbedCode: string | null;
 };
 
 const CATEGORY_OPTIONS = [
@@ -86,7 +89,7 @@ function kindOf(video: VibixVideo) {
   return "Фильм";
 }
 
-function compactList(value: unknown) {
+function compactList(value: unknown): string {
   if (!value) return "—";
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -134,7 +137,10 @@ async function getLocalMatches(videos: VibixVideo[]) {
       kinopoiskId: true,
       imdbId: true,
       vibixAvailable: true,
+      isPublished: true,
       isPublicVisible: true,
+      vibixIframeUrl: true,
+      vibixEmbedCode: true,
     },
   });
 
@@ -261,6 +267,7 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
               const kpId = stringValue(video.kp_id) || stringValue(video.kinopoisk_id);
               const imdbId = stringValue(video.imdb_id);
               const hasPlayer = Boolean(stringValue(video.iframe_url) || stringValue(video.embed_code));
+              const localWatchAvailable = local ? local.isPublished && local.vibixAvailable && Boolean(stringValue(local.vibixIframeUrl) || stringValue(local.vibixEmbedCode)) : false;
               return (
                 <tr key={`${video.id ?? "noid"}-${kpId ?? "nokp"}-${index}`} className="align-top hover:bg-[#fff8f8]">
                   <td className="p-3">
@@ -303,7 +310,7 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
                       <div>
                         <div className="font-black text-green-700">Уже есть</div>
                         <Link href={`/watch/${local.slug}`} className="mt-1 block max-w-[220px] truncate text-[#e50914] hover:underline">{local.titleRu} ({local.year})</Link>
-                        <div className="mt-1 text-neutral-500">public: {local.isPublicVisible ? "yes" : "no"}, vibix: {local.vibixAvailable ? "yes" : "no"}</div>
+                        <div className="mt-1 text-neutral-500">watch: {localWatchAvailable ? "yes" : "no"}, public: {local.isPublicVisible ? "yes" : "no"}, vibix: {local.vibixAvailable ? "yes" : "no"}</div>
                       </div>
                     ) : (
                       <div className={hasPlayer ? "font-bold text-red-700" : "font-bold text-neutral-500"}>{hasPlayer ? "Нет на сайте" : "Нет player"}</div>

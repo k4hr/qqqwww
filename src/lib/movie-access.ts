@@ -7,10 +7,14 @@ export const playableMovieWhere: Prisma.MovieWhereInput = {
   ],
 };
 
-export const vibixPublicMovieWhere = {
+export const vibixWatchMovieWhere = {
   isPublished: true,
-  isCatalogAllowed: true,
   vibixAvailable: true,
-  posterUrl: { not: null },
   AND: [playableMovieWhere],
+} satisfies Prisma.MovieWhereInput;
+
+export const vibixPublicMovieWhere = {
+  ...vibixWatchMovieWhere,
+  isCatalogAllowed: true,
+  posterUrl: { not: null },
 } satisfies Prisma.MovieWhereInput;

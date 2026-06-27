@@ -941,7 +941,7 @@ function visibilityDiagnosis(movie: Awaited<ReturnType<typeof findLocalMovieByHi
     id: movie.id,
     titleRu: movie.titleRu,
     slug: movie.slug,
-    url: `/film/${movie.slug}`,
+    url: `/watch/${movie.slug}`,
     type: movie.type,
     year: movie.year,
     kinopoiskId: movie.kinopoiskId,
@@ -1088,6 +1088,7 @@ export async function importVibixTitleManually(input: {
   const saved = await saveVibixVideo(video);
   const movieId = "movieId" in saved ? saved.movieId : null;
   const after = movieId ? await findLocalMovieByHints({ kpId, imdbId, vibixId: manualVibixId, title: input.title }) : null;
+  const watchUrl = after?.slug ? `/watch/${after.slug}` : null;
 
   const indexWhereOr: Prisma.VibixCatalogIndexWhereInput[] = [];
   if (kpId) indexWhereOr.push({ kpId });
@@ -1104,7 +1105,7 @@ export async function importVibixTitleManually(input: {
   return {
     ok: saved.status !== "skipped",
     message: saved.status === "skipped" ? `Vibix import skipped: ${saved.reason}` : `Импорт/обновление выполнены: ${saved.status}.`,
-    details: { attempts, before: visibilityDiagnosis(before), saved, after: visibilityDiagnosis(after) },
+    details: { attempts, before: visibilityDiagnosis(before), saved, after: visibilityDiagnosis(after), watchUrl },
   };
 }
 

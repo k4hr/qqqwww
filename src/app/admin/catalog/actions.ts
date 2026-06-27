@@ -97,6 +97,10 @@ export async function importVibixTitleManuallyAction(formData: FormData) {
     year: optionalNumberField(formData, "year"),
     type: optionalStringField(formData, "manualType"),
   });
+  const details = typeof result === "object" && result && "details" in result
+    ? result.details as { watchUrl?: string | null }
+    : null;
+  if (details?.watchUrl) revalidatePath(details.watchUrl);
   redirectWithResult(result);
 }
 

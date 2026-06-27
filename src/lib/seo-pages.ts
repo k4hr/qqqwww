@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { vibixPublicMovieWhere } from "@/lib/movie-access";
+import { vibixPublicMovieWhere, vibixWatchMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere, buildCountryFilterWhere } from "@/lib/catalog-filters";
 import { baseSlugFromCollectionSlug, buildCollectionSlug, movieSlugFromFilmSeoSlug, normalizeMovieBaseTitle } from "@/lib/seo-slugs";
 import { buildSimilarityCandidateWhere, sortSimilarMovies, type SimilarMovieResult } from "@/lib/similar";
@@ -13,7 +13,7 @@ export const movieSeoInclude = {
 export type SeoMovie = Prisma.MovieGetPayload<{ include: typeof movieSeoInclude }>;
 
 export async function getSeoMovieBySlug(slug: string) {
-  return prisma.movie.findFirst({ where: { slug, ...vibixPublicMovieWhere }, include: movieSeoInclude });
+  return prisma.movie.findFirst({ where: { slug, ...vibixWatchMovieWhere }, include: movieSeoInclude });
 }
 
 export async function getSeoMovieByFilmSlug(slug: string) {

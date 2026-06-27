@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import {
   getVibixVideoByImdbIdResult,
   getVibixVideoByKpIdResult,
@@ -80,14 +81,19 @@ export async function importVibixBrowserItemAction(formData: FormData) {
   }
 
   const saved = await saveVibixVideo(enrichment.video);
+  const movie = "movieId" in saved
+    ? await prisma.movie.findUnique({ where: { id: saved.movieId }, select: { slug: true, titleRu: true, year: true, isPublicVisible: true, isCatalogAllowed: true, posterUrl: true, vibixIframeUrl: true, vibixEmbedCode: true } })
+    : null;
+
   revalidatePath("/");
   revalidatePath("/admin/catalog");
   revalidatePath("/admin/catalog/vibix");
+  if (movie?.slug) revalidatePath(`/watch/${movie.slug}`);
 
-  const title = stringValue(enrichment.video.name_rus) || stringValue(enrichment.video.name) || stringValue(enrichment.video.name_original) || `Vibix ${enrichment.video.id ?? ""}`;
+  const title = movie?.titleRu || stringValue(enrichment.video.name_rus) || stringValue(enrichment.video.name) || stringValue(enrichment.video.name_original) || `Vibix ${enrichment.video.id ?? ""}`;
   redirect(resultUrl({
     ok: saved.status !== "skipped",
     message: saved.status === "skipped" ? `Не добавлено: ${saved.reason}` : `Добавлено/обновлено: ${title}`,
-    details: { saved, attempts: enrichment.attempts, video: enrichment.video },
+    details: { saved, movie, watchUrl: movie?.slug ? `/watch/${movie.slug}` : null, attempts: enrichment.attempts, video: enrichment.video },
   }));
 }
