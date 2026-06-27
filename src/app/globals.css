@@ -523,9 +523,6 @@ html.is-telegram-webapp header {
 }
 
 
-html.is-telegram-webapp .telegram-watch-promo {
-  display: none;
-}
 
 @media (max-width: 640px) {
   .telegram-watch-promo {

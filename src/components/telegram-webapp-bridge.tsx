@@ -10,6 +10,9 @@ type TelegramSafeAreaInset = {
 };
 
 type TelegramWebApp = {
+  initData?: string;
+  initDataUnsafe?: { user?: unknown };
+  platform?: string;
   ready?: () => void;
   expand?: () => void;
   requestFullscreen?: () => void;
@@ -27,6 +30,14 @@ type TelegramWebApp = {
 
 function px(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? `${Math.max(0, value)}px` : "0px";
+}
+
+function isRealTelegramMiniApp(webApp: TelegramWebApp) {
+  const hasSignedInitData = typeof webApp.initData === "string" && webApp.initData.length > 0;
+  const hasTelegramUser = Boolean(webApp.initDataUnsafe?.user);
+  const hasTelegramLaunchParams = typeof window !== "undefined" && window.location.hash.includes("tgWebAppData=");
+
+  return hasSignedInitData || hasTelegramUser || hasTelegramLaunchParams;
 }
 
 function setTelegramCssVariables(webApp: TelegramWebApp) {
@@ -68,7 +79,7 @@ export function TelegramWebAppBridge() {
       const telegramWindow = window as unknown as { Telegram?: { WebApp?: TelegramWebApp } };
       webApp = telegramWindow.Telegram?.WebApp;
 
-      if (!webApp) {
+      if (!webApp || !isRealTelegramMiniApp(webApp)) {
         attempts += 1;
         if (attempts <= 30) timer = setTimeout(run, 150);
         return;
