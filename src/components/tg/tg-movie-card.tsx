@@ -21,11 +21,7 @@ type Props = {
 export function TgMovieCard({ movie }: Props) {
   const rating = movie.kpRating ?? movie.imdbRating;
   return (
-<<<<<<< HEAD
     <Link href={`/watch/${movie.slug}`} className="grid grid-cols-[82px_minmax(0,1fr)] gap-3 rounded-3xl border border-white/10 bg-white/[.045] p-3 transition active:scale-[.99]">
-=======
-    <Link href={`/tg/watch/${movie.slug}`} className="grid grid-cols-[82px_minmax(0,1fr)] gap-3 rounded-3xl border border-white/10 bg-white/[.045] p-3 transition active:scale-[.99]">
->>>>>>> f1dfcac89a507e51aea244136d8ffd51e6b84be5
       <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-[#15151d]">
         {movie.posterUrl ? <Image src={movie.posterUrl} alt={movie.titleRu} fill sizes="82px" className="object-cover" unoptimized /> : <div className="flex h-full items-center justify-center text-2xl font-black text-[#3f3f49]">R</div>}
       </div>
