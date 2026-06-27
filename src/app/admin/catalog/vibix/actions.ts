@@ -100,11 +100,14 @@ export async function importVibixBrowserItemAction(formData: FormData) {
 
   const saved = await saveVibixVideo(enrichment.video);
   const forceAnime = sourceCategoryId === VIBIX_CATEGORY_IDS.anime || sourceCategoryLabel?.toLocaleLowerCase("ru-RU").includes("аниме") === true || sourceCategoryLabel?.toLocaleLowerCase("ru-RU").includes("anime") === true;
-  if (forceAnime && "movieId" in saved) {
-    await forceMovieToAnimeById(saved.movieId, "admin_vibix_browser_anime_import");
+  const savedMovieId = "movieId" in saved ? stringValue(saved.movieId) : null;
+
+  if (forceAnime && savedMovieId) {
+    await forceMovieToAnimeById(savedMovieId, "admin_vibix_browser_anime_import");
   }
-  const movie = "movieId" in saved
-    ? await prisma.movie.findUnique({ where: { id: saved.movieId }, select: { slug: true, titleRu: true, year: true, isPublicVisible: true, isCatalogAllowed: true, posterUrl: true, vibixIframeUrl: true, vibixEmbedCode: true } })
+
+  const movie = savedMovieId
+    ? await prisma.movie.findUnique({ where: { id: savedMovieId }, select: { slug: true, titleRu: true, year: true, isPublicVisible: true, isCatalogAllowed: true, posterUrl: true, vibixIframeUrl: true, vibixEmbedCode: true } })
     : null;
 
   revalidatePath("/");
