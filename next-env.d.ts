@@ -1,14 +1,6 @@
-[variables]
-NODE_VERSION = "22"
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+import "./.next/types/routes.d.ts";
 
-[phases.setup]
-nixPkgs = ["nodejs_22", "openssl"]
-
-[phases.install]
-cmds = ["npm install"]
-
-[phases.build]
-cmds = ["npm run build"]
-
-[start]
-cmd = "npx prisma db push --accept-data-loss && npx prisma generate && npx next start -H 0.0.0.0 -p ${PORT:-3000}"
+// NOTE: This file should not be edited
+// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
