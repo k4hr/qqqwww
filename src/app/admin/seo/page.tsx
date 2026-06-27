@@ -43,6 +43,16 @@ export default async function AdminSeoPage({ searchParams }: Props) {
 
     {result ? <pre className="mb-5 overflow-auto rounded-xl bg-[#111] p-4 text-xs text-white">{JSON.stringify(result, null, 2)}</pre> : null}
 
+    <section className="admin-panel mb-5 p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-black">Яндекс Переобход</h2>
+          <p className="mt-2 text-sm text-neutral-600">Собрать 150 приоритетных публичных URL: /watch, /similar, коллекции, жанры, годы и страны.</p>
+        </div>
+        <Link href="/admin/seo/reindex" className="rounded-xl bg-[#e50914] px-5 py-3 text-center font-black text-white">Открыть список URL</Link>
+      </div>
+    </section>
+
     <section className="admin-panel mb-5 border-2 border-[#e50914]/30 p-5">
       <h2 className="text-xl font-black">SEO Autopilot</h2>
       <p className="mt-2 text-sm text-neutral-600">Одна кнопка: пересобирает встроенный Wordstat без дублей, чистит пустые и мусорные страницы, ставит redirect для широких запросов, прогоняет Quality Gate и запускает OpenAI для лучших страниц.</p>

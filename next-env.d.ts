@@ -1,0 +1,50 @@
+{
+  "name": "redfilm",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "lint": "next lint",
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "vibix:worker": "tsx src/scripts/vibix-sync-worker.ts",
+    "trend:worker": "tsx src/scripts/trend-worker.ts",
+    "trend:vibix": "tsx src/scripts/vibix-trend-sync.ts",
+    "trend:recalculate": "tsx src/scripts/recalculate-trend-scores.ts",
+    "redfilm:recheck-catalog": "tsx scripts/recheck-movie-catalog-visibility.ts",
+    "trend:enrich-existing": "tsx src/scripts/enrich-existing-vibix.ts",
+    "catalog:recalculate": "tsx src/scripts/recalculate-catalog-scores.ts",
+    "vibix:update-worker": "tsx src/scripts/vibix-update-worker.ts",
+    "vibix:update-once": "tsx src/scripts/vibix-update-once.ts",
+    "similarity:recalculate": "tsx src/scripts/recalculate-similarities.ts",
+    "similarity:worker": "tsx src/scripts/similarity-worker.ts",
+    "vibix:catalog-worker": "tsx src/scripts/vibix-catalog-worker.ts",
+    "seo:import-wordstat": "tsx src/scripts/import-wordstat-seo.ts",
+    "seo:ai-top": "tsx src/scripts/generate-ai-seo-pages.ts",
+    "seo:autopilot": "tsx src/scripts/seo-autopilot.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.468.0",
+    "clsx": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.2",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^3.4.17",
+    "postcss": "^8.4.49",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.16.0",
+    "eslint-config-next": "^16.0.0"
+  }
+}

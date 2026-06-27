@@ -6,6 +6,7 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { VibixUnion } from "@/components/vibix-union";
 import { MobileZoomLock } from "@/components/mobile-zoom-lock";
+import { TelegramWebAppBridge } from "@/components/telegram-webapp-bridge";
 import { getVibixAdSettings, getVibixAddTypesAttribute } from "@/lib/vibix-ads";
 
 export const viewport: Viewport = {
@@ -43,6 +44,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="ru">
       <body className="site-shell">
         <MobileZoomLock />
+        <TelegramWebAppBridge />
+        <Script id="telegram-webapp-sdk" src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" />
         <Script id="redfilm-vibix-player-sdk" src="https://graphicslab.io/sdk/v2/rendex-sdk.min.js" strategy="afterInteractive" />
         <Script id="yandex-metrika" strategy="afterInteractive">
           {`

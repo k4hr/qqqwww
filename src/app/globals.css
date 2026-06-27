@@ -508,3 +508,16 @@ button, input, select, textarea { font: inherit; font-size: max(16px, 1em); }
   [data-pm-b],
   .home-catalog-ad { display: none !important; }
 }
+
+html.is-telegram-webapp {
+  background: #09090b;
+}
+
+html.is-telegram-webapp body {
+  background: #09090b;
+  overscroll-behavior-y: none;
+}
+
+html.is-telegram-webapp header {
+  padding-top: calc(max(var(--tg-content-safe-top, 0px), var(--tg-safe-top, 0px), env(safe-area-inset-top, 0px)) + 12px);
+}
