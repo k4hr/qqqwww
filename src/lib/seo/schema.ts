@@ -12,10 +12,23 @@ function compact<T extends Record<string, unknown>>(obj: T) {
 }
 
 function ratingSchema(movie: SeoSchemaMovie) {
-  const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
-  const votes = movie.kpVotes ?? movie.imdbVotes ?? movie.tmdbVotes;
+  const rating = movie.kpRating && movie.kpVotes && movie.kpVotes > 0
+    ? { ratingValue: movie.kpRating, ratingCount: movie.kpVotes }
+    : movie.imdbRating && movie.imdbVotes && movie.imdbVotes > 0
+      ? { ratingValue: movie.imdbRating, ratingCount: movie.imdbVotes }
+      : movie.tmdbRating && movie.tmdbVotes && movie.tmdbVotes > 0
+        ? { ratingValue: movie.tmdbRating, ratingCount: movie.tmdbVotes }
+        : null;
+
   if (!rating) return undefined;
-  return compact({ "@type": "AggregateRating", ratingValue: rating.toFixed(1), bestRating: "10", worstRating: "0", ratingCount: votes && votes > 0 ? votes : undefined });
+
+  return {
+    "@type": "AggregateRating",
+    ratingValue: Number(rating.ratingValue.toFixed(1)),
+    ratingCount: Number(rating.ratingCount),
+    bestRating: 10,
+    worstRating: 1,
+  };
 }
 
 export function movieJsonLd(movie: SeoSchemaMovie) {
