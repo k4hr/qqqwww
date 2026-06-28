@@ -83,7 +83,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     if (typeof window.ym === "function") {
                       window.ym(counterId, "hit", window.location.href);
                     }
-                  }, 1500);
+                  }, 800);
+
+                  window.setTimeout(function(){
+                    var pixel = new Image();
+                    pixel.referrerPolicy = "strict-origin-when-cross-origin";
+                    pixel.src = "https://mc.yandex.ru/watch/110229115?rn=" + Date.now() + "&page-url=" + encodeURIComponent(window.location.href);
+                  }, 1200);
                 }
               })();
             `,
