@@ -49,14 +49,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <MobileZoomLock />
         <TelegramWebAppBridge />
         <Script id="telegram-webapp-sdk" src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" />
-        <Script id="redfilm-vibix-player-sdk" src="https://graphicslab.io/sdk/v2/rendex-sdk.min.js" strategy="afterInteractive" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
               window.ym = window.ym || function(){
                 (window.ym.a = window.ym.a || []).push(arguments);
               };
-              window.ym.l = 1 * new Date();
+              window.ym.l = window.ym.l || 1 * new Date();
             `,
           }}
         />
@@ -64,8 +63,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              if (!window.location.pathname.startsWith("/admin")) {
-                window.ym(110229115, "init", {
+              (function(){
+                var counterId = 110229115;
+                var isAdmin = window.location.pathname.indexOf("/admin") === 0;
+                if (isAdmin || window.__redfilmYandexMetrikaInitialized110229115) return;
+
+                window.__redfilmYandexMetrikaInitialized110229115 = true;
+                window.ym(counterId, "init", {
                   ssr: true,
                   webvisor: true,
                   clickmap: true,
@@ -73,7 +77,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   accurateTrackBounce: true,
                   trackLinks: true
                 });
-              }
+
+                if (window.location.search.indexOf("_ym_status-check=110229115") !== -1) {
+                  window.setTimeout(function(){
+                    if (typeof window.ym === "function") {
+                      window.ym(counterId, "hit", window.location.href);
+                    }
+                  }, 1500);
+                }
+              })();
             `,
           }}
         />
