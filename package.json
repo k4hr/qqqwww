@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "npm run prebuild:clean-routes && prisma generate && next build",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "next lint",
     "postinstall": "prisma generate",
@@ -28,7 +28,8 @@
     "vibix:catalog-worker": "tsx src/scripts/vibix-catalog-worker.ts",
     "seo:import-wordstat": "tsx src/scripts/import-wordstat-seo.ts",
     "seo:ai-top": "tsx src/scripts/generate-ai-seo-pages.ts",
-    "seo:autopilot": "tsx src/scripts/seo-autopilot.ts"
+    "seo:autopilot": "tsx src/scripts/seo-autopilot.ts",
+    "prebuild:clean-routes": "node scripts/prebuild-clean-routes.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
