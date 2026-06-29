@@ -227,6 +227,10 @@ export async function generateAiSeoLandingPage(slug: string) {
   const model = process.env.OPENAI_SEO_MODEL || "gpt-4.1-mini";
   const landing = await prisma.seoLandingPage.findUnique({ where: { slug } });
   if (!landing) throw new Error(`SeoLandingPage not found: ${slug}`);
+  if (["SEASON_PAGE", "SIMILAR_PAGE", "LIKE_PAGE", "PERSON_PAGE"].includes(landing.type)) {
+    await prisma.seoLandingPage.update({ where: { slug }, data: { aiStatus: "SKIPPED", aiError: "This SEO type is rendered by a dedicated dynamic route." } });
+    return { ok: true, slug, status: "SKIPPED", message: "Динамическая SEO-страница не требует AI-текста." };
+  }
 
   if (!apiKey) {
     await prisma.seoLandingPage.update({ where: { slug }, data: { aiStatus: "FAILED", aiError: "OPENAI_API_KEY is not configured" } });
@@ -295,7 +299,7 @@ export async function generateAiSeoLandingPage(slug: string) {
 
 export async function generateTopAiSeoLandingPages(limit = 10) {
   const pages = await prisma.seoLandingPage.findMany({
-    where: { status: "ACTIVE", isIndexable: true, sitemapIncluded: true, type: { not: "BASE" } },
+    where: { status: "ACTIVE", isIndexable: true, sitemapIncluded: true, type: { notIn: ["BASE", "SEASON_PAGE", "SIMILAR_PAGE", "LIKE_PAGE", "PERSON_PAGE"] } },
     orderBy: [{ aiStatus: "asc" }, { totalDemand: "desc" }, { updatedAt: "desc" }],
     select: { slug: true },
     take: Math.max(1, Math.min(limit, 30)),

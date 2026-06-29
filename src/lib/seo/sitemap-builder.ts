@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
-import { siteUrl, watchPath, similarPath } from "@/lib/seo-links";
+import { likePath, personPath, siteUrl, watchPath, similarPath } from "@/lib/seo-links";
 import { publicCollections } from "@/lib/collections";
 import { countryPages, qualityPages, seoTopics } from "@/lib/seo-pages";
 import { ContentType } from "@prisma/client";
+import { countSeasonSitemapEntries, findSeasonSitemapEntries } from "@/lib/seo/season-pages";
+import { isPublicPersonName } from "@/lib/person-quality";
 
 export const SITEMAP_PAGE_SIZE = 10_000;
 
@@ -36,23 +38,44 @@ export async function publicMovieCount(type?: ContentType) {
   return prisma.movie.count({ where: type ? { AND: [vibixPublicMovieWhere, { type }] } : vibixPublicMovieWhere });
 }
 
-export async function similarSitemapCount() {
+async function groupedSimilaritySourceIds(minCount: number) {
   const rows = await prisma.movieSimilarity.groupBy({
     by: ["sourceMovieId"],
     where: { score: { gte: 140 } },
     _count: { sourceMovieId: true },
     orderBy: { sourceMovieId: "asc" },
   }).catch(() => [] as Array<{ sourceMovieId: string; _count: { sourceMovieId: number } }>);
-  return rows.filter((row) => row._count.sourceMovieId >= 4).length;
+  return rows.filter((row) => row._count.sourceMovieId >= minCount).map((row) => row.sourceMovieId);
+}
+
+export async function similarSitemapCount() {
+  return (await groupedSimilaritySourceIds(4)).length;
+}
+
+export async function likeSitemapCount() {
+  return (await groupedSimilaritySourceIds(6)).length;
+}
+
+export async function personSitemapCount() {
+  const rows = await prisma.movieCast.groupBy({
+    by: ["personId"],
+    _count: { personId: true },
+    orderBy: { _count: { personId: "desc" } },
+    take: 10_000,
+  }).catch(() => [] as Array<{ personId: string; _count: { personId: number } }>);
+  return rows.filter((row) => row._count.personId >= 3).length;
 }
 
 export async function buildSitemapIndexXml() {
-  const [movies, series, anime, cartoons, similar] = await Promise.all([
+  const [movies, series, anime, cartoons, similar, like, seasons, persons] = await Promise.all([
     publicMovieCount(ContentType.MOVIE),
     publicMovieCount(ContentType.SERIES),
     publicMovieCount(ContentType.ANIME),
     publicMovieCount(ContentType.CARTOON),
     similarSitemapCount(),
+    likeSitemapCount(),
+    countSeasonSitemapEntries(),
+    personSitemapCount(),
   ]);
   const items: XmlSitemap[] = [{ loc: siteUrl("/sitemaps/static.xml") }, { loc: siteUrl("/sitemaps/collections.xml") }];
   const add = (kind: string, count: number) => {
@@ -64,6 +87,9 @@ export async function buildSitemapIndexXml() {
   add("anime", anime);
   add("cartoons", cartoons);
   if (similar > 0) add("similar", similar);
+  if (like > 0) add("like", like);
+  if (seasons > 0) add("seasons", seasons);
+  if (persons > 0) add("persons", persons);
   return sitemapIndex(items);
 }
 
@@ -94,7 +120,7 @@ export async function buildStaticSitemapXml() {
 }
 
 export async function buildCollectionSitemapXml() {
-  const seoPages = await prisma.seoLandingPage.findMany({ where: { status: "ACTIVE", isIndexable: true, sitemapIncluded: true }, select: { slug: true, updatedAt: true, totalDemand: true }, orderBy: [{ totalDemand: "desc" }, { updatedAt: "desc" }], take: 10_000 }).catch(() => []);
+  const seoPages = await prisma.seoLandingPage.findMany({ where: { status: "ACTIVE", isIndexable: true, sitemapIncluded: true, type: { notIn: ["SEASON_PAGE", "SIMILAR_PAGE", "LIKE_PAGE", "PERSON_PAGE"] } }, select: { slug: true, updatedAt: true, totalDemand: true }, orderBy: [{ totalDemand: "desc" }, { updatedAt: "desc" }], take: 10_000 }).catch(() => []);
   const urls: XmlUrl[] = [
     ...publicCollections.map((collection) => ({ loc: siteUrl(`/collections/${collection.slug}`), changefreq: "weekly", priority: .7 })),
     ...seoPages.map((page) => ({ loc: siteUrl(`/collections/${page.slug}`), lastmod: page.updatedAt, changefreq: "weekly", priority: page.totalDemand > 100_000 ? .8 : .6 })),
@@ -119,13 +145,30 @@ export async function buildMovieSitemapXml(kind: string, page: number) {
 }
 
 export async function buildSimilarSitemapXml(page: number) {
-  const groups = await prisma.movieSimilarity.groupBy({
-    by: ["sourceMovieId"],
-    where: { score: { gte: 140 } },
-    _count: { sourceMovieId: true },
-    orderBy: { sourceMovieId: "asc" },
-  }).catch(() => [] as Array<{ sourceMovieId: string; _count: { sourceMovieId: number } }>);
-  const ids = groups.filter((row) => row._count.sourceMovieId >= 4).slice(Math.max(0, page - 1) * SITEMAP_PAGE_SIZE, page * SITEMAP_PAGE_SIZE).map((row) => row.sourceMovieId);
+  const ids = (await groupedSimilaritySourceIds(4)).slice(Math.max(0, page - 1) * SITEMAP_PAGE_SIZE, page * SITEMAP_PAGE_SIZE);
   const movies = await prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, { id: { in: ids } }] }, select: { slug: true, updatedAt: true } });
   return urlset(movies.map((movie) => ({ loc: siteUrl(similarPath(movie)), lastmod: movie.updatedAt, changefreq: "weekly", priority: .6 })));
+}
+
+export async function buildLikeSitemapXml(page: number) {
+  const ids = (await groupedSimilaritySourceIds(6)).slice(Math.max(0, page - 1) * SITEMAP_PAGE_SIZE, page * SITEMAP_PAGE_SIZE);
+  const movies = await prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, { id: { in: ids } }] }, select: { slug: true, updatedAt: true } });
+  return urlset(movies.map((movie) => ({ loc: siteUrl(likePath(movie)), lastmod: movie.updatedAt, changefreq: "weekly", priority: .55 })));
+}
+
+export async function buildSeasonSitemapXml(page: number) {
+  const entries = await findSeasonSitemapEntries(page, SITEMAP_PAGE_SIZE);
+  return urlset(entries.map((entry) => ({ loc: siteUrl(entry.loc), lastmod: entry.lastmod, changefreq: "weekly", priority: .65 })));
+}
+
+export async function buildPersonSitemapXml(page: number) {
+  const groups = await prisma.movieCast.groupBy({
+    by: ["personId"],
+    _count: { personId: true },
+    orderBy: { _count: { personId: "desc" } },
+    take: 10_000,
+  }).catch(() => [] as Array<{ personId: string; _count: { personId: number } }>);
+  const ids = groups.filter((row) => row._count.personId >= 3).slice(Math.max(0, page - 1) * SITEMAP_PAGE_SIZE, page * SITEMAP_PAGE_SIZE).map((row) => row.personId);
+  const persons = await prisma.person.findMany({ where: { id: { in: ids } }, select: { nameRu: true } }).catch(() => [] as Array<{ nameRu: string }>);
+  return urlset(persons.filter((person) => isPublicPersonName(person.nameRu)).map((person) => ({ loc: siteUrl(personPath(person.nameRu)), changefreq: "monthly", priority: .45 })));
 }

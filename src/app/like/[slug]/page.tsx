@@ -13,15 +13,18 @@ type Props = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const movie = await getSeoMovieBySlug((await params).slug);
   if (!movie) return {};
+  const movies = await findSimilarSeoMovies(movie, 8);
+  const indexable = movies.length >= 6;
   const title = `Что посмотреть если понравился ${movie.titleRu} — REDFILM`;
   const description = `Что посмотреть после фильма ${movie.titleRu}: подборка картин с близкой атмосферой, жанрами и рейтингами.`;
-  return { title, description, alternates: { canonical: similarPath(movie) }, openGraph: { title, description, url: likePath(movie) }, robots: { index: false, follow: true } };
+  return { title, description, alternates: { canonical: indexable ? likePath(movie) : similarPath(movie) }, openGraph: { title, description, url: likePath(movie) }, robots: indexable ? { index: true, follow: true } : { index: false, follow: true } };
 }
 
 export default async function LikePage({ params }: Props) {
   const movie = await getSeoMovieBySlug((await params).slug);
   if (!movie) notFound();
   const movies = await findSimilarSeoMovies(movie, 12);
+  if (movies.length < 6) notFound();
   const intro = likeSeoIntro(movie);
   return <div className="container py-6">
     <JsonLd data={{ "@context": "https://schema.org", "@type": "ItemList", name: `Что посмотреть после ${movie.titleRu}`, url: siteUrl(likePath(movie)), itemListElement: movies.map((item, index) => ({ "@type": "ListItem", position: index + 1, name: item.titleRu, url: siteUrl(watchPath(item)) })) }} />

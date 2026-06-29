@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSeoAdminStats } from "@/lib/seo/keyword-engine";
+import { getSeoOpportunityReport } from "@/lib/seo/opportunity-engine";
 import { generateAiSeoPageAction, generateTopAiSeoPagesAction, importWordstatCsvAction, rebuildEmbeddedWordstatAction, runSeoAutopilotAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +16,9 @@ function decodeResult(value?: string) {
 export default async function AdminSeoPage({ searchParams }: Props) {
   const params = await searchParams;
   const result = decodeResult(params.result);
-  const [stats, clusters, pages, excluded] = await Promise.all([
+  const [stats, opportunities, clusters, pages, excluded] = await Promise.all([
     getSeoAdminStats(),
+    getSeoOpportunityReport(180),
     prisma.seoCluster.findMany({ orderBy: [{ totalDemand: "desc" }, { updatedAt: "desc" }], take: 30 }).catch(() => []),
     prisma.seoLandingPage.findMany({ orderBy: [{ totalDemand: "desc" }, { updatedAt: "desc" }], take: 30 }).catch(() => []),
     prisma.seoKeyword.findMany({ where: { status: "EXCLUDED" }, orderBy: { impressions: "desc" }, take: 10 }).catch(() => []),
@@ -42,6 +44,48 @@ export default async function AdminSeoPage({ searchParams }: Props) {
     </div>
 
     {result ? <pre className="mb-5 overflow-auto rounded-xl bg-[#111] p-4 text-xs text-white">{JSON.stringify(result, null, 2)}</pre> : null}
+
+    <section className="admin-panel mb-5 border-2 border-[#e50914]/30 p-5">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <h2 className="text-xl font-black">SEO Opportunity Engine</h2>
+          <p className="mt-2 max-w-4xl text-sm text-neutral-600">Показывает не просто ключи, а покрытие спроса: какой запрос уже закрыт страницей REDFILM, где нет фильма, где нет Vibix-плеера, где не хватает похожих, сезонных страниц или подборок.</p>
+        </div>
+        <div className="grid gap-2 text-sm sm:grid-cols-4 xl:min-w-[560px]">
+          <MiniStat title="Проверено" value={opportunities.checked} />
+          <MiniStat title="Спрос" value={opportunities.totalDemand} />
+          <MiniStat title="Покрыто" value={`${opportunities.readyShare}%`} />
+          <MiniStat title="Не закрыто" value={opportunities.missingDemand} />
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 xl:grid-cols-2">
+        <div className="rounded-xl border border-[#eee] bg-white p-4">
+          <h3 className="font-black">По статусам</h3>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">{opportunities.byStatus.map((item) => <span key={item.status} className="rounded-full bg-neutral-100 px-3 py-2"><b>{item.status}</b> · {item.count} · {item.demand.toLocaleString("ru-RU")}</span>)}</div>
+        </div>
+        <div className="rounded-xl border border-[#eee] bg-white p-4">
+          <h3 className="font-black">По интентам</h3>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">{opportunities.byIntent.map((item) => <span key={item.intent} className="rounded-full bg-neutral-100 px-3 py-2"><b>{item.intent}</b> · {item.count} · {item.demand.toLocaleString("ru-RU")}</span>)}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded-xl border border-[#eee] bg-white">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-neutral-50 text-xs uppercase text-neutral-500"><tr><th className="p-3">Запрос</th><th className="p-3">Спрос</th><th className="p-3">Интент</th><th className="p-3">Статус</th><th className="p-3">Цель</th><th className="p-3">Что делать</th></tr></thead>
+          <tbody>
+            {opportunities.opportunities.slice(0, 40).map((item) => <tr key={item.normalizedQuery} className="border-t border-[#eee] align-top">
+              <td className="p-3 font-bold">{item.query}</td>
+              <td className="p-3 whitespace-nowrap">{item.impressions.toLocaleString("ru-RU")}</td>
+              <td className="p-3 text-xs text-neutral-500">{item.intent}</td>
+              <td className="p-3"><span className={item.status === "READY" ? "rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-green-700" : "rounded-full bg-red-50 px-2 py-1 text-xs font-bold text-[#e50914]"}>{item.status}</span></td>
+              <td className="p-3">{item.targetUrl ? <Link href={item.targetUrl} target="_blank" className="font-bold text-[#e50914]">{item.entityTitle || item.targetUrl}</Link> : <span className="text-neutral-400">—</span>}</td>
+              <td className="p-3 max-w-md text-neutral-600">{item.problem}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <section className="admin-panel mb-5 p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -110,7 +154,7 @@ export default async function AdminSeoPage({ searchParams }: Props) {
       <section className="admin-panel p-5">
         <h2 className="text-xl font-black">SEO-страницы</h2>
         <div className="mt-3 space-y-2 text-sm">
-          {pages.map((item) => <div key={item.id} className="rounded-lg border border-[#eee] bg-white p-3"><Link href={`/collections/${item.slug}`} className="font-bold text-[#e50914]" target="_blank">{item.h1}</Link><br /><span className="text-neutral-500">{item.type} · статус {item.status} · AI {item.aiStatus} · min {item.minItems} · спрос {item.totalDemand.toLocaleString("ru-RU")}</span><form action={generateAiSeoPageAction} className="mt-2"><input type="hidden" name="slug" value={item.slug} /><button type="submit" className="rounded-lg border border-[#e50914] px-3 py-1 text-xs font-bold text-[#e50914]">AI пересобрать</button></form></div>)}
+          {pages.map((item) => <div key={item.id} className="rounded-lg border border-[#eee] bg-white p-3"><Link href={seoPageHref(item.type, item.slug)} className="font-bold text-[#e50914]" target="_blank">{item.h1}</Link><br /><span className="text-neutral-500">{item.type} · статус {item.status} · AI {item.aiStatus} · min {item.minItems} · спрос {item.totalDemand.toLocaleString("ru-RU")}</span><form action={generateAiSeoPageAction} className="mt-2"><input type="hidden" name="slug" value={item.slug} /><button type="submit" className="rounded-lg border border-[#e50914] px-3 py-1 text-xs font-bold text-[#e50914]">AI пересобрать</button></form></div>)}
           {!pages.length ? <div className="text-neutral-500">SEO-страницы ещё не созданы.</div> : null}
         </div>
       </section>
@@ -124,6 +168,18 @@ export default async function AdminSeoPage({ searchParams }: Props) {
       </div>
     </section>
   </div>;
+}
+
+function seoPageHref(type: string, slug: string) {
+  if (type === "SEASON_PAGE") return `/series/${slug}`;
+  if (type === "SIMILAR_PAGE") return `/similar/${slug.replace(/^pohozhie-na-/, "")}`;
+  if (type === "LIKE_PAGE") return `/like/${slug.replace(/^chto-posmotret-posle-/, "")}`;
+  if (type === "PERSON_PAGE") return `/person/${slug.replace(/^filmy-s-/, "")}`;
+  return `/collections/${slug}`;
+}
+
+function MiniStat({ title, value }: { title: string; value: string | number }) {
+  return <div className="rounded-xl border border-[#eee] bg-white p-3"><div className="text-xs text-neutral-500">{title}</div><div className="mt-1 text-lg font-black text-[#e50914]">{typeof value === "number" ? value.toLocaleString("ru-RU") : value}</div></div>;
 }
 
 function Stat({ title, value }: { title: string; value: string | number }) {

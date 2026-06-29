@@ -1,14 +1,18 @@
 import type { Movie, Prisma } from "@prisma/client";
+import { ContentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { playableMovieWhere } from "@/lib/movie-access";
 import { publicCollections } from "@/lib/collections";
 import { seoTopics } from "@/lib/seo-pages";
-import { similarPath, siteUrl, watchPath } from "@/lib/seo-links";
+import { likePath, personPath, seasonPath, similarPath, siteUrl, watchPath } from "@/lib/seo-links";
 
 export type YandexReindexGroupName =
   | "WATCH TOP"
   | "WATCH NEW"
   | "SIMILAR"
+  | "LIKE"
+  | "SEASONS"
+  | "PERSONS"
   | "COLLECTIONS"
   | "TAXONOMY";
 
@@ -192,9 +196,58 @@ async function getSimilarUrls(seen: Set<string>) {
   return urls;
 }
 
+
+async function getLikeUrls(seen: Set<string>) {
+  const links = await prisma.movieSimilarity.findMany({
+    select: { sourceMovieId: true, score: true },
+    orderBy: [{ score: "desc" }, { updatedAt: "desc" }],
+    take: 10_000,
+  });
+  const grouped = new Map<string, { count: number; score: number }>();
+  for (const link of links) {
+    const current = grouped.get(link.sourceMovieId) ?? { count: 0, score: 0 };
+    current.count += 1;
+    current.score = Math.max(current.score, link.score);
+    grouped.set(link.sourceMovieId, current);
+  }
+  const sourceIds = [...grouped.entries()].filter(([, item]) => item.count >= 6).sort((a, b) => b[1].score - a[1].score).map(([id]) => id).slice(0, 200);
+  if (!sourceIds.length) return [];
+  const movies = await prisma.movie.findMany({ where: { AND: [publicWatchWhere, { id: { in: sourceIds } }] }, select: { id: true, slug: true, homeScore: true, trendScore: true, kpRating: true, imdbRating: true, views: true, year: true }, take: 200 });
+  const urls: string[] = [];
+  addUnique(urls, seen, movies.sort((a, b) => b.homeScore - a.homeScore || b.trendScore - a.trendScore || (b.kpRating ?? 0) - (a.kpRating ?? 0) || b.views - a.views).map((movie) => toAbsolute(likePath(movie))), 15);
+  return urls;
+}
+
+async function getSeasonUrls(seen: Set<string>) {
+  const series = await prisma.movie.findMany({
+    where: { AND: [publicWatchWhere, { type: ContentType.SERIES, vibixSeasonCount: { gt: 0 } }] },
+    select: { slug: true, titleRu: true, vibixSeasonCount: true, homeScore: true, trendScore: true, year: true },
+    orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }, { year: "desc" }],
+    take: 80,
+  });
+  const paths = series.flatMap((movie) => Array.from({ length: Math.min(movie.vibixSeasonCount ?? 0, 4) }, (_, index) => seasonPath(movie, index + 1)));
+  const urls: string[] = [];
+  addUnique(urls, seen, paths.map(toAbsolute), 20);
+  return urls;
+}
+
+async function getPersonUrls(seen: Set<string>) {
+  const groups = await prisma.movieCast.groupBy({
+    by: ["personId"],
+    _count: { personId: true },
+    orderBy: { _count: { personId: "desc" } },
+    take: 100,
+  }).catch(() => [] as Array<{ personId: string; _count: { personId: number } }>);
+  const ids = groups.filter((row) => row._count.personId >= 3).map((row) => row.personId);
+  const persons = await prisma.person.findMany({ where: { id: { in: ids } }, select: { nameRu: true }, take: 100 }).catch(() => []);
+  const urls: string[] = [];
+  addUnique(urls, seen, persons.map((person) => toAbsolute(personPath(person.nameRu))), 10);
+  return urls;
+}
+
 async function getCollectionUrls(seen: Set<string>) {
   const activeSeoPages = await prisma.seoLandingPage.findMany({
-    where: { status: "ACTIVE", isIndexable: true },
+    where: { status: "ACTIVE", isIndexable: true, type: { notIn: ["SEASON_PAGE", "SIMILAR_PAGE", "LIKE_PAGE", "PERSON_PAGE"] } },
     select: { slug: true },
     orderBy: [{ totalDemand: "desc" }, { updatedAt: "desc" }],
     take: 30,
@@ -230,6 +283,9 @@ export async function generateYandexReindexList(): Promise<YandexReindexList> {
     { name: "WATCH TOP", urls: await getWatchTopUrls(seen) },
     { name: "WATCH NEW", urls: await getWatchNewUrls(seen) },
     { name: "SIMILAR", urls: await getSimilarUrls(seen) },
+    { name: "LIKE", urls: await getLikeUrls(seen) },
+    { name: "SEASONS", urls: await getSeasonUrls(seen) },
+    { name: "PERSONS", urls: await getPersonUrls(seen) },
     { name: "COLLECTIONS", urls: await getCollectionUrls(seen) },
     { name: "TAXONOMY", urls: getTaxonomyUrls(seen) },
   ];
