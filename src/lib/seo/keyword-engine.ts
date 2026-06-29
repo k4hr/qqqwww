@@ -9,6 +9,7 @@ import {
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 import { detectWarTopic, getWarTopicBySlug, getWarTopicTerms } from "@/lib/seo/topic-intents";
+import { baseRedirectForCollectionSlug, baseRedirectForSeoQuery } from "@/lib/seo/base-redirects";
 
 export type SeoIntent =
   | "BASE"
@@ -173,6 +174,9 @@ export function detectSeoIntent(query: string): SeoIntent {
     )
       ? "GENRE_YEAR"
       : "YEAR";
+  const baseRedirect = baseRedirectForSeoQuery(normalized);
+  if (baseRedirect) return "BASE";
+
   if (
     /мультик|мультфильм|мультфильмы|мультики/.test(normalized) &&
     /\bпро\b/.test(normalized)
@@ -683,27 +687,19 @@ export function buildClusterForQuery(query: string) {
     };
   }
 
-  const slug = /мульт|мультик/.test(normalized)
-    ? "multfilmy-smotret-online"
-    : /сериал/.test(normalized)
-      ? "serialy-smotret-online"
-      : /аниме/.test(normalized)
-        ? "anime-smotret-online"
-        : "filmy-smotret-online";
-  const title = slug.startsWith("mult")
-    ? "Мультфильмы смотреть онлайн"
-    : slug.startsWith("serial")
-      ? "Сериалы смотреть онлайн"
-      : slug.startsWith("anime")
-        ? "Аниме смотреть онлайн"
-        : "Фильмы смотреть онлайн";
+  const baseRedirect = baseRedirectForSeoQuery(normalized) ?? {
+    slug: "filmy",
+    path: "/films",
+    title: "Фильмы",
+    mainQuery: "фильмы",
+  };
   return {
-    key: slug,
-    targetSlug: slug,
+    key: baseRedirect.slug,
+    targetSlug: baseRedirect.slug,
     intent: "BASE" as const,
     targetType: "BASE",
-    title,
-    mainQuery: title.toLowerCase(),
+    title: baseRedirect.title,
+    mainQuery: baseRedirect.mainQuery,
   };
 }
 
@@ -954,10 +950,11 @@ export async function applySeoLandingQualityGate(limit = 10000) {
 
   for (const page of pages) {
     checked++;
-    if (page.type === "BASE") {
+    if (page.type === "BASE" || baseRedirectForSeoQuery(page.slug.replace(/-/g, " ")) || baseRedirectForCollectionSlug(page.slug)) {
       await prisma.seoLandingPage.update({
         where: { id: page.id },
         data: {
+          type: "BASE",
           status: "REDIRECT",
           isIndexable: false,
           sitemapIncluded: false,

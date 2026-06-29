@@ -13,6 +13,7 @@ import { trendCategorySlug, trendCategoryTitle } from "@/lib/trend-sources";
 import { whereForSeoLanding } from "@/lib/seo/keyword-engine";
 import { getFranchiseConfig, sortMoviesByFranchiseOrder } from "@/lib/seo/franchise-orders";
 import { readAiSeoDraft } from "@/lib/seo/ai-builder";
+import { baseRedirectForCollectionSlug } from "@/lib/seo/base-redirects";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,9 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function CollectionPage({ params }: Props) {
   const { slug } = await params;
+  const baseRedirect = baseRedirectForCollectionSlug(slug);
+  if (baseRedirect) permanentRedirect(baseRedirect);
+
   const collection = getCollection(slug);
   const topic = getSeoTopic(slug);
   const seoLanding = !collection && !topic ? await prisma.seoLandingPage.findUnique({ where: { slug } }).catch(() => null) : null;

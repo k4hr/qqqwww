@@ -5,6 +5,7 @@ import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 import { likePath, personPath, similarPath, watchPath } from "@/lib/seo-links";
 import { normalizeSeoQuery, slugifyRu } from "@/lib/seo/keyword-engine";
 import { detectWarTopic } from "@/lib/seo/topic-intents";
+import { baseRedirectForSeoQuery } from "@/lib/seo/base-redirects";
 import { isPublicPersonName } from "@/lib/person-quality";
 
 export type SeoOpportunityIntent =
@@ -135,6 +136,7 @@ export function detectSeoOpportunityIntent(query: string): SeoOpportunityIntent 
   if (/аниме/.test(normalized) && /про |исекай|магия|романтик|школ|демон|вампир|спорт/.test(normalized)) return "ANIME_TOPIC";
   if (/\b(20[0-3][0-9]|19[0-9]{2})\b/.test(normalized) && /боевик|комеди|ужас|триллер|драм|фантаст|мелодрам|детектив|аниме|сериал/.test(normalized)) return "GENRE_YEAR";
   if (COUNTRY_ALIASES.some((item) => item.pattern.test(normalized)) && /фильм|сериал|аниме|дорам/.test(normalized)) return "COUNTRY_TYPE";
+  if (baseRedirectForSeoQuery(normalized)) return "BASE";
   if (/смотреть|онлайн|фильм|сериал|мультфильм|аниме/.test(normalized) && cleanEntityTitle(normalized).length >= 3) return "WATCH_TITLE";
   if (/новинки|лучшие|топ|подборк|фильмы|сериалы|мультфильмы|аниме/.test(normalized)) return "COLLECTION";
   return "UNKNOWN";
@@ -283,6 +285,16 @@ export async function analyzeSeoKeyword(queryRow: { query: string; normalizedQue
   const base = { query: queryRow.query, normalizedQuery: queryRow.normalizedQuery, impressions: queryRow.impressions, intent, targetUrl: null, entityTitle: null, problem: "", movieId: null, personId: null };
 
   if (intent === "EXCLUDED") return opportunity("EXCLUDED", { ...base, problem: "Запрос исключён: adult/download/torrent." });
+
+  if (intent === "BASE") {
+    const redirectTarget = baseRedirectForSeoQuery(queryRow.normalizedQuery) ?? { path: "/films", title: "Фильмы" };
+    return opportunity("READY", {
+      ...base,
+      targetUrl: redirectTarget.path,
+      entityTitle: redirectTarget.title,
+      problem: `Широкий навигационный запрос закрывается основным разделом ${redirectTarget.path}, без пустой /collections-страницы.`,
+    });
+  }
 
   if (intent === "SEASON") {
     const season = seasonNumber(queryRow.normalizedQuery);
