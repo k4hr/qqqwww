@@ -126,7 +126,7 @@ export default async function AdminSeoPage({ searchParams }: Props) {
 
     <section className="admin-panel mb-5 p-5">
       <h2 className="text-xl font-black">Импорт Wordstat CSV</h2>
-      <p className="mt-2 text-sm text-neutral-600">Загрузи CSV из Яндекс Вордстат или вставь содержимое. Система очистит мусор, сгруппирует запросы и создаст SeoLandingPage.</p>
+      <p className="mt-2 text-sm text-neutral-600">Загрузи сразу до 10 CSV из Яндекс Вордстат или вставь содержимое. Система объединит файлы, уберёт дубли, очистит мусор, сгруппирует запросы и создаст SeoLandingPage.</p>
 
       <form action={rebuildEmbeddedWordstatAction} className="mt-4">
         <button type="submit" className="rounded-xl bg-[#e50914] px-5 py-3 font-black text-white">Пересобрать встроенные CSV без дублей</button>
@@ -136,9 +136,13 @@ export default async function AdminSeoPage({ searchParams }: Props) {
       <form action={importWordstatCsvAction} className="mt-5 grid gap-3 border-t border-[#eee] pt-5">
         <input name="source" defaultValue="wordstat" className="min-h-11 rounded-lg border border-[#ddd] bg-white px-3" />
         <label className="flex items-center gap-2 text-sm text-neutral-700"><input name="replace" type="checkbox" /> Очистить старый Wordstat-импорт перед загрузкой</label>
-        <input name="csvFile" type="file" accept=".csv,text/csv,text/plain" className="min-h-11 rounded-lg border border-[#ddd] bg-white px-3 py-2" />
+        <label className="grid gap-2 text-sm font-bold text-neutral-700">
+          CSV-файлы Wordstat, можно выбрать до 10 файлов за раз
+          <input name="csvFiles" type="file" multiple accept=".csv,text/csv,text/plain" className="min-h-11 rounded-lg border border-[#ddd] bg-white px-3 py-2 font-normal" />
+        </label>
         <textarea name="csvText" rows={8} placeholder="Можно вставить CSV сюда..." className="rounded-lg border border-[#ddd] bg-white p-3 font-mono text-sm" />
-        <button type="submit" className="rounded-xl bg-[#333] px-5 py-3 font-black text-white">Импортировать загруженный CSV</button>
+        <button type="submit" className="rounded-xl bg-[#333] px-5 py-3 font-black text-white">Импортировать CSV-пакет</button>
+        <p className="text-xs text-neutral-500">Подсказка: выдели в проводнике сразу wordstat_top_queries (1).csv … wordstat_top_queries (10).csv и отправь одним разом. Если выбрано больше 10 файлов, backend возьмёт первые 10 и покажет сколько пропустил.</p>
       </form>
     </section>
 

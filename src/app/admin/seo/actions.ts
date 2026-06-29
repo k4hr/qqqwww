@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { importEmbeddedWordstatFiles, importWordstatKeywords } from "@/lib/seo/keyword-engine";
+import { applySeoLandingQualityGate, importEmbeddedWordstatFiles, importWordstatRows, parseWordstatCsv } from "@/lib/seo/keyword-engine";
 import { generateAiSeoLandingPage, generateTopAiSeoLandingPages } from "@/lib/seo/ai-builder";
 import { runSeoAutopilot } from "@/lib/seo/autopilot";
 
@@ -15,18 +15,75 @@ function redirectWithResult(result: unknown) {
   redirect(`/admin/seo?result=${encoded}`);
 }
 
+function isTextUpload(value: FormDataEntryValue | null): value is File {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "text" in value &&
+      typeof value.text === "function"
+  );
+}
+
 export async function importWordstatCsvAction(formData: FormData) {
   const source = String(formData.get("source") ?? "wordstat").trim() || "wordstat";
   const replace = String(formData.get("replace") ?? "") === "on";
-  let text = String(formData.get("csvText") ?? "").trim();
-  const file = formData.get("csvFile");
-  if (file && typeof file === "object" && "text" in file && typeof file.text === "function") {
-    const uploadedText = await file.text();
-    if (uploadedText.trim()) text = uploadedText;
+  const manualText = String(formData.get("csvText") ?? "").trim();
+  const fileEntries = [
+    ...formData.getAll("csvFiles"),
+    ...formData.getAll("csvFile"),
+  ].filter(isTextUpload);
+
+  const uniqueFiles = fileEntries.filter((file, index, list) => {
+    if (!file.name && file.size === 0) return false;
+    return list.findIndex((item) => item.name === file.name && item.size === file.size) === index;
+  });
+  const selectedFiles = uniqueFiles.slice(0, 10);
+  const skippedFiles = Math.max(0, uniqueFiles.length - selectedFiles.length);
+  const rows = [] as ReturnType<typeof parseWordstatCsv>;
+  const files: { name: string; size: number; rows: number }[] = [];
+
+  for (const file of selectedFiles) {
+    const text = (await file.text()).trim();
+    if (!text) {
+      files.push({ name: file.name || "без имени", size: file.size, rows: 0 });
+      continue;
+    }
+    const parsedRows = parseWordstatCsv(text);
+    rows.push(...parsedRows);
+    files.push({ name: file.name || "без имени", size: file.size, rows: parsedRows.length });
   }
-  if (!text) redirectWithResult({ ok: false, message: "CSV пустой. Вставь текст или загрузи файл Wordstat." });
-  const result = await importWordstatKeywords(text, source, { replace });
-  redirectWithResult({ ok: true, message: replace ? "Wordstat CSV пересобран с очисткой старых данных." : "Wordstat CSV импортирован и кластеризован.", result });
+
+  let manualRows = 0;
+  if (manualText) {
+    const parsedRows = parseWordstatCsv(manualText);
+    manualRows = parsedRows.length;
+    rows.push(...parsedRows);
+  }
+
+  if (!rows.length) {
+    redirectWithResult({
+      ok: false,
+      message: "CSV пустой. Выбери до 10 файлов Wordstat или вставь CSV текстом.",
+      files,
+      manualRows,
+      skippedFiles,
+    });
+  }
+
+  const result = await importWordstatRows(rows, source, { replace });
+  const quality = await applySeoLandingQualityGate();
+  redirectWithResult({
+    ok: true,
+    message: replace
+      ? "Wordstat CSV-пакет пересобран с очисткой старых данных."
+      : "Wordstat CSV-пакет импортирован и кластеризован.",
+    files,
+    fileCount: selectedFiles.length,
+    skippedFiles,
+    manualRows,
+    result,
+    quality,
+  });
 }
 
 export async function rebuildEmbeddedWordstatAction() {
