@@ -15,9 +15,9 @@ export async function cleanupBadSeoPages() {
     prisma.seoLandingPage.updateMany({
       where: {
         OR: [
-          { introText: { contains: "Wordstat", mode: "insensitive" } },
-          { introText: { contains: "суммарный спрос", mode: "insensitive" } },
-          { description: { contains: "Wordstat", mode: "insensitive" } },
+          { introText: { contains: "Wordstat", mode: "insensitive" as const } },
+          { introText: { contains: "суммарный спрос", mode: "insensitive" as const } },
+          { description: { contains: "Wordstat", mode: "insensitive" as const } },
         ],
       },
       data: { aiStatus: "NOT_GENERATED" },

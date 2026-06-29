@@ -173,12 +173,17 @@ async function matchMovieByQuery(query: string, type?: ContentType) {
   const words = entity.split(" ").filter((word) => word.length >= 3).slice(0, 5);
   if (!words.length) return null;
 
-  const strictWhere: Prisma.MovieWhereInput = {
-    AND: [
-      type ? { type } : {},
-      { OR: [{ titleRu: { contains: entity, mode: "insensitive" } }, { titleOriginal: { contains: entity, mode: "insensitive" } }, { slug: { contains: slugifyRu(entity), mode: "insensitive" } }] },
-    ].filter((item) => Object.keys(item).length),
-  };
+  const strictAnd: Prisma.MovieWhereInput[] = [];
+  if (type) strictAnd.push({ type });
+  strictAnd.push({
+    OR: [
+      { titleRu: { contains: entity, mode: "insensitive" as const } },
+      { titleOriginal: { contains: entity, mode: "insensitive" as const } },
+      { slug: { contains: slugifyRu(entity), mode: "insensitive" as const } },
+    ],
+  });
+
+  const strictWhere: Prisma.MovieWhereInput = { AND: strictAnd };
 
   const strict = await prisma.movie.findFirst({
     where: strictWhere,
@@ -187,13 +192,20 @@ async function matchMovieByQuery(query: string, type?: ContentType) {
   }).catch(() => null);
   if (strict) return strict;
 
+  const looseAnd: Prisma.MovieWhereInput[] = [];
+  if (type) looseAnd.push({ type });
+  for (const word of words) {
+    looseAnd.push({
+      OR: [
+        { titleRu: { contains: word, mode: "insensitive" as const } },
+        { titleOriginal: { contains: word, mode: "insensitive" as const } },
+        { slug: { contains: slugifyRu(word), mode: "insensitive" as const } },
+      ],
+    });
+  }
+
   const loose = await prisma.movie.findMany({
-    where: {
-      AND: [
-        type ? { type } : {},
-        ...words.map((word) => ({ OR: [{ titleRu: { contains: word, mode: "insensitive" as const } }, { titleOriginal: { contains: word, mode: "insensitive" as const } }, { slug: { contains: slugifyRu(word), mode: "insensitive" as const } }] })),
-      ].filter((item) => Object.keys(item).length),
-    },
+    where: { AND: looseAnd },
     orderBy: [{ isPublicVisible: "desc" }, { vibixAvailable: "desc" }, { popularScore: "desc" }, { kpRating: "desc" }],
     select: movieSelect,
     take: 8,
@@ -234,7 +246,7 @@ async function matchPerson(query: string) {
   if (!entity || entity.length < 3) return null;
   const token = entity.split(" ").find((word) => word.length >= 4) ?? entity;
   const people = await prisma.person.findMany({
-    where: { OR: [{ nameRu: { contains: token, mode: "insensitive" } }, { nameOriginal: { contains: token, mode: "insensitive" } }] },
+    where: { OR: [{ nameRu: { contains: token, mode: "insensitive" as const } }, { nameOriginal: { contains: token, mode: "insensitive" as const } }] },
     select: { id: true, nameRu: true, nameOriginal: true },
     take: 20,
   }).catch(() => []);

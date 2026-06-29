@@ -36,7 +36,7 @@ export async function resolveSeasonSeoPage(slug: string): Promise<SeasonSeoPage 
         {
           OR: [
             { slug: { startsWith: parsed.baseSlug } },
-            { titleRu: { contains: parsed.baseSlug.replace(/-/g, " "), mode: "insensitive" } },
+            { titleRu: { contains: parsed.baseSlug.replace(/-/g, " "), mode: "insensitive" as const } },
           ],
         },
       ],
