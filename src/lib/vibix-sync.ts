@@ -336,7 +336,7 @@ async function uniqueSlug(title: string, year: number) {
   return slug;
 }
 
-async function findExisting(kinopoiskId: string | null, imdbId: string | null, vibixId: number | null) {
+async function findExisting(kinopoiskId: string | null, imdbId: string | null, vibixId: number | null, title?: string | null, year?: number | null) {
   if (kinopoiskId) {
     const movie = await prisma.movie.findFirst({ where: { kinopoiskId } });
     if (movie) return movie;
@@ -345,7 +345,21 @@ async function findExisting(kinopoiskId: string | null, imdbId: string | null, v
     const movie = await prisma.movie.findFirst({ where: { imdbId } });
     if (movie) return movie;
   }
-  if (vibixId !== null) return prisma.movie.findFirst({ where: { vibixId } });
+  if (vibixId !== null) {
+    const movie = await prisma.movie.findFirst({ where: { vibixId } });
+    if (movie) return movie;
+  }
+  if (title && year) {
+    return prisma.movie.findFirst({
+      where: {
+        year,
+        OR: [
+          { titleRu: { equals: title, mode: "insensitive" } },
+          { titleOriginal: { equals: title, mode: "insensitive" } },
+        ],
+      },
+    });
+  }
   return null;
 }
 
@@ -392,13 +406,30 @@ async function applyQualityGate(movieId: string, sourceVideo?: VibixVideo) {
   await prisma.movie.update({ where: { id: movie.id }, data: { type: catalogKind, ...score, ...catalogScore, lastQualitySyncAt: new Date(), lastCatalogScoreAt: new Date() } });
 }
 
-export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) {
+type SaveVibixVideoOptions = {
+  forcePublic?: boolean;
+  dirtyReason?: string;
+};
+
+async function forceManualImportVisibility(movieId: string) {
+  await prisma.movie.update({
+    where: { id: movieId },
+    data: {
+      isPublished: true,
+      isCatalogAllowed: true,
+      isPublicVisible: true,
+      isFreshEligible: true,
+    },
+  });
+}
+
+export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string, options: SaveVibixVideoOptions = {}) {
   const normalized = normalizeVideoData(video);
   if ("reason" in normalized) return { status: "skipped" as const, reason: normalized.reason };
   const data = normalized.data;
   const existing = targetMovieId
     ? await prisma.movie.findUnique({ where: { id: targetMovieId } })
-    : await findExisting(data.kinopoiskId, data.imdbId, data.vibixId);
+    : await findExisting(data.kinopoiskId, data.imdbId, data.vibixId, data.title, data.year);
   const syncedAt = new Date();
 
   if (existing) {
@@ -439,11 +470,12 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
         actorPowerScore: data.actorPowerScore,
         isPublished: true,
         similarityDirty: true,
-        similarityDirtyReason: "vibix_update",
+        similarityDirtyReason: options.dirtyReason ?? "vibix_update",
       },
     });
     await syncVibixRelations(updated.id, video);
     await applyQualityGate(updated.id, video);
+    if (options.forcePublic) await forceManualImportVisibility(updated.id);
     return { status: "updated" as const, movieId: existing.id };
   }
 
@@ -484,11 +516,12 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string) 
       actorPowerScore: data.actorPowerScore,
       isPublished: true,
       similarityDirty: true,
-      similarityDirtyReason: "vibix_import",
+      similarityDirtyReason: options.dirtyReason ?? "vibix_import",
     },
   });
   await syncVibixRelations(created.id, video);
   await applyQualityGate(created.id, video);
+  if (options.forcePublic) await forceManualImportVisibility(created.id);
   return { status: "imported" as const, movieId: created.id };
 }
 

@@ -98,7 +98,7 @@ export async function importVibixBrowserItemAction(formData: FormData) {
     redirect(resultUrl({ ok: false, message: enrichment.message, details: { attempts: enrichment.attempts, video: enrichment.video } }));
   }
 
-  const saved = await saveVibixVideo(enrichment.video);
+  const saved = await saveVibixVideo(enrichment.video, undefined, { forcePublic: true, dirtyReason: "admin_vibix_manual_import" });
   const forceAnime = sourceCategoryId === VIBIX_CATEGORY_IDS.anime || sourceCategoryLabel?.toLocaleLowerCase("ru-RU").includes("аниме") === true || sourceCategoryLabel?.toLocaleLowerCase("ru-RU").includes("anime") === true;
   const savedMovieId = "movieId" in saved ? stringValue(saved.movieId) : null;
 

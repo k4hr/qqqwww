@@ -294,7 +294,20 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
                 <tr key={`${video.id ?? "noid"}-${kpId ?? "nokp"}-${index}`} className="align-top hover:bg-[#fff8f8]">
                   <td className="p-3">
                     {local ? (
-                      <Link href={`/watch/${local.slug}`} className="inline-flex h-10 items-center rounded-xl bg-[#333] px-4 text-xs font-black text-white">Открыть</Link>
+                      <div className="flex flex-col gap-2">
+                        {localWatchAvailable ? (
+                          <Link href={`/watch/${local.slug}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-[#333] px-4 text-xs font-black text-white">Открыть</Link>
+                        ) : null}
+                        <form action={importVibixBrowserItemAction}>
+                          <input type="hidden" name="sourceType" value={sourceType} />
+                          <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
+                          <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
+                          <input type="hidden" name="videoJson" value={encodedVideo(video)} />
+                          <button className="h-10 rounded-xl bg-[#e50914] px-4 text-xs font-black text-white disabled:bg-neutral-400" disabled={!hasPlayer}>
+                            {localWatchAvailable ? "Обновить" : "Обновить Vibix"}
+                          </button>
+                        </form>
+                      </div>
                     ) : (
                       <form action={importVibixBrowserItemAction}>
                         <input type="hidden" name="sourceType" value={sourceType} />
@@ -335,6 +348,15 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
                         <div className="font-black text-green-700">Уже есть</div>
                         <Link href={`/watch/${local.slug}`} className="mt-1 block max-w-[220px] truncate text-[#e50914] hover:underline">{local.titleRu} ({local.year})</Link>
                         <div className="mt-1 text-neutral-500">type: {local.type}, watch: {localWatchAvailable ? "yes" : "no"}, public: {local.isPublicVisible ? "yes" : "no"}, vibix: {local.vibixAvailable ? "yes" : "no"}</div>
+                        {!localWatchAvailable || !local.vibixAvailable || !local.isPublicVisible ? (
+                          <form action={importVibixBrowserItemAction} className="mt-2">
+                            <input type="hidden" name="sourceType" value={sourceType} />
+                            <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
+                            <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
+                            <input type="hidden" name="videoJson" value={encodedVideo(video)} />
+                            <button className="rounded-lg bg-[#333] px-3 py-2 text-xs font-black text-white disabled:bg-neutral-400" disabled={!hasPlayer}>Обновить Vibix</button>
+                          </form>
+                        ) : null}
                         {categoryOption.categoryId === VIBIX_CATEGORY_IDS.anime && (local.type !== "ANIME" || !local.isPublicVisible || !local.isCatalogAllowed) ? (
                           <form action={moveVibixBrowserPageMoviesToAnimeAction} className="mt-2">
                             <input type="hidden" name="movieIds" value={JSON.stringify([local.id])} />
