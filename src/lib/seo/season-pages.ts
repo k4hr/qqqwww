@@ -52,7 +52,7 @@ export async function resolveSeasonSeoPage(slug: string): Promise<SeasonSeoPage 
   const maxSeason = movie.vibixSeasonCount && movie.vibixSeasonCount > 0 ? movie.vibixSeasonCount : null;
   if (maxSeason && parsed.season > maxSeason) return null;
 
-  return { movie, season: parsed.season, slug: seasonPath(movie, parsed.season).replace("/series/", ""), maxSeason };
+  return { movie, season: parsed.season, slug: seasonPath(movie, parsed.season).replace("/season/", ""), maxSeason };
 }
 
 export function seasonSeoTitle(page: SeasonSeoPage) {

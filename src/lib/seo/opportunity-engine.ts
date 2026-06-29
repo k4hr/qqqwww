@@ -273,7 +273,7 @@ export async function analyzeSeoKeyword(queryRow: { query: string; normalizedQue
     if (!movie) return opportunity("NEEDS_MOVIE", { ...base, seasonNumber: season, problem: "Сезонный запрос, но сериал не найден в базе REDFILM." });
     if (!hasWatch(movie)) return opportunity("NEEDS_VIBIX", { ...base, movieId: movie.id, entityTitle: movie.titleRu, seasonNumber: season, targetUrl: watchPath(movie), problem: "Сериал найден, но нет рабочего Vibix/watch-доступа." });
     const maxSeason = movie.vibixSeasonCount || 0;
-    const targetUrl = season ? `/series/${slugifyRu(movie.titleRu)}-${season}-sezon` : watchPath(movie);
+    const targetUrl = season ? `/season/${slugifyRu(movie.titleRu)}-${season}-sezon` : watchPath(movie);
     const ready = !season || maxSeason === 0 || season <= maxSeason;
     return opportunity(ready ? "READY" : "NEEDS_SEASON_PAGE", { ...base, movieId: movie.id, entityTitle: movie.titleRu, seasonNumber: season, targetUrl, problem: ready ? "Сезонная посадочная готова: сериал найден, watch доступен." : `В базе указано сезонов: ${maxSeason}, запрос на сезон ${season}. Нужно проверить Vibix seasons.` });
   }

@@ -171,7 +171,7 @@ export default async function AdminSeoPage({ searchParams }: Props) {
 }
 
 function seoPageHref(type: string, slug: string) {
-  if (type === "SEASON_PAGE") return `/series/${slug}`;
+  if (type === "SEASON_PAGE") return `/season/${slug}`;
   if (type === "SIMILAR_PAGE") return `/similar/${slug.replace(/^pohozhie-na-/, "")}`;
   if (type === "LIKE_PAGE") return `/like/${slug.replace(/^chto-posmotret-posle-/, "")}`;
   if (type === "PERSON_PAGE") return `/person/${slug.replace(/^filmy-s-/, "")}`;

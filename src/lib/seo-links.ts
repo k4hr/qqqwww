@@ -35,7 +35,7 @@ export function filmPath(movie: Pick<Movie, "slug">) { return `/film/${buildFilm
 export function watchPath(movie: Pick<Movie, "slug">) { return `/watch/${buildWatchSlug(movie)}`; }
 export function similarPath(movie: Pick<Movie, "slug">) { return `/similar/${buildSimilarSlug(movie)}`; }
 export function likePath(movie: Pick<Movie, "slug">) { return `/like/${buildSimilarSlug(movie)}`; }
-export function seasonPath(movie: Pick<Movie, "titleRu" | "slug">, season: number) { return `/series/${normalizeSlug(movie.titleRu)}-${Math.max(1, Math.floor(season))}-sezon`; }
+export function seasonPath(movie: Pick<Movie, "titleRu" | "slug">, season: number) { return `/season/${normalizeSlug(movie.titleRu)}-${Math.max(1, Math.floor(season))}-sezon`; }
 export function franchisePath(movie: Pick<Movie, "titleRu">) { return `/collection/${buildCollectionSlug(movie.titleRu)}`; }
 export function genrePath(genre: Pick<Genre, "slug">) { return `/genre/${genre.slug}`; }
 export function yearPath(movie: Pick<Movie, "year">) { return `/year/${movie.year}`; }
