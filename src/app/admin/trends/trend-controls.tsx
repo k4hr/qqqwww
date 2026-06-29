@@ -103,7 +103,7 @@ export function TrendControls() {
 
   return <div className="space-y-5">
     <div className="rounded-2xl border border-[#f2c94c] bg-[#fff8df] p-4 text-sm leading-6 text-[#4b3b00]">
-      <b>Правильный порядок:</b> после деплоя сначала <b>1</b> — это замена <code>npm run catalog:recalculate</code>. Если у известных фильмов missing_player/missing_votes — нажать <b>2</b>, потом снова <b>1</b>. Кнопка <b>3</b> ловит свежие обновления Vibix, <b>4</b> ищет новые сильные тайтлы, а <b>5</b> — только для уже созданных кандидатов.
+      <b>Дополнительные инструменты Trend Engine:</b> основной ежедневный порядок теперь находится сверху на странице <code>/admin/catalog</code>. Эти кнопки нужны для ручной диагностики: пересчёт каталога, обогащение старой базы, свежие обновления Vibix, Vibix-first Trend Sync и проверка кандидатов.
     </div>
 
     <div className="grid gap-4 xl:grid-cols-2">

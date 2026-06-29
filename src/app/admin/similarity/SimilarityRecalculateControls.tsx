@@ -123,17 +123,17 @@ export function SimilarityRecalculateControls({ initialSnapshot }: { initialSnap
           className="rounded-lg bg-[#e50914] px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           type="button"
           disabled={state === "running" || active}
-          onClick={() => call("/api/admin/similarity/jobs", { body: JSON.stringify({ mode: "ALL", batchSize: 100, force: false }) })}
+          onClick={() => call("/api/admin/similarity/jobs", { body: JSON.stringify({ mode: "DIRTY", batchSize: 100 }) })}
         >
-          Пересчитать все в фоне
+          Найти похожие для новых
         </button>
         <button
           className="rounded-lg bg-[#333] px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           type="button"
           disabled={state === "running" || active}
-          onClick={() => call("/api/admin/similarity/jobs", { body: JSON.stringify({ mode: "DIRTY", batchSize: 100 }) })}
+          onClick={() => call("/api/admin/similarity/jobs", { body: JSON.stringify({ mode: "ALL", batchSize: 100, force: false }) })}
         >
-          Пересчитать новые/грязные
+          Полный пересчёт похожих
         </button>
         <button
           className="rounded-lg border border-[#ddd] bg-white px-5 py-3 font-bold text-[#222] disabled:cursor-not-allowed disabled:opacity-60"
@@ -193,7 +193,7 @@ export function SimilarityRecalculateControls({ initialSnapshot }: { initialSnap
       ) : null}
 
       <div className="rounded-lg bg-[#fff7e6] p-3 text-sm text-[#7a4b00]">
-        Для полной автоматики добавь отдельный Railway worker с командой <code>npm run similarity:worker</code>. Новые фильмы автоматически имеют dirty-флаг и будут подхватываться этим worker-ом.
+        В daily pipeline dirty-фильмы обрабатывает <code>npm run vibix:catalog-worker</code>. Отдельный <code>npm run similarity:worker</code> можно оставить как ускоритель, но он больше не обязателен для ежедневного сценария.
       </div>
     </div>
   );

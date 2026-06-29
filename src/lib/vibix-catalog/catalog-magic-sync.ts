@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { sleep } from "@/lib/vibix";
 import { recalculateAllCatalogScores } from "@/lib/catalog-score";
+import { createSimilarityJob, getSimilarityJobSnapshot, processSimilarityJobBatch } from "@/lib/similarity/similarity-job";
+import { checkTrendCandidatesInVibix, recalculateAllHomeScores, runTrendSync } from "@/lib/trend-engine";
 import {
   buildVibixPlayableLinksIndexBatch,
   importMissingFromVibixIndex,
@@ -79,18 +81,90 @@ export async function startVibixCatalogMagicJob(options: { restart?: boolean } =
     });
   }
 
+  return createCatalogPipelineJob({
+    mode: "FULL_CATALOG",
+    currentStage: "REFRESH",
+    message: "Задача создана. Worker сам обновит Vibix, построит /links индекс, догрузит недостающее, посчитает похожие и пересчитает каталог.",
+  });
+}
+
+type CatalogPipelineMode = "FULL_CATALOG" | "CHECK_VIBIX" | "IMPORT_MISSING" | "DAILY_PIPELINE";
+
+type CreateCatalogPipelineOptions = {
+  mode: CatalogPipelineMode;
+  currentStage: string;
+  restart?: boolean;
+  message: string;
+};
+
+async function createCatalogPipelineJob(options: CreateCatalogPipelineOptions) {
+  if (options.restart) {
+    await prisma.vibixCatalogAutoJob.updateMany({
+      where: { status: { in: ACTIVE_STATUSES } },
+      data: { status: "CANCELED", finishedAt: new Date(), message: "Остановлено перед запуском нового операционного сценария." },
+    });
+  }
+
+  const active = await prisma.vibixCatalogAutoJob.findFirst({
+    where: { status: { in: ACTIVE_STATUSES } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (active) {
+    return prisma.vibixCatalogAutoJob.update({
+      where: { id: active.id },
+      data: {
+        status: "QUEUED",
+        mode: options.mode,
+        currentStage: options.currentStage,
+        currentType: options.currentStage === "INDEX_LINKS" ? "movie" : "both",
+        nextPage: 1,
+        rateLimitUntil: null,
+        message: options.message,
+        lastError: null,
+      },
+    });
+  }
+
   return prisma.vibixCatalogAutoJob.create({
     data: {
       status: "QUEUED",
-      mode: "FULL_CATALOG",
-      currentStage: "REFRESH",
-      currentType: "movie",
+      mode: options.mode,
+      currentStage: options.currentStage,
+      currentType: options.currentStage === "INDEX_LINKS" || options.currentStage === "REFRESH" ? "movie" : "both",
       nextPage: 1,
       pagesPerRun: envInt("VIBIX_CATALOG_PAGES_PER_RUN", 15, 1, 30),
       importBatchSize: envInt("VIBIX_CATALOG_IMPORT_BATCH_SIZE", 100, 10, 500),
       pageDelayMs: envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 2500, 250, 30_000),
-      message: "Задача создана. Worker сам обновит Vibix, построит /links индекс, догрузит недостающее и пересчитает каталог.",
+      message: options.message,
     },
+  });
+}
+
+export async function startVibixCatalogCheckJob(options: { restart?: boolean } = {}) {
+  return createCatalogPipelineJob({
+    mode: "CHECK_VIBIX",
+    currentStage: "REFRESH",
+    restart: options.restart,
+    message: "Проверка новых Vibix создана: обновлю totals/snapshots и построю /links индекс, чтобы показать свежие missing без массового импорта.",
+  });
+}
+
+export async function startVibixCatalogImportJob(options: { restart?: boolean } = {}) {
+  return createCatalogPipelineJob({
+    mode: "IMPORT_MISSING",
+    currentStage: "IMPORT_MISSING",
+    restart: options.restart,
+    message: "Догрузка найденного создана: импортирую missing из текущего /links индекса, обновлю существующие карточки, затем починю покрытие и пересчитаю витрину.",
+  });
+}
+
+export async function startDailyCatalogPipelineJob(options: { restart?: boolean } = {}) {
+  return createCatalogPipelineJob({
+    mode: "DAILY_PIPELINE",
+    currentStage: "REFRESH",
+    restart: options.restart,
+    message: "Ежедневный pipeline создан: Vibix → импорт → repair → похожие → тренды → витрина.",
   });
 }
 
@@ -288,17 +362,22 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
           return { ok: true, message: updated.message, job: updated, details: result };
         }
 
+        const checkOnly = job.mode === "CHECK_VIBIX";
         const updated = await prisma.vibixCatalogAutoJob.update({
           where: { id: job.id },
           data: {
-            currentStage: "IMPORT_MISSING",
+            status: checkOnly ? "COMPLETED" : "RUNNING",
+            currentStage: checkOnly ? "DONE" : "IMPORT_MISSING",
             currentType: "both",
             nextPage: 1,
             indexed: { increment: result.indexed },
             present: { increment: result.present },
             missing: { increment: result.missingImportable },
             loops: { increment: 1 },
-            message: `${pageMessage} Индекс фильмов и сериалов завершён. Перехожу к догрузке недостающего.`,
+            finishedAt: checkOnly ? new Date() : undefined,
+            message: checkOnly
+              ? `${pageMessage} Проверка Vibix завершена. Новых к догрузке: ${result.missingImportable}.`
+              : `${pageMessage} Индекс фильмов и сериалов завершён. Перехожу к догрузке недостающего.`,
           },
         });
         return { ok: true, message: updated.message, job: updated, details: result };
@@ -380,11 +459,16 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
       });
 
       if (result.requested === 0) {
+        const nextStage = job.mode === "DAILY_PIPELINE" || job.mode === "FULL_CATALOG" || job.mode === "IMPORT_MISSING"
+          ? "QUEUE_SIMILARITY"
+          : "RECALC";
         const updated = await prisma.vibixCatalogAutoJob.update({
           where: { id: job.id },
           data: {
-            currentStage: "RECALC",
-            message: "Автопроверка важных тайтлов завершена. Перехожу к пересчёту каталога и типов.",
+            currentStage: nextStage,
+            message: nextStage === "QUEUE_SIMILARITY"
+              ? "Автопроверка важных тайтлов завершена. Перехожу к задаче похожих для новых/dirty фильмов."
+              : "Автопроверка важных тайтлов завершена. Перехожу к пересчёту каталога и типов.",
             lastError: null,
           },
         });
@@ -402,8 +486,64 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
       return { ok: result.failed === 0, message: updated.message, job: updated, details: result };
     }
 
+    if (job.currentStage === "QUEUE_SIMILARITY") {
+      const result = await createSimilarityJob({ mode: "DIRTY", batchSize: envInt("SIMILARITY_RECALCULATE_BATCH_SIZE", 100, 10, 500) });
+      const snapshot = await getSimilarityJobSnapshot();
+      const updated = await prisma.vibixCatalogAutoJob.update({
+        where: { id: job.id },
+        data: {
+          currentStage: snapshot.dirtyCount > 0 ? "PROCESS_SIMILARITY" : job.mode === "DAILY_PIPELINE" ? "TREND_SYNC" : "RECALC",
+          loops: { increment: 1 },
+          message: snapshot.dirtyCount > 0
+            ? `Похожие поставлены в очередь (${snapshot.dirtyCount} dirty). Worker начнёт считать similarity батчами.`
+            : job.mode === "DAILY_PIPELINE"
+              ? "Dirty-фильмов для похожих нет. Перехожу к поиску трендов."
+              : "Dirty-фильмов для похожих нет. Перехожу к пересчёту витрины.",
+          lastError: null,
+        },
+      });
+      return { ok: true, message: updated.message, job: updated, details: { result, snapshot } };
+    }
+
+    if (job.currentStage === "PROCESS_SIMILARITY") {
+      const result = await processSimilarityJobBatch();
+      const typed = result as { ok?: boolean; idle?: boolean; completed?: boolean; afterDirty?: number; error?: string; result?: { processed?: number; saved?: number; errors?: number } };
+      const done = Boolean(typed.idle || typed.completed || (typeof typed.afterDirty === "number" && typed.afterDirty <= 0));
+      const nextStage = job.mode === "DAILY_PIPELINE" ? "TREND_SYNC" : "RECALC";
+      const updated = await prisma.vibixCatalogAutoJob.update({
+        where: { id: job.id },
+        data: {
+          currentStage: done ? nextStage : "PROCESS_SIMILARITY",
+          failed: { increment: typed.ok === false ? 1 : 0 },
+          loops: { increment: 1 },
+          message: done
+            ? `Похожие обработаны. Перехожу к ${nextStage === "TREND_SYNC" ? "трендам" : "пересчёту витрины"}.`
+            : `Похожие считаются батчами: обработано ${typed.result?.processed ?? 0}, сохранено связей ${typed.result?.saved ?? 0}, ошибок ${typed.result?.errors ?? 0}.`,
+          lastError: typed.ok === false ? (typed.error ?? "Similarity processing failed").slice(0, 2_000) : null,
+        },
+      });
+      return { ok: typed.ok !== false, message: updated.message, job: updated, details: result };
+    }
+
+    if (job.currentStage === "TREND_SYNC") {
+      const trend = await runTrendSync({ batchSize: envInt("TREND_SYNC_BATCH_SIZE", 50, 1, 100) });
+      const candidates = await checkTrendCandidatesInVibix(envInt("TREND_CHECK_BATCH_SIZE", 50, 1, 100));
+      const updated = await prisma.vibixCatalogAutoJob.update({
+        where: { id: job.id },
+        data: {
+          currentStage: "RECALC",
+          loops: { increment: 1 },
+          message: `Тренды проверены. Trend Sync: ${JSON.stringify(trend).slice(0, 350)}. Vibix candidates: ${JSON.stringify(candidates).slice(0, 350)}. Перехожу к финальной витрине.`,
+          lastError: null,
+        },
+      });
+      return { ok: true, message: updated.message, job: updated, details: { trend, candidates } };
+    }
+
     if (job.currentStage === "RECALC") {
-      const result = await recalculateAllCatalogScores();
+      const catalog = await recalculateAllCatalogScores();
+      const home = await recalculateAllHomeScores();
+      const errors = catalog.errors + home.errors;
       const updated = await prisma.vibixCatalogAutoJob.update({
         where: { id: job.id },
         data: {
@@ -411,11 +551,11 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
           currentStage: "DONE",
           finishedAt: new Date(),
           loops: { increment: 1 },
-          message: `Волшебная загрузка завершена. Каталог пересчитан: ${result.processed}; публичных ${result.publicVisible}; ошибок ${result.errors}.`,
-          lastError: result.errors > 0 ? JSON.stringify(result).slice(0, 2_000) : null,
+          message: `Pipeline завершён. Каталог: ${catalog.processed}; публичных ${catalog.publicVisible}; home ${home.homeEligible}; hero ${home.heroEligible}; ошибок ${errors}.`,
+          lastError: errors > 0 ? JSON.stringify({ catalog, home }).slice(0, 2_000) : null,
         },
       });
-      return { ok: result.errors === 0, message: updated.message, job: updated, details: result };
+      return { ok: errors === 0, message: updated.message, job: updated, details: { catalog, home } };
     }
 
     const completed = await prisma.vibixCatalogAutoJob.update({

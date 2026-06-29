@@ -4,6 +4,8 @@ import { ContentType, type Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { recalculateAllCatalogScores } from "@/lib/catalog-score";
+import { createSimilarityJob } from "@/lib/similarity/similarity-job";
+import { checkTrendCandidatesInVibix, recalculateAllHomeScores, runTrendSync } from "@/lib/trend-engine";
 import { classifyCatalogKind } from "@/lib/catalog-kind";
 import { forceMoviesToAnimeByIds } from "@/lib/admin-anime-tools";
 import { prisma } from "@/lib/prisma";
@@ -18,7 +20,7 @@ import {
   refreshVibixReferences,
 } from "@/lib/vibix-catalog/catalog-audit";
 import type { VibixCatalogType } from "@/lib/vibix";
-import { cancelVibixCatalogMagicJob, runVibixCatalogMagicJobIteration, startVibixCatalogMagicJob, startVibixCoverageRepairJob } from "@/lib/vibix-catalog/catalog-magic-sync";
+import { cancelVibixCatalogMagicJob, runVibixCatalogMagicJobIteration, startDailyCatalogPipelineJob, startVibixCatalogCheckJob, startVibixCatalogImportJob, startVibixCatalogMagicJob, startVibixCoverageRepairJob } from "@/lib/vibix-catalog/catalog-magic-sync";
 import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
 
 function numberField(formData: FormData, name: string, fallback: number, min: number, max: number) {
@@ -74,6 +76,39 @@ function hasAnimeTag(movie: AnimeRepairMovie) {
     const normalized = tag.toLocaleLowerCase("ru-RU").replaceAll("ё", "е");
     return normalized === "аниме" || normalized === "anime" || ["ova", "ona", "oav", "shounen", "shonen", "seinen", "shoujo", "shojo", "josei"].includes(normalized);
   });
+}
+
+
+export async function startDailyCatalogPipelineAction() {
+  const job = await startDailyCatalogPipelineJob({ restart: true });
+  redirectWithResult({ ok: true, message: `Ежедневный pipeline запущен. Этап: ${job.currentStage}. Worker продолжит автоматически.`, details: job });
+}
+
+export async function checkNewVibixCatalogAction() {
+  const job = await startVibixCatalogCheckJob({ restart: true });
+  redirectWithResult({ ok: true, message: `Проверка новых Vibix запущена. Этап: ${job.currentStage}. Worker обновит индекс и покажет missing.`, details: job });
+}
+
+export async function importFoundVibixCatalogAction() {
+  const job = await startVibixCatalogImportJob({ restart: true });
+  redirectWithResult({ ok: true, message: `Догрузка найденного запущена. Этап: ${job.currentStage}. Worker импортирует missing и обновит существующие карточки.`, details: job });
+}
+
+export async function queueDirtySimilarityAction() {
+  const result = await createSimilarityJob({ mode: "DIRTY", batchSize: 100 });
+  redirectWithResult({ ok: true, message: "Похожие для новых/dirty фильмов поставлены в очередь.", details: result });
+}
+
+export async function runTrendSyncCatalogAction() {
+  const trend = await runTrendSync({ batchSize: 50 });
+  const candidates = await checkTrendCandidatesInVibix(50);
+  redirectWithResult({ ok: true, message: "Тренды найдены и кандидаты проверены в Vibix.", details: { trend, candidates } });
+}
+
+export async function activateTrendsCatalogAction() {
+  const catalog = await recalculateAllCatalogScores();
+  const home = await recalculateAllHomeScores();
+  redirectWithResult({ ok: catalog.errors + home.errors === 0, message: `Витрина обновлена: каталог ${catalog.processed}, home ${home.processed}, hero ${home.heroEligible}, homeEligible ${home.homeEligible}.`, details: { catalog, home } });
 }
 
 export async function moveMoviesToAnimeAction() {

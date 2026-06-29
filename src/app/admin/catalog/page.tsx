@@ -1,29 +1,40 @@
 import Link from "next/link";
+import { ContentType, type Prisma } from "@prisma/client";
 import { MagicJobPauseInfo } from "./MagicJobPauseInfo";
+import { prisma } from "@/lib/prisma";
+import { getSimilarityJobSnapshot } from "@/lib/similarity/similarity-job";
+import { SimilarityRecalculateControls } from "../similarity/SimilarityRecalculateControls";
+import { TrendControls } from "../trends/trend-controls";
 import { getVibixCatalogDashboardData } from "@/lib/vibix-catalog/catalog-audit";
 import { getLatestVibixCatalogMagicJob } from "@/lib/vibix-catalog/catalog-magic-sync";
 import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
 import {
   buildVibixIndexAction,
+  activateTrendsCatalogAction,
   buildVibixPlayableLinksIndexAction,
+  checkNewVibixCatalogAction,
   cancelVibixCatalogMagicAction,
   diagnoseVibixManualImportAction,
+  importFoundVibixCatalogAction,
   importMissingFromVibixAction,
   importVibixTitleManuallyAction,
   moveMoviesToAnimeAction,
+  queueDirtySimilarityAction,
   recalculateCatalogKindsAction,
   restartVibixCatalogMagicAction,
+  runTrendSyncCatalogAction,
   runVibixCatalogMagicOnceAction,
   refreshVibixCatalogAuditAction,
   refreshVibixReferencesAction,
   refreshVibixTotalsAction,
+  startDailyCatalogPipelineAction,
   startVibixCatalogMagicAction,
   startVibixCoverageRepairAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-type Props = { searchParams: Promise<{ result?: string }> };
+type Props = { searchParams: Promise<{ result?: string; similarityQ?: string }> };
 
 type ActionResult = { ok?: boolean; message?: string; details?: unknown } | null;
 
@@ -48,10 +59,87 @@ function date(value?: Date | string | null) {
   return parsed.toLocaleString("ru-RU");
 }
 
+const playableWhere: Prisma.MovieWhereInput = {
+  OR: [
+    { AND: [{ vibixIframeUrl: { not: null } }, { vibixIframeUrl: { not: "" } }] },
+    { AND: [{ vibixEmbedCode: { not: null } }, { vibixEmbedCode: { not: "" } }] },
+  ],
+};
+
+async function getTrendDashboardData() {
+  const [
+    run,
+    catalogRun,
+    statuses,
+    candidates,
+    hero,
+    qualityProblems,
+    missingPoster,
+    missingBackdrop,
+    missingPlayer,
+    totalMovies,
+    publicVisibleCount,
+    homeVisibleCount,
+    heroVisibleCount,
+    popularEligibleCount,
+    topEligibleCount,
+    freshEligibleCount,
+    typeGroups,
+  ] = await Promise.all([
+    prisma.trendSyncRun.findFirst({ orderBy: { createdAt: "desc" } }),
+    prisma.catalogEngineRun.findFirst({ orderBy: { createdAt: "desc" } }),
+    prisma.trendCandidate.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.trendCandidate.findMany({ orderBy: { sourceScore: "desc" }, take: 20 }),
+    prisma.movie.findMany({ where: { isPublished: true, isCatalogAllowed: true, isHeroEligible: true }, orderBy: { homeScore: "desc" }, take: 8 }),
+    prisma.movie.count({ where: { isPublished: true, isQualityDataComplete: false } }),
+    prisma.movie.count({ where: { isPublished: true, OR: [{ posterUrl: null }, { posterUrl: "" }] } }),
+    prisma.movie.count({ where: { isPublished: true, OR: [{ backdropUrl: null }, { backdropUrl: "" }] } }),
+    prisma.movie.count({ where: { isPublished: true, AND: [
+      { OR: [{ vibixIframeUrl: null }, { vibixIframeUrl: "" }] },
+      { OR: [{ vibixEmbedCode: null }, { vibixEmbedCode: "" }] },
+    ] } }),
+    prisma.movie.count(),
+    prisma.movie.count({ where: { isPublicVisible: true } }),
+    prisma.movie.count({ where: { isPublished: true, isCatalogAllowed: true, isHomeEligible: true } }),
+    prisma.movie.count({ where: { isPublished: true, isCatalogAllowed: true, isHeroEligible: true } }),
+    prisma.movie.count({ where: { isPopularEligible: true } }),
+    prisma.movie.count({ where: { isTopEligible: true } }),
+    prisma.movie.count({ where: { isFreshEligible: true } }),
+    prisma.movie.groupBy({ by: ["type"], where: { isPublished: true, isCatalogAllowed: true }, _count: { _all: true } }),
+  ]);
+
+  const statusCount = new Map(statuses.map((item) => [item.status, item._count._all]));
+  const typeCount = new Map(typeGroups.map((item) => [item.type, item._count._all]));
+  const playableVisible = await prisma.movie.count({ where: { isPublished: true, isCatalogAllowed: true, ...playableWhere } });
+
+  return {
+    tmdbConfigured: Boolean(process.env.TMDB_API_KEY?.trim()),
+    run,
+    catalogRun,
+    statusCount,
+    typeCount,
+    candidates,
+    hero,
+    qualityProblems,
+    missingPoster,
+    missingBackdrop,
+    missingPlayer,
+    totalMovies,
+    publicVisibleCount,
+    playableVisible,
+    homeVisibleCount,
+    heroVisibleCount,
+    popularEligibleCount,
+    topEligibleCount,
+    freshEligibleCount,
+  };
+}
+
 export default async function AdminCatalogPage({ searchParams }: Props) {
   const params = await searchParams;
   const actionResult = parseResult(params.result);
-  const [data, magicJob] = await Promise.all([getVibixCatalogDashboardData(), getLatestVibixCatalogMagicJob()]);
+  const [data, magicJob, similaritySnapshot, trendData] = await Promise.all([getVibixCatalogDashboardData(), getLatestVibixCatalogMagicJob(), getSimilarityJobSnapshot(), getTrendDashboardData()]);
+  const similarityQ = params.similarityQ?.trim() || "Мстители: Война бесконечности";
   const snapshotsByKey = new Map(data.snapshots.map((item) => [item.key, item]));
   const movieTotal = snapshotsByKey.get("movie_all")?.total ?? null;
   const serialTotal = snapshotsByKey.get("serial_all")?.total ?? null;
@@ -63,12 +151,12 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
       <Link href="/admin" className="text-sm text-neutral-500 hover:text-[#e50914]">← Назад в админку</Link>
       <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="break-words text-[clamp(1.75rem,6vw,2.5rem)] font-black text-[#222]">КАТАЛОГ</h1>
-          <p className="mt-2 max-w-4xl text-neutral-600">Контроль покрытия базы: что есть у REDFILM, что есть у Vibix, чего не хватает и что нужно догрузить.</p>
+          <h1 className="break-words text-[clamp(1.75rem,6vw,2.5rem)] font-black text-[#222]">Операционный центр REDFILM</h1>
+          <p className="mt-2 max-w-4xl text-neutral-600">Единая ежедневная панель: Vibix → импорт → похожие → тренды → витрина.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/catalog/vibix" className="rounded-xl bg-[#e50914] px-5 py-3 text-center font-bold text-white">Смотреть VIBIX</Link>
-          <Link href="/admin/vibix" className="rounded-xl bg-[#333] px-5 py-3 text-center font-bold text-white">Vibix sync</Link>
+          <Link href="/admin/seo" className="rounded-xl bg-[#333] px-5 py-3 text-center font-bold text-white">SEO</Link>
         </div>
       </div>
 
@@ -83,11 +171,30 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
       <section className="admin-panel mt-5 overflow-hidden border-2 border-[#e50914] bg-gradient-to-br from-[#fff5f5] to-white p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-2xl font-black text-[#222]">ВОЛШЕБНАЯ ЗАГРУЗКА ВСЕГО VIBIX</h2>
-            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Одна кнопка создаёт фоновую задачу: обновляет справочники Vibix, строит доступный /links индекс для фильмов и сериалов, при 429 сама уходит на паузу, потом продолжает, догружает недостающее, автоматически чинит важные пропущенные/скрытые тайтлы и пересчитывает каталог.</p>
+            <h2 className="text-2xl font-black text-[#222]">Ежедневный порядок</h2>
+            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Нажимай сверху вниз вручную или запускай весь сценарий одной кнопкой. Автоматически этот же pipeline стартует через cron в 06:00 МСК.</p>
+          </div>
+          <form action={startDailyCatalogPipelineAction}>
+            <button className="h-14 rounded-2xl bg-[#e50914] px-6 text-lg font-black text-white shadow-lg shadow-red-200">Запустить весь pipeline</button>
+          </form>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <DailyStep step="1" title="Проверить новые Vibix" description="Обновить справочники, totals и /links индекс, показать сколько новых тайтлов к догрузке." action={checkNewVibixCatalogAction} />
+          <DailyStep step="2" title="Докачать найденное" description="Импортировать missing, обновить существующие карточки без плеера, починить watch/public." action={importFoundVibixCatalogAction} />
+          <DailyStep step="3" title="Найти похожие" description="Поставить в очередь похожие для новых/dirty фильмов после импорта." action={queueDirtySimilarityAction} />
+          <DailyStep step="4" title="Найти тренды" description="Запустить Vibix-first Trend Sync и проверить кандидатов в Vibix." action={runTrendSyncCatalogAction} />
+          <DailyStep step="5" title="Включить тренды" description="Финально пересчитать каталог, главную, популярное, ТОП и новинки." action={activateTrendsCatalogAction} />
+        </div>
+      </section>
+
+      <section className="admin-panel mt-5 overflow-hidden border-2 border-[#e50914] bg-gradient-to-br from-[#fff5f5] to-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-[#222]">Фоновая задача Vibix / Daily pipeline</h2>
+            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Здесь видно состояние активной фоновой задачи. Её запускают кнопки ежедневного порядка, ручная полная загрузка или cron. Worker продолжает стадии батчами и переживает 429.</p>
           </div>
           <form action={startVibixCatalogMagicAction}>
-            <button className="h-14 rounded-2xl bg-[#e50914] px-6 text-lg font-black text-white shadow-lg shadow-red-200">Загрузить всё автоматически</button>
+            <button className="h-14 rounded-2xl bg-[#e50914] px-6 text-lg font-black text-white shadow-lg shadow-red-200">Полная загрузка Vibix</button>
           </form>
         </div>
 
@@ -264,7 +371,7 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
 
         <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="font-bold">Как пользоваться:</div>
-          <div className="mt-1">1) Обновить всё Vibix → 2) Строить именно доступный /links индекс для movie/serial → 3) Догружать недостающее → 4) Автопочинка важных тайтлов → 5) Пересчитать категории. Сырой get_kpids не использовать для догрузки.</div>
+          <div className="mt-1">Ежедневный сценарий: 1) проверить новые Vibix → 2) докачать найденное → 3) найти похожие → 4) найти тренды → 5) включить тренды. Сырой get_kpids оставлен только для контроля.</div>
         </div>
       </section>
 
@@ -277,6 +384,75 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
           <div className="flex flex-wrap gap-2">
             <form action={moveMoviesToAnimeAction}><button className="h-12 rounded-xl bg-[#e50914] px-5 font-bold text-white">Перенести аниме из фильмов</button></form>
             <form action={recalculateCatalogKindsAction}><button className="h-12 rounded-xl bg-[#333] px-5 font-bold text-white">Пересчитать каталог и типы</button></form>
+          </div>
+        </div>
+      </section>
+
+      <section id="similarity" className="admin-panel mt-5 p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-[#222]">Похожие фильмы</h2>
+            <p className="mt-1 text-sm text-neutral-500">После любого импорта новые/обновлённые фильмы должны уходить в dirty-очередь. Обычный ежедневный режим — пересчитать только новые/dirty, полный пересчёт нужен редко.</p>
+          </div>
+          <a href={`/api/admin/similarity/debug?q=${encodeURIComponent(similarityQ)}&limit=30`} target="_blank" className="rounded-xl bg-[#333] px-5 py-3 text-center font-bold text-white">Debug JSON</a>
+        </div>
+        <SimilarityRecalculateControls initialSnapshot={similaritySnapshot} />
+        <form className="mt-5 flex flex-col gap-3 md:flex-row" action="/admin/catalog#similarity">
+          <input name="similarityQ" defaultValue={similarityQ} className="min-h-11 flex-1 rounded-lg border border-[#ddd] bg-white px-3 text-[#222]" />
+          <button className="rounded-lg bg-[#333] px-5 py-3 font-bold text-white" type="submit">Поставить пример</button>
+          <a className="rounded-lg bg-[#e50914] px-5 py-3 font-bold text-white" href={`/api/admin/similarity/debug?q=${encodeURIComponent(similarityQ)}&limit=30`} target="_blank">Открыть debug JSON</a>
+        </form>
+      </section>
+
+      <section id="trends" className="admin-panel mt-5 p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-[#222]">Тренды и витрина</h2>
+            <p className="mt-1 text-sm text-neutral-500">Trend Engine теперь живёт здесь: диагностика главной, Quality Gate, кандидаты и финальное включение витрины.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a href="/api/admin/trends/home-preview" className="rounded-xl border border-[#ddd] bg-white px-4 py-3 text-sm font-bold text-[#222]">Home JSON</a>
+            <a href="/api/admin/trends/hero-preview" className="rounded-xl border border-[#ddd] bg-white px-4 py-3 text-sm font-bold text-[#222]">Hero JSON</a>
+          </div>
+        </div>
+        {!trendData.tmdbConfigured ? <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-900">TMDB_API_KEY не указан. Это нормально: базовая витрина работает в Vibix-first режиме.</div> : null}
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <Stat label="Всего Movie" value={trendData.totalMovies} />
+          <Stat label="Public visible" value={trendData.publicVisibleCount} good={trendData.publicVisibleCount > 0} />
+          <Stat label="С плеером для главной" value={trendData.playableVisible} good={trendData.playableVisible > 0} />
+          <Stat label="Home visible" value={trendData.homeVisibleCount} good={trendData.homeVisibleCount > 0} />
+          <Stat label="Hero visible" value={trendData.heroVisibleCount} good={trendData.heroVisibleCount > 0} />
+          <Stat label="Проблемы качества" value={trendData.qualityProblems} />
+          <Stat label="Без poster" value={trendData.missingPoster} bad={trendData.missingPoster > 0} />
+          <Stat label="Без backdrop" value={trendData.missingBackdrop} />
+          <Stat label="Без player" value={trendData.missingPlayer} bad={trendData.missingPlayer > 0} />
+          <Stat label="Popular eligible" value={trendData.popularEligibleCount} good={trendData.popularEligibleCount > 0} />
+          <Stat label="Top eligible" value={trendData.topEligibleCount} good={trendData.topEligibleCount > 0} />
+          <Stat label="Fresh eligible" value={trendData.freshEligibleCount} good={trendData.freshEligibleCount > 0} />
+          <Stat label="Фильмы" value={trendData.typeCount.get(ContentType.MOVIE) ?? 0} />
+          <Stat label="Сериалы" value={trendData.typeCount.get(ContentType.SERIES) ?? 0} />
+          <Stat label="Аниме" value={trendData.typeCount.get(ContentType.ANIME) ?? 0} />
+          <Stat label="AVAILABLE" value={trendData.statusCount.get("AVAILABLE") ?? 0} />
+          <Stat label="NOT_IN_VIBIX" value={trendData.statusCount.get("NOT_IN_VIBIX") ?? 0} />
+          <Stat label="NEEDS_ENRICHMENT" value={trendData.statusCount.get("NEEDS_ENRICHMENT") ?? 0} />
+          <Stat label="FAILED" value={trendData.statusCount.get("FAILED") ?? 0} bad={(trendData.statusCount.get("FAILED") ?? 0) > 0} />
+        </div>
+        <div className="mt-5">
+          <TrendControls />
+        </div>
+        {(trendData.run?.message || trendData.catalogRun?.message) ? <div className="mt-5 rounded-2xl bg-white p-4 text-sm text-[#222]"><h3 className="mb-2 text-lg font-black">Последние сообщения</h3>{trendData.run?.message ? <pre className="mb-2 whitespace-pre-wrap rounded-lg bg-[#f5f5f5] p-3 text-xs">Trend: {trendData.run.message}</pre> : null}{trendData.catalogRun?.message ? <pre className="whitespace-pre-wrap rounded-lg bg-[#f5f5f5] p-3 text-xs">Catalog: {trendData.catalogRun.message}</pre> : null}</div> : null}
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div className="rounded-2xl border border-[#eee] bg-white p-4">
+            <h3 className="mb-3 text-lg font-black text-[#222]">Hero preview</h3>
+            <div className="grid gap-2">
+              {trendData.hero.length ? trendData.hero.map((movie) => <Link key={movie.id} href={`/watch/${movie.slug}`} className="rounded-lg border border-[#ddd] p-3"><b>{movie.titleRu}</b><span className="ml-2 text-neutral-500">{movie.homeScore.toFixed(1)}</span></Link>) : <div className="rounded-lg border border-[#ddd] p-3 text-neutral-500">Hero пока пустой. Нажми “Включить тренды”.</div>}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[#eee] bg-white p-4">
+            <h3 className="mb-3 text-lg font-black text-[#222]">Лучшие кандидаты</h3>
+            <div className="max-h-[420px] overflow-auto">
+              <table className="w-full text-left text-sm text-[#222]"><thead className="text-neutral-500"><tr><th className="p-2">Название</th><th className="p-2">Источник</th><th className="p-2">Год</th><th className="p-2">Score</th><th className="p-2">Статус</th></tr></thead><tbody>{trendData.candidates.map((item) => <tr key={item.id} className="border-t border-[#eee]"><td className="p-2 font-medium">{item.titleRu || item.titleOriginal}</td><td className="p-2">{item.sourceCategory}</td><td className="p-2">{item.year || "—"}</td><td className="p-2">{item.sourceScore.toFixed(1)}</td><td className="p-2">{item.status}</td></tr>)}</tbody></table>
+            </div>
           </div>
         </div>
       </section>
@@ -327,6 +503,19 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
         </div>
       </section>
     </div>
+  );
+}
+
+function DailyStep({ step, title, description, action }: { step: string; title: string; description: string; action: (formData: FormData) => void | Promise<void> }) {
+  return (
+    <form action={action} className="flex h-full flex-col rounded-2xl border border-[#eee] bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e50914] text-lg font-black text-white">{step}</div>
+        <h3 className="text-base font-black text-[#111]">{title}</h3>
+      </div>
+      <p className="min-h-16 flex-1 text-sm leading-5 text-neutral-600">{description}</p>
+      <button className="mt-4 h-11 rounded-xl bg-[#333] px-4 font-bold text-white">Запустить</button>
+    </form>
   );
 }
 
