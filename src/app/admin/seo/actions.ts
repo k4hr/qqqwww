@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { applySeoLandingQualityGate, importEmbeddedWordstatFiles, importWordstatRows, parseWordstatCsv } from "@/lib/seo/keyword-engine";
+import { applySeoLandingQualityGate, importEmbeddedWordstatFiles, importWordstatRows, parseWordstatCsv, rebuildStoredWordstatDemand } from "@/lib/seo/keyword-engine";
 import { generateAiSeoLandingPage, generateTopAiSeoLandingPages } from "@/lib/seo/ai-builder";
 import { runSeoAutopilot } from "@/lib/seo/autopilot";
 
@@ -122,6 +122,19 @@ export async function runSeoAutopilotAction(formData: FormData) {
     revalidatePath("/sitemap-index.xml");
     revalidatePath("/sitemaps/collections.xml");
     redirectWithResult({ ok: true, message: "SEO Autopilot завершил сборку страниц.", result });
+  } catch (error) {
+    redirectWithResult({ ok: false, message: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+
+export async function rebuildSeoDemandAction() {
+  try {
+    const result = await rebuildStoredWordstatDemand();
+    revalidatePath("/admin/seo");
+    revalidatePath("/sitemap-index.xml");
+    revalidatePath("/sitemaps/collections.xml");
+    redirectWithResult({ ok: true, message: "SEO Demand пересчитан: интенты, военные темы, подборки и Quality Gate обновлены.", result });
   } catch (error) {
     redirectWithResult({ ok: false, message: error instanceof Error ? error.message : String(error) });
   }

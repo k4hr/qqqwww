@@ -8,6 +8,7 @@ import {
 } from "@/lib/seo/franchise-orders";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
+import { detectWarTopic, getWarTopicBySlug, getWarTopicTerms } from "@/lib/seo/topic-intents";
 
 export type SeoIntent =
   | "BASE"
@@ -23,6 +24,7 @@ export type SeoIntent =
   | "GENRE_YEAR"
   | "COUNTRY_TYPE"
   | "ANIME_TOPIC"
+  | "WAR_TOPIC"
   | "WATCH_TITLE"
   | "EXCLUDED"
   | "UNKNOWN";
@@ -53,6 +55,7 @@ const GENERATED_LANDING_TYPES = [
   "COUNTRY_TYPE",
   "GENRE_YEAR",
   "ANIME_TOPIC",
+  "WAR_COLLECTION",
   "SEASON_PAGE",
   "SIMILAR_PAGE",
   "LIKE_PAGE",
@@ -128,6 +131,7 @@ export function detectSeoIntent(query: string): SeoIntent {
   if (!normalized) return "UNKNOWN";
   if (EXCLUDED_PATTERNS.some((pattern) => pattern.test(normalized)))
     return "EXCLUDED";
+  if (detectWarTopic(normalized)) return "WAR_TOPIC";
   if (/\b([1-9]|1[0-9]|2[0-5])\s*(?:й|-й)?\s*(сезон|сезона)\b/.test(normalized))
     return "SEASON";
   if (/что посмотреть|после просмотра|если понравил/.test(normalized))
@@ -233,17 +237,51 @@ function parseCsvLine(line: string) {
   return cells.map((cell) => cell.replace(/^"|"$/g, "").trim());
 }
 
-function parseImpressions(value: string) {
-  const number = Number(String(value ?? "").replace(/[^0-9]+/g, ""));
+function digitsOnly(value: string) {
+  return String(value ?? "").replace(/[^0-9]+/g, "");
+}
+
+function parseImpressions(value: string, query?: string) {
+  const raw = String(value ?? "").trim();
+  const digits = digitsOnly(raw);
+  if (!digits) return 0;
+
+  // Защита от главного бага: если частотность случайно взяли из самого запроса
+  // (например, "кино про войну 1941 1945" -> "19411945"), не превращаем годы в спрос.
+  const queryDigits = digitsOnly(query ?? "");
+  if (queryDigits.length >= 4 && digits === queryDigits) return 0;
+
+  const number = Number(digits);
   return int4(Number.isFinite(number) ? number : 0);
+}
+
+function looksLikeQueryCell(value: string) {
+  return /[a-zа-яё]/i.test(value) && normalizeSeoQuery(value).length >= 2;
+}
+
+function looksLikeDemandCell(value: string, query: string) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return false;
+  if (/[a-zа-яё]/i.test(raw)) return false;
+  return parseImpressions(raw, query) > 0;
+}
+
+function inferCsvColumns(cells: string[]) {
+  const lowered = cells.map((cell) => normalizeSeoQuery(cell));
+  const queryIndex = lowered.findIndex(
+    (cell) => /^(запрос|query|keyword|ключ|фраза|поисковая фраза)$/.test(cell) || cell.includes("запрос"),
+  );
+  const impressionsIndex = lowered.findIndex((cell) => /показ|частот|impression|frequency|freq|число/.test(cell));
+  return { queryIndex, impressionsIndex };
 }
 
 export function parseWordstatCsv(text: string): WordstatRow[] {
   const rows: WordstatRow[] = [];
   const lines = text.replace(/^\uFEFF/, "").split(/\r\n|\n|\r/);
   let queryIndex = 0;
-  let impressionsIndex = 1;
+  let impressionsIndex: number | null = null;
   let headerChecked = false;
+  let explicitHeader = false;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -252,25 +290,46 @@ export function parseWordstatCsv(text: string): WordstatRow[] {
 
     if (!headerChecked) {
       headerChecked = true;
-      const lowered = cells.map((cell) => normalizeSeoQuery(cell));
-      const qIndex = lowered.findIndex((cell) => /^(запрос|query|keyword|ключ|фраза|поисковая фраза)$/.test(cell) || cell.includes("запрос"));
-      const iIndex = lowered.findIndex((cell) => /показ|частот|impression|frequency|freq|число/.test(cell));
-      if (qIndex >= 0) queryIndex = qIndex;
-      if (iIndex >= 0) impressionsIndex = iIndex;
-      if (qIndex >= 0 || iIndex >= 0) continue;
+      const inferred = inferCsvColumns(cells);
+      if (inferred.queryIndex >= 0) queryIndex = inferred.queryIndex;
+      if (inferred.impressionsIndex >= 0) impressionsIndex = inferred.impressionsIndex;
+      if (inferred.queryIndex >= 0 || inferred.impressionsIndex >= 0) {
+        explicitHeader = true;
+        continue;
+      }
     }
 
-    const query = String(cells[queryIndex] ?? cells[0] ?? "").trim();
-    const impressions = parseImpressions(String(cells[impressionsIndex] ?? cells[1] ?? ""));
+    if (!explicitHeader) {
+      const guessedQueryIndex = cells.findIndex(looksLikeQueryCell);
+      if (guessedQueryIndex >= 0) queryIndex = guessedQueryIndex;
+    }
 
-    if (!query || !impressions) continue;
+    const query = String(cells[queryIndex] ?? cells.find(looksLikeQueryCell) ?? "").trim();
+    if (!query) continue;
     if (/число запросов|запросы со словами|топ частотных запросов/i.test(query)) continue;
     if (/^[0-9\s]+$/.test(query)) continue;
 
-    rows.push({ query, impressions });
+    let demandIndex = impressionsIndex;
+    if (demandIndex === null || demandIndex === queryIndex) {
+      const detected = cells.findIndex((cell, index) => index !== queryIndex && looksLikeDemandCell(cell, query));
+      demandIndex = detected >= 0 ? detected : null;
+    }
+
+    const impressions = demandIndex === null ? 1 : parseImpressions(String(cells[demandIndex] ?? ""), query);
+
+    // Если в CSV нет отдельной колонки частотности, сохраняем запрос с минимальным весом,
+    // но не выдумываем спрос из годов/номеров в тексте запроса.
+    rows.push({ query, impressions: impressions > 0 ? impressions : 1 });
   }
 
   return rows;
+}
+
+function sanitizeDemandForQuery(query: string, impressions: number) {
+  const digits = digitsOnly(String(impressions));
+  const queryDigits = digitsOnly(query);
+  if (queryDigits.length >= 4 && digits === queryDigits) return 1;
+  return int4(impressions > 0 ? impressions : 1);
 }
 
 function dedupeRows(rows: WordstatRow[]) {
@@ -279,9 +338,10 @@ function dedupeRows(rows: WordstatRow[]) {
   for (const row of rows) {
     const normalizedQuery = normalizeSeoQuery(row.query);
     if (!normalizedQuery) continue;
+    const impressions = sanitizeDemandForQuery(row.query, row.impressions);
     const previous = map.get(normalizedQuery);
-    if (!previous || row.impressions > previous.impressions) {
-      map.set(normalizedQuery, { ...row, normalizedQuery });
+    if (!previous || impressions > previous.impressions) {
+      map.set(normalizedQuery, { ...row, impressions, normalizedQuery });
     }
   }
 
@@ -468,6 +528,11 @@ export function buildClusterForQuery(query: string) {
   const normalized = normalizeSeoQuery(query);
   const intent = detectSeoIntent(normalized);
   if (intent === "EXCLUDED" || intent === "UNKNOWN") return null;
+
+  if (intent === "WAR_TOPIC") {
+    const topic = detectWarTopic(normalized);
+    if (topic) return topic;
+  }
 
   if (intent === "SEASON") {
     const season = seasonFromQuery(normalized);
@@ -704,6 +769,9 @@ function landingIntroForCluster(cluster: {
   if (cluster.targetType === "PERSON_PAGE") {
     return `Страница REDFILM под запрос «${title}»: фильмы и сериалы с актёром, доступные тайтлы, рейтинги и удобная навигация.`;
   }
+  if (cluster.targetType === "WAR_COLLECTION") {
+    return `Подборка REDFILM по запросу «${title}»: фильмы и сериалы про войну 1941–1945, разведчиков, фронт, партизан и события Второй мировой. Важный момент: годы 1941–1945 здесь считаются темой, а не годом выпуска фильма.`;
+  }
   if (
     cluster.targetType === "COUNTRY_TYPE" ||
     cluster.targetType === "GENRE_YEAR" ||
@@ -720,27 +788,8 @@ function landingIntroForCluster(cluster: {
   return `Подборка REDFILM по теме «${title}»: фильмы и сериалы с плеером, постерами, рейтингами и ссылками на похожие страницы.`;
 }
 
-export function whereForSeoLanding(filter: unknown): Prisma.MovieWhereInput {
-  const value =
-    typeof filter === "object" && filter
-      ? (filter as Record<string, unknown>)
-      : {};
-  const targetType = String(value.targetType ?? "COLLECTION");
-  const slug = String(value.slug ?? value.targetSlug ?? "").trim();
-  const franchiseWhere =
-    targetType === "FRANCHISE_ORDER" || targetType === "FRANCHISE"
-      ? buildFranchiseWhere(slug)
-      : null;
-  if (franchiseWhere) return franchiseWhere;
-  const topic = String(value.topic ?? "").trim();
-  const year = Number(value.year);
-  const words = topic
-    ? topic
-        .split(/\s+/)
-        .filter((word) => word.length >= 3)
-        .slice(0, 4)
-    : [];
-  const textWhere = words.length
+function textSearchWhere(words: string[]): Prisma.MovieWhereInput {
+  return words.length
     ? {
         OR: words.flatMap((word) => [
           { titleRu: { contains: word, mode: "insensitive" as const } },
@@ -755,9 +804,54 @@ export function whereForSeoLanding(filter: unknown): Prisma.MovieWhereInput {
               },
             },
           },
+          { vibixTags: { has: word } },
         ]),
       }
     : {};
+}
+
+function warCollectionWhere(value: Record<string, unknown>, slug: string): Prisma.MovieWhereInput | null {
+  const topicKey = String(value.topicKey ?? getWarTopicBySlug(slug)?.key ?? "WAR_WW2");
+  const terms = getWarTopicTerms(topicKey).filter((word) => word.length >= 3);
+  const generalTerms = ["война", "военный", "фронт", "1941", "1945", "великая отечественная", "вторая мировая"];
+  const specificTerms = terms.filter((term) => !generalTerms.includes(term));
+  const typeWhere: Prisma.MovieWhereInput = topicKey === "WAR_SERIALS"
+    ? { type: ContentType.SERIES }
+    : { type: { in: [ContentType.MOVIE, ContentType.SERIES] } };
+
+  const andWhere: Prisma.MovieWhereInput[] = [typeWhere, textSearchWhere(generalTerms)];
+  if (specificTerms.length) andWhere.push(textSearchWhere(specificTerms));
+
+  return { AND: andWhere.filter((item) => Object.keys(item).length) };
+}
+
+export function whereForSeoLanding(filter: unknown): Prisma.MovieWhereInput {
+  const value =
+    typeof filter === "object" && filter
+      ? (filter as Record<string, unknown>)
+      : {};
+  const targetType = String(value.targetType ?? "COLLECTION");
+  const slug = String(value.slug ?? value.targetSlug ?? "").trim();
+  const franchiseWhere =
+    targetType === "FRANCHISE_ORDER" || targetType === "FRANCHISE"
+      ? buildFranchiseWhere(slug)
+      : null;
+  if (franchiseWhere) return franchiseWhere;
+
+  if (targetType === "WAR_COLLECTION") {
+    const warWhere = warCollectionWhere(value, slug);
+    if (warWhere) return warWhere;
+  }
+
+  const topic = String(value.topic ?? "").trim();
+  const year = Number(value.year);
+  const words = topic
+    ? topic
+        .split(/\s+/)
+        .filter((word) => word.length >= 3)
+        .slice(0, 4)
+    : [];
+  const textWhere = textSearchWhere(words);
   const yearWhere = Number.isFinite(year) && year > 1900 ? { year } : {};
   const typeWhere: Prisma.MovieWhereInput =
     targetType === "CARTOON_COLLECTION" || targetType === "CARTOON_YEAR"
@@ -769,11 +863,8 @@ export function whereForSeoLanding(filter: unknown): Prisma.MovieWhereInput {
           : targetType === "MOVIE_YEAR"
             ? { type: ContentType.MOVIE }
             : {};
-  return {
-    AND: [typeWhere, yearWhere, textWhere].filter(
-      (item) => Object.keys(item).length,
-    ),
-  };
+  const andWhere: Prisma.MovieWhereInput[] = [typeWhere, yearWhere, textWhere];
+  return { AND: andWhere.filter((item) => Object.keys(item).length) };
 }
 
 function landingStateForCluster(
@@ -911,7 +1002,8 @@ function filterForCluster(cluster: ReturnType<typeof buildClusterForQuery>) {
     cluster.intent === "MULTIKI_PRO" ||
     cluster.intent === "ANIME_TOPIC" ||
     cluster.intent === "GENRE_YEAR" ||
-    cluster.intent === "COUNTRY_TYPE"
+    cluster.intent === "COUNTRY_TYPE" ||
+    cluster.intent === "WAR_TOPIC"
       ? cluster.mainQuery.replace(/^фильмы про |^мультики про |^аниме /, "")
       : undefined;
   const year =
@@ -921,12 +1013,14 @@ function filterForCluster(cluster: ReturnType<typeof buildClusterForQuery>) {
     cluster.intent === "ANIME_TOPIC"
       ? yearFromQuery(cluster.mainQuery)
       : undefined;
-  return {
+  const filter: Record<string, unknown> = {
     targetType: cluster.targetType,
     targetSlug: cluster.targetSlug,
     topic,
     year,
   };
+  if ("topicKey" in cluster) filter.topicKey = cluster.topicKey;
+  return filter;
 }
 
 async function resetGeneratedSeoPages() {
@@ -967,7 +1061,7 @@ export async function importWordstatRows(
   >();
 
   for (const row of rows) {
-    const normalizedQuery = row.normalizedQuery ?? normalizeSeoQuery(row.query);
+    const normalizedQuery = normalizeSeoQuery(row.query);
     const intent = detectSeoIntent(normalizedQuery);
     const cluster = buildClusterForQuery(normalizedQuery);
     const status =
@@ -1090,6 +1184,23 @@ export async function importWordstatKeywords(
   options?: { replace?: boolean },
 ) {
   return importWordstatRows(parseWordstatCsv(text), source, options);
+}
+
+export async function rebuildStoredWordstatDemand() {
+  const existing = await prisma.seoKeyword.findMany({
+    where: { source: { startsWith: "wordstat" } },
+    select: { query: true, impressions: true },
+    orderBy: [{ impressions: "desc" }, { updatedAt: "desc" }],
+    take: 100000,
+  });
+
+  await resetWordstatSeoEngine();
+  const result = await importWordstatRows(
+    existing.map((item) => ({ query: item.query, impressions: sanitizeDemandForQuery(item.query, item.impressions) })),
+    "wordstat",
+  );
+  const quality = await applySeoLandingQualityGate();
+  return { sourceRows: existing.length, ...result, quality };
 }
 
 export async function importEmbeddedWordstatFiles(options?: {

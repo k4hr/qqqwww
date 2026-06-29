@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSeoAdminStats } from "@/lib/seo/keyword-engine";
 import { getSeoOpportunityReport } from "@/lib/seo/opportunity-engine";
-import { generateAiSeoPageAction, generateTopAiSeoPagesAction, importWordstatCsvAction, rebuildEmbeddedWordstatAction, runSeoAutopilotAction } from "./actions";
+import { generateAiSeoPageAction, generateTopAiSeoPagesAction, importWordstatCsvAction, rebuildEmbeddedWordstatAction, rebuildSeoDemandAction, runSeoAutopilotAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +84,23 @@ export default async function AdminSeoPage({ searchParams }: Props) {
             </tr>)}
           </tbody>
         </table>
+      </div>
+    </section>
+
+    <section className="admin-panel mb-5 border-2 border-[#e50914]/30 p-5">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h2 className="text-xl font-black">Закрыть спрос правильно</h2>
+          <p className="mt-2 max-w-4xl text-sm text-neutral-600">Пересчитать уже загруженные Wordstat-запросы новым Topic Intent Engine: 1941–1945, ВОВ, разведчики, диверсанты и военное кино будут закрываться SEO-подборками, а не ошибочно искаться как годы выпуска или конкретные фильмы.</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full bg-neutral-100 px-3 py-2 font-bold">WAR_TOPIC → /collections/filmy-pro-voynu-1941-1945</span>
+            <span className="rounded-full bg-neutral-100 px-3 py-2 font-bold">NEEDS_COLLECTION → создать/усилить подборку</span>
+            <span className="rounded-full bg-neutral-100 px-3 py-2 font-bold">READY → sitemap + переобход</span>
+          </div>
+        </div>
+        <form action={rebuildSeoDemandAction}>
+          <button type="submit" className="rounded-xl bg-[#e50914] px-5 py-3 font-black text-white">Пересчитать интенты и закрыть подборки</button>
+        </form>
       </div>
     </section>
 

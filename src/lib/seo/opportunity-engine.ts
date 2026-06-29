@@ -4,6 +4,7 @@ import { vibixPublicMovieWhere, vibixWatchMovieWhere } from "@/lib/movie-access"
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 import { likePath, personPath, similarPath, watchPath } from "@/lib/seo-links";
 import { normalizeSeoQuery, slugifyRu } from "@/lib/seo/keyword-engine";
+import { detectWarTopic } from "@/lib/seo/topic-intents";
 import { isPublicPersonName } from "@/lib/person-quality";
 
 export type SeoOpportunityIntent =
@@ -15,6 +16,7 @@ export type SeoOpportunityIntent =
   | "GENRE_YEAR"
   | "COUNTRY_TYPE"
   | "ANIME_TOPIC"
+  | "WAR_TOPIC"
   | "FRANCHISE_ORDER"
   | "COLLECTION"
   | "BASE"
@@ -124,6 +126,7 @@ export function detectSeoOpportunityIntent(query: string): SeoOpportunityIntent 
   const normalized = normalizeSeoQuery(query);
   if (!normalized) return "UNKNOWN";
   if (/\b(порно|sex|xxx|торрент|torrent|скачать|download)\b/i.test(normalized)) return "EXCLUDED";
+  if (detectWarTopic(normalized)) return "WAR_TOPIC";
   if (seasonNumber(normalized)) return "SEASON";
   if (/что посмотреть|после просмотра|если понравил/.test(normalized)) return "LIKE_AFTER";
   if (/похожи[ей]* на|похожие на|фильмы похожие|сериалы похожие/.test(normalized)) return "SIMILAR";
@@ -139,6 +142,8 @@ export function detectSeoOpportunityIntent(query: string): SeoOpportunityIntent 
 
 export function targetCollectionForQuery(query: string) {
   const normalized = normalizeSeoQuery(query);
+  const warTopic = detectWarTopic(normalized);
+  if (warTopic) return { slug: warTopic.targetSlug, title: warTopic.title };
   const year = normalized.match(/\b(20[0-3][0-9]|19[0-9]{2})\b/)?.[1];
   const franchise = FRANCHISE_ALIASES.find((item) => item.pattern.test(normalized));
   if (franchise) return { slug: franchise.slug, title: franchise.title };
@@ -307,7 +312,7 @@ export async function analyzeSeoKeyword(queryRow: { query: string; normalizedQue
   }
 
   const collection = targetCollectionForQuery(queryRow.normalizedQuery);
-  if (collection || intent === "GENRE_YEAR" || intent === "COUNTRY_TYPE" || intent === "ANIME_TOPIC" || intent === "FRANCHISE_ORDER" || intent === "COLLECTION") {
+  if (collection || intent === "WAR_TOPIC" || intent === "GENRE_YEAR" || intent === "COUNTRY_TYPE" || intent === "ANIME_TOPIC" || intent === "FRANCHISE_ORDER" || intent === "COLLECTION") {
     const target = collection ?? { slug: slugifyRu(cleanEntityTitle(queryRow.normalizedQuery) || queryRow.normalizedQuery), title: titleCaseRu(cleanEntityTitle(queryRow.normalizedQuery) || queryRow.query) };
     const landing = await prisma.seoLandingPage.findUnique({ where: { slug: target.slug }, select: { status: true, isIndexable: true, sitemapIncluded: true, type: true } }).catch(() => null);
     return opportunity(landing?.status === "ACTIVE" && landing.isIndexable ? "READY" : "NEEDS_COLLECTION", { ...base, entityTitle: target.title, targetUrl: `/collections/${target.slug}`, problem: landing ? `Страница есть, но статус ${landing.status}.` : "Нужно создать/усилить SEO-подборку под этот запрос." });
