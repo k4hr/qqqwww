@@ -1,28 +1,65 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const CONTENT_PREFIXES = ["/watch", "/season", "/similar", "/like", "/collections", "/person"];
+const PLAYBACK_PREFIXES = ["/watch", "/season"];
+
+function envFlag(name: string, fallback: boolean) {
+  const value = process.env[name]?.trim().toLowerCase();
+  if (!value) return fallback;
+  return ["1", "true", "yes", "on"].includes(value);
+}
+
+function pathStartsWithPrefix(pathname: string, prefixes: string[]) {
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function gone(message: string) {
+  return new NextResponse(message, {
+    status: 410,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "x-robots-tag": "noindex, nofollow, noarchive",
+      "cache-control": "no-store, max-age=0",
+    },
+  });
+}
+
 export function middleware(request: NextRequest) {
   const host = request.headers.get("host") || "";
   const normalizedHost = host.toLowerCase().split(":")[0];
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-  const canonicalRedirectHosts = new Set(["redfilm.online", "www.redfilm.online", "www.redfilm.win"]);
+  const canonicalHost = process.env.NEXT_PUBLIC_SITE_HOST || "redfilm.win";
+  const canonicalRedirectHosts = new Set(["redfilm.online", "www.redfilm.online", `www.${canonicalHost}`]);
+  const pathname = request.nextUrl.pathname;
 
   if (!isLocalhost && canonicalRedirectHosts.has(normalizedHost)) {
-    return NextResponse.redirect(`https://redfilm.win${request.nextUrl.pathname}${request.nextUrl.search}`, 301);
+    return NextResponse.redirect(`https://${canonicalHost}${pathname}${request.nextUrl.search}`, 301);
   }
 
   if (!isLocalhost && forwardedProto === "http") {
-    if (normalizedHost === "redfilm.win") {
-      return NextResponse.redirect(`https://redfilm.win${request.nextUrl.pathname}${request.nextUrl.search}`, 301);
+    if (normalizedHost === canonicalHost) {
+      return NextResponse.redirect(`https://${canonicalHost}${pathname}${request.nextUrl.search}`, 301);
     }
   }
 
-  if (request.nextUrl.pathname.startsWith("/admin") || request.nextUrl.pathname.startsWith("/api/admin")) {
+  const emergencyDeindexMode = envFlag("EMERGENCY_DEINDEX_MODE", false);
+  const publicPlaybackEnabled = envFlag("PUBLIC_PLAYBACK_ENABLED", true);
+
+  if (emergencyDeindexMode && pathStartsWithPrefix(pathname, CONTENT_PREFIXES)) {
+    return gone("REDFILM content pages are temporarily unavailable during migration.");
+  }
+
+  if (!publicPlaybackEnabled && pathStartsWithPrefix(pathname, PLAYBACK_PREFIXES)) {
+    return gone("REDFILM playback pages are disabled.");
+  }
+
+  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
     const username = process.env.ADMIN_USERNAME || "admin";
     const password = process.env.ADMIN_PASSWORD;
 
     if (!password) {
-      return new NextResponse("ADMIN_PASSWORD is not configured in Railway Variables.", { status: 503 });
+      return new NextResponse("ADMIN_PASSWORD is not configured in server environment variables.", { status: 503 });
     }
 
     const header = request.headers.get("authorization");
@@ -43,7 +80,13 @@ export function middleware(request: NextRequest) {
     if (user !== username || pass !== password) return unauthorized();
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  const publicIndexingEnabled = envFlag("PUBLIC_INDEXING_ENABLED", true);
+  if (!publicIndexingEnabled && !pathname.startsWith("/api") && !pathname.startsWith("/admin")) {
+    response.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
+  }
+
+  return response;
 }
 
 function unauthorized() {

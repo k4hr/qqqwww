@@ -1,0 +1,128 @@
+services:
+  - type: web
+    name: redfilm-web
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SITE_NAME
+        value: REDFILM
+      - key: NEXT_PUBLIC_SITE_HOST
+        value: redfilm.win
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://redfilm.win
+      - key: SITE_URL
+        value: https://redfilm.win
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://redfilm.win
+      - key: REDFILM_BASE_URL
+        value: https://redfilm.win
+      - key: PUBLIC_INDEXING_ENABLED
+        value: "false"
+      - key: PUBLIC_PLAYBACK_ENABLED
+        value: "false"
+      - key: EMERGENCY_DEINDEX_MODE
+        value: "true"
+      - key: NEXT_PUBLIC_YANDEX_METRIKA_ID
+        value: "110229115"
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: VIBIX_API_KEY
+        sync: false
+      - key: VIBIX_PUBLISHER_ID
+        value: "678353780"
+      - key: CRON_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_SEO_MODEL
+        value: gpt-4.1-mini
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: TELEGRAM_ADMIN_IDS
+        sync: false
+
+  - type: worker
+    name: redfilm-catalog-worker
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    buildCommand: npm install && npm run build
+    startCommand: npm run render:worker
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: VIBIX_API_KEY
+        sync: false
+      - key: VIBIX_PUBLISHER_ID
+        value: "678353780"
+      - key: VIBIX_CATALOG_WORKER_ENABLED
+        value: "true"
+      - key: VIBIX_CATALOG_WORKER_INTERVAL_MS
+        value: "30000"
+      - key: VIBIX_CATALOG_PAGES_PER_RUN
+        value: "10"
+      - key: VIBIX_CATALOG_IMPORT_BATCH_SIZE
+        value: "50"
+      - key: VIBIX_CATALOG_PAGE_DELAY_MS
+        value: "3500"
+      - key: VIBIX_CATALOG_429_COOLDOWN_MS
+        value: "900000"
+      - key: SIMILARITY_WORKER_ENABLED
+        value: "true"
+      - key: SIMILARITY_RECALCULATE_BATCH_SIZE
+        value: "75"
+      - key: TREND_SYNC_ENABLED
+        value: "true"
+      - key: TREND_SYNC_BATCH_SIZE
+        value: "30"
+      - key: TREND_CHECK_BATCH_SIZE
+        value: "30"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_SEO_MODEL
+        value: gpt-4.1-mini
+
+  - type: cron
+    name: redfilm-daily-catalog-cron
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    schedule: "0 3 * * *"
+    buildCommand: npm install
+    startCommand: npm run render:cron-daily
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: REDFILM_BASE_URL
+        value: https://redfilm.win
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://redfilm.win
+      - key: CRON_SECRET
+        sync: false

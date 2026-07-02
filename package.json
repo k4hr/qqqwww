@@ -29,7 +29,10 @@
     "seo:import-wordstat": "tsx src/scripts/import-wordstat-seo.ts",
     "seo:ai-top": "tsx src/scripts/generate-ai-seo-pages.ts",
     "seo:autopilot": "tsx src/scripts/seo-autopilot.ts",
-    "prebuild:clean-routes": "node scripts/prebuild-clean-routes.mjs"
+    "prebuild:clean-routes": "node scripts/prebuild-clean-routes.mjs",
+    "render:worker": "npm run vibix:catalog-worker",
+    "render:cron-daily": "node scripts/render-trigger-daily-catalog.mjs",
+    "render:db:push": "prisma db push"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
