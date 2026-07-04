@@ -126,12 +126,16 @@ function normalizeVibixDataType(value?: string | null): VibixDataType | null {
 }
 
 export function buildVibixAttrs({ kinopoiskId, imdbId, vibixId, vibixType, embedCode }: Pick<VibixPlayerProps, "kinopoiskId" | "imdbId" | "vibixId" | "vibixType" | "embedCode">): VibixAttributes | null {
-  const embedAttrs = buildEmbedAttrs(embedCode);
-  if (embedAttrs) return embedAttrs;
-
+  // IMPORTANT: prefer the exact Vibix/Rendex content id over old stored kp/imdb embeds.
+  // A lot of migrated rows already have a vibixEmbedCode like data-type="kp"/"imdb".
+  // Those attrs are syntactically valid, but Rendex often answers "content not added".
+  // The official integration is data-type="movie|series" + Vibix content id.
   const storedVibixId = String(vibixId ?? "").trim();
   const storedVibixType = normalizeVibixDataType(vibixType);
   if (storedVibixId && storedVibixType) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": storedVibixType, "data-id": storedVibixId });
+
+  const embedAttrs = buildEmbedAttrs(embedCode);
+  if (embedAttrs) return embedAttrs;
 
   const kpId = String(kinopoiskId ?? "").trim();
   if (kpId) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "kp", "data-id": kpId });
