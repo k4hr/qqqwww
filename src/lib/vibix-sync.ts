@@ -173,10 +173,25 @@ function contentType(value: unknown) {
   return null;
 }
 
+
+function normalizeVibixEmbedType(value: unknown, contentType?: ContentType | null) {
+  const normalized = stringValue(value)?.toLowerCase() ?? "";
+  if (["serial", "series", "tv", "tv_series", "show"].includes(normalized)) return "series";
+  if (["movie", "film"].includes(normalized)) return "movie";
+  if (contentType === ContentType.SERIES) return "series";
+  return "movie";
+}
+
+function buildStoredEmbedCode(input: { embedCode?: string | null; vibixId?: number | null; vibixType?: string | null; type?: ContentType | null }) {
+  const existing = stringValue(input.embedCode);
+  if (existing) return existing;
+  if (input.vibixId === null || input.vibixId === undefined) return null;
+  const dataType = normalizeVibixEmbedType(input.vibixType, input.type);
+  return `data-publisher-id="678353780" data-type="${dataType}" data-id="${input.vibixId}"`;
+}
+
 function normalizeVideoData(video: VibixVideo): { data: NormalizedVideo } | { reason: VibixSkippedReason } {
   const iframeUrl = stringValue(video.iframe_url);
-  const embedCode = stringValue(video.embed_code);
-  if (!iframeUrl && !embedCode) return { reason: "missing_player_source" };
 
   const title = stringValue(video.name_rus) || stringValue(video.name) || stringValue(video.name_eng) || stringValue(video.name_original);
   if (!title) return { reason: "missing_title" };
@@ -189,6 +204,8 @@ function normalizeVideoData(video: VibixVideo): { data: NormalizedVideo } | { re
   const baseType = contentType(video.type);
   if (!baseType) return { reason: "unknown_type" };
   const type = classifyCatalogKindFromVibix(video as unknown as Record<string, unknown>, baseType);
+  const embedCode = buildStoredEmbedCode({ embedCode: stringValue(video.embed_code), vibixId, vibixType: stringValue(video.type), type });
+  if (!iframeUrl && !embedCode) return { reason: "missing_player_source" };
 
   const year = intValue(video.year);
   if (!year || year < 1880 || year > 2200) return { reason: "other" };

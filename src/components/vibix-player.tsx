@@ -7,6 +7,8 @@ type VibixPlayerProps = {
   title?: string | null;
   kinopoiskId?: number | string | null;
   imdbId?: string | null;
+  vibixId?: number | string | null;
+  vibixType?: string | null;
   embedCode?: string | null;
   iframeUrl?: string | null;
   posterUrl?: string | null;
@@ -116,9 +118,20 @@ function buildEmbedAttrs(embedCode?: string | null): VibixAttributes | null {
   }, parsed);
 }
 
-export function buildVibixAttrs({ kinopoiskId, imdbId, embedCode }: Pick<VibixPlayerProps, "kinopoiskId" | "imdbId" | "embedCode">): VibixAttributes | null {
+function normalizeVibixDataType(value?: string | null): VibixDataType | null {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["serial", "series", "tv", "tv_series", "show"].includes(normalized)) return "series";
+  if (["movie", "film", "cartoon", "anime"].includes(normalized)) return "movie";
+  return null;
+}
+
+export function buildVibixAttrs({ kinopoiskId, imdbId, vibixId, vibixType, embedCode }: Pick<VibixPlayerProps, "kinopoiskId" | "imdbId" | "vibixId" | "vibixType" | "embedCode">): VibixAttributes | null {
   const embedAttrs = buildEmbedAttrs(embedCode);
   if (embedAttrs) return embedAttrs;
+
+  const storedVibixId = String(vibixId ?? "").trim();
+  const storedVibixType = normalizeVibixDataType(vibixType);
+  if (storedVibixId && storedVibixType) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": storedVibixType, "data-id": storedVibixId });
 
   const kpId = String(kinopoiskId ?? "").trim();
   if (kpId) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "kp", "data-id": kpId });
@@ -139,8 +152,8 @@ function normalizeIframeUrl(iframeUrl?: string | null) {
   }
 }
 
-export function VibixPlayer({ title, kinopoiskId, imdbId, embedCode, iframeUrl, posterUrl }: VibixPlayerProps) {
-  const attrs = useMemo(() => buildVibixAttrs({ kinopoiskId, imdbId, embedCode }), [kinopoiskId, imdbId, embedCode]);
+export function VibixPlayer({ title, kinopoiskId, imdbId, vibixId, vibixType, embedCode, iframeUrl, posterUrl }: VibixPlayerProps) {
+  const attrs = useMemo(() => buildVibixAttrs({ kinopoiskId, imdbId, vibixId, vibixType, embedCode }), [kinopoiskId, imdbId, vibixId, vibixType, embedCode]);
   const attrsKey = attrs ? `${attrs["data-type"]}-${attrs["data-id"]}` : null;
   const normalizedIframeUrl = useMemo(() => normalizeIframeUrl(iframeUrl), [iframeUrl]);
   const [iframeFailed, setIframeFailed] = useState(false);

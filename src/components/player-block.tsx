@@ -3,7 +3,7 @@ import { VibixPlayer } from "@/components/vibix-player";
 import { AnalyticsEvent } from "@/components/analytics-event";
 
 type Props = {
-  movie: Pick<Movie, "id" | "titleRu" | "year" | "kinopoiskId" | "imdbId" | "vibixIframeUrl" | "vibixEmbedCode" | "posterUrl">;
+  movie: Pick<Movie, "id" | "titleRu" | "year" | "kinopoiskId" | "imdbId" | "vibixId" | "vibixType" | "vibixIframeUrl" | "vibixEmbedCode" | "posterUrl">;
 };
 
 export function PlayerBlock({ movie }: Props) {
@@ -24,6 +24,8 @@ export function PlayerBlock({ movie }: Props) {
           title={movie.titleRu}
           kinopoiskId={movie.kinopoiskId}
           imdbId={movie.imdbId}
+          vibixId={movie.vibixId}
+          vibixType={movie.vibixType}
           embedCode={movie.vibixEmbedCode}
           iframeUrl={movie.vibixIframeUrl}
           posterUrl={movie.posterUrl}
