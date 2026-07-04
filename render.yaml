@@ -90,11 +90,11 @@ services:
       - key: VIBIX_CATALOG_WORKER_INTERVAL_MS
         value: "30000"
       - key: VIBIX_CATALOG_PAGES_PER_RUN
-        value: "10"
+        value: "5"
       - key: VIBIX_CATALOG_IMPORT_BATCH_SIZE
         value: "50"
       - key: VIBIX_CATALOG_PAGE_DELAY_MS
-        value: "3500"
+        value: "7000"
       - key: VIBIX_CATALOG_LINKS_LIMIT
         value: "50"
       - key: VIBIX_AVAILABLE_MAX_PAGES_PER_TYPE
@@ -103,8 +103,14 @@ services:
         value: "35000"
       - key: VIBIX_SUSPICIOUS_FULL_CATALOG_TOTAL
         value: "100000"
-      - key: VIBIX_CATALOG_429_COOLDOWN_MS
-        value: "900000"
+      - key: VIBIX_CATALOG_429_MIN_COOLDOWN_MS
+        value: "300000"
+      - key: VIBIX_CATALOG_429_MAX_COOLDOWN_MS
+        value: "1800000"
+      - key: VIBIX_CATALOG_SOFT_PAGES_PER_RUN
+        value: "5"
+      - key: VIBIX_CATALOG_SOFT_PAGE_DELAY_MS
+        value: "7000"
       - key: SIMILARITY_WORKER_ENABLED
         value: "true"
       - key: SIMILARITY_RECALCULATE_BATCH_SIZE

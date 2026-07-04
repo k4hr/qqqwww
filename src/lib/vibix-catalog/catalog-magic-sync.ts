@@ -22,6 +22,30 @@ function nowPlus(ms: number) {
   return new Date(Date.now() + Math.max(1_000, ms));
 }
 
+function clampMs(value: number | null | undefined, fallback: number, min: number, max: number) {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return Math.max(min, Math.min(max, numeric));
+}
+
+function rateLimitCooldownMs(job: { failed: number }, retryAfterMs?: number | null) {
+  const minMs = envInt("VIBIX_CATALOG_429_MIN_COOLDOWN_MS", 5 * 60_000, 30_000, 60 * 60_000);
+  const maxMs = envInt("VIBIX_CATALOG_429_MAX_COOLDOWN_MS", 30 * 60_000, 60_000, 2 * 60 * 60_000);
+  const fallbackSteps = [5 * 60_000, 10 * 60_000, 20 * 60_000, 30 * 60_000];
+  const fallback = fallbackSteps[Math.min(Math.max(0, job.failed), fallbackSteps.length - 1)] ?? 30 * 60_000;
+
+  // Vibix sometimes returns Retry-After: 3600 for short bursts. Do not lock the whole
+  // REDFILM pipeline for an hour during ordinary /links checks; cap it and continue gently.
+  return clampMs(retryAfterMs, fallback, minMs, maxMs);
+}
+
+function softenedPagesPerRun(current: number) {
+  return Math.min(current, envInt("VIBIX_CATALOG_SOFT_PAGES_PER_RUN", 5, 1, 15));
+}
+
+function softenedPageDelayMs(current: number) {
+  return Math.max(current, envInt("VIBIX_CATALOG_SOFT_PAGE_DELAY_MS", 7000, 1000, 60_000));
+}
+
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -133,9 +157,9 @@ async function createCatalogPipelineJob(options: CreateCatalogPipelineOptions) {
       currentStage: options.currentStage,
       currentType: options.currentStage === "INDEX_LINKS" || options.currentStage === "REFRESH" ? "movie" : "both",
       nextPage: 1,
-      pagesPerRun: envInt("VIBIX_CATALOG_PAGES_PER_RUN", 15, 1, 30),
+      pagesPerRun: envInt("VIBIX_CATALOG_PAGES_PER_RUN", 5, 1, 30),
       importBatchSize: envInt("VIBIX_CATALOG_IMPORT_BATCH_SIZE", 100, 10, 500),
-      pageDelayMs: envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 2500, 250, 30_000),
+      pageDelayMs: envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 7000, 250, 60_000),
       message: options.message,
     },
   });
@@ -203,9 +227,9 @@ export async function startVibixCoverageRepairJob(options: { restart?: boolean }
       currentStage: "VERIFY_COVERAGE",
       currentType: "both",
       nextPage: 1,
-      pagesPerRun: envInt("VIBIX_CATALOG_PAGES_PER_RUN", 15, 1, 30),
+      pagesPerRun: envInt("VIBIX_CATALOG_PAGES_PER_RUN", 5, 1, 30),
       importBatchSize: envInt("VIBIX_CATALOG_IMPORT_BATCH_SIZE", 100, 10, 500),
-      pageDelayMs: envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 2500, 250, 30_000),
+      pageDelayMs: envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 7000, 250, 60_000),
       message: "Задача автопочинки создана. Worker проверит /links индекс, импортирует важные отсутствующие, поправит type/player и пересчитает каталог.",
     },
   });
@@ -355,12 +379,18 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
       const pageMessage = `${sourceType}: /links page ${job.nextPage}–${Math.max(job.nextPage, nextPage - 1)}; найдено ${result.indexed}, новых ${result.missingImportable}, уже есть ${result.present}.`;
 
       if (result.failed > 0) {
-        const delayMs = result.rateLimited ? (result.retryAfterMs ?? envInt("VIBIX_CATALOG_429_COOLDOWN_MS", 10 * 60_000, 60_000, 60 * 60_000)) : envInt("VIBIX_CATALOG_ERROR_COOLDOWN_MS", 3 * 60_000, 30_000, 30 * 60_000);
+        const delayMs = result.rateLimited
+          ? rateLimitCooldownMs(job, result.retryAfterMs)
+          : envInt("VIBIX_CATALOG_ERROR_COOLDOWN_MS", 3 * 60_000, 30_000, 30 * 60_000);
+        const nextPagesPerRun = result.rateLimited ? softenedPagesPerRun(job.pagesPerRun) : job.pagesPerRun;
+        const nextPageDelayMs = result.rateLimited ? softenedPageDelayMs(job.pageDelayMs) : job.pageDelayMs;
         await prisma.vibixCatalogAutoJob.update({
           where: { id: job.id },
           data: {
             nextPage,
             lastPageDone: result.scannedPages > 0 ? nextPage - 1 : job.lastPageDone,
+            pagesPerRun: nextPagesPerRun,
+            pageDelayMs: nextPageDelayMs,
             indexed: { increment: result.indexed },
             present: { increment: result.present },
             missing: { increment: result.missingImportable },
@@ -368,9 +398,10 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
             loops: { increment: 1 },
           },
         });
+        const minutes = Math.ceil(delayMs / 60_000);
         const paused = await pauseJob(
           job.id,
-          `${pageMessage} Vibix ограничил/уронил запрос. Автоматически продолжу с page ${nextPage} после паузы.`,
+          `${pageMessage} Vibix дал 429/ошибку. Снижаю скорость до ${nextPagesPerRun} страниц за проход и задержки ${Math.round(nextPageDelayMs / 1000)} сек. Автоматически продолжу с page ${nextPage} примерно через ${minutes} мин.`,
           delayMs,
           result.errors.join("\n"),
         );
@@ -446,10 +477,11 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
       });
 
       if (isRateLimited) {
+        const delayMs = rateLimitCooldownMs(job);
         const paused = await pauseJob(
           job.id,
-          `Vibix ограничил detail/import. Автоматически продолжу догрузку после паузы.`,
-          envInt("VIBIX_CATALOG_429_COOLDOWN_MS", 10 * 60_000, 60_000, 60 * 60_000),
+          `Vibix ограничил detail/import. Автоматически продолжу догрузку примерно через ${Math.ceil(delayMs / 60_000)} мин.`,
+          delayMs,
           failedText,
         );
         return { ok: false, message: paused.message, job: paused, details: result };
