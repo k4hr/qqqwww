@@ -192,6 +192,7 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
     : [];
   const total = response.meta?.total ?? null;
   const lastPage = response.meta?.lastPage ?? null;
+  const currentReturnTo = buildUrl({ type: sourceType, category: categoryOption.value, year, page, q: query });
 
   return (
     <div className="container admin-shell py-6">
@@ -302,6 +303,7 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
                           <input type="hidden" name="sourceType" value={sourceType} />
                           <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
                           <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
+                          <input type="hidden" name="returnTo" value={currentReturnTo} />
                           <input type="hidden" name="videoJson" value={encodedVideo(video)} />
                           <button className="h-10 rounded-xl bg-[#e50914] px-4 text-xs font-black text-white disabled:bg-neutral-400" disabled={!hasPlayer}>
                             {localWatchAvailable ? "Обновить" : "Обновить Vibix"}
@@ -313,6 +315,7 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
                         <input type="hidden" name="sourceType" value={sourceType} />
                         <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
                         <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
+                        <input type="hidden" name="returnTo" value={currentReturnTo} />
                         <input type="hidden" name="videoJson" value={encodedVideo(video)} />
                         <button className="h-10 rounded-xl bg-[#e50914] px-4 text-xs font-black text-white disabled:bg-neutral-400" disabled={!hasPlayer}>Добавить</button>
                       </form>
@@ -353,6 +356,7 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
                             <input type="hidden" name="sourceType" value={sourceType} />
                             <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
                             <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
+                            <input type="hidden" name="returnTo" value={currentReturnTo} />
                             <input type="hidden" name="videoJson" value={encodedVideo(video)} />
                             <button className="rounded-lg bg-[#333] px-3 py-2 text-xs font-black text-white disabled:bg-neutral-400" disabled={!hasPlayer}>Обновить Vibix</button>
                           </form>
