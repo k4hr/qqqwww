@@ -183,11 +183,10 @@ function normalizeVibixEmbedType(value: unknown, contentType?: ContentType | nul
 }
 
 function buildStoredEmbedCode(input: { embedCode?: string | null; vibixId?: number | null; vibixType?: string | null; type?: ContentType | null }) {
-  const existing = stringValue(input.embedCode);
-  if (existing) return existing;
-  if (input.vibixId === null || input.vibixId === undefined) return null;
-  const dataType = normalizeVibixEmbedType(input.vibixType, input.type);
-  return `data-publisher-id="678353780" data-type="${dataType}" data-id="${input.vibixId}"`;
+  // Do not synthesize a Rendex embed from Vibix API `id`.
+  // For serials API `id` and player `data-id` differ (e.g. id=927016, data-id=1051).
+  // Only store a player embed when Vibix itself returns embed_code.
+  return stringValue(input.embedCode);
 }
 
 function normalizeVideoData(video: VibixVideo): { data: NormalizedVideo } | { reason: VibixSkippedReason } {

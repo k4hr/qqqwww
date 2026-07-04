@@ -14,7 +14,7 @@ type VibixPlayerProps = {
   posterUrl?: string | null;
 };
 
-type VibixDataType = "movie" | "series" | "kp" | "imdb";
+type VibixDataType = "movie" | "series" | "serial" | "kp" | "imdb";
 type VibixAttributes = {
   "data-publisher-id": string;
   "data-type": VibixDataType;
@@ -45,7 +45,7 @@ type VibixSdkWindow = Window & {
 
 const VIBIX_PUBLISHER_ID = "678353780";
 const VIBIX_SDK_URL = "https://graphicslab.io/sdk/v2/rendex-sdk.min.js";
-const VIBIX_DATA_TYPES = new Set<VibixDataType>(["movie", "series", "kp", "imdb"]);
+const VIBIX_DATA_TYPES = new Set<VibixDataType>(["movie", "series", "serial", "kp", "imdb"]);
 
 const REDFILM_PLAYER_DEFAULT_ATTRS = {
   "data-design": "5",
@@ -126,22 +126,24 @@ function normalizeVibixDataType(value?: string | null): VibixDataType | null {
 }
 
 export function buildVibixAttrs({ kinopoiskId, imdbId, vibixId, vibixType, embedCode }: Pick<VibixPlayerProps, "kinopoiskId" | "imdbId" | "vibixId" | "vibixType" | "embedCode">): VibixAttributes | null {
-  // IMPORTANT: prefer the exact Vibix/Rendex content id over old stored kp/imdb embeds.
-  // A lot of migrated rows already have a vibixEmbedCode like data-type="kp"/"imdb".
-  // Those attrs are syntactically valid, but Rendex often answers "content not added".
-  // The official integration is data-type="movie|series" + Vibix content id.
-  const storedVibixId = String(vibixId ?? "").trim();
-  const storedVibixType = normalizeVibixDataType(vibixType);
-  if (storedVibixId && storedVibixType) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": storedVibixType, "data-id": storedVibixId });
-
+  // IMPORTANT: the API field `id` is NOT always the Rendex player id.
+  // Example from Vibix detail: id=927016, but embed_code has data-id="1051".
+  // Therefore the exact API-provided embed_code must win. Do not synthesize
+  // data-type/data-id from Movie.vibixId unless there is no other option.
   const embedAttrs = buildEmbedAttrs(embedCode);
   if (embedAttrs) return embedAttrs;
 
+  // Last-resort fallbacks only. They may work for some titles, but they are not
+  // considered a verified REDFILM player source.
   const kpId = String(kinopoiskId ?? "").trim();
   if (kpId) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "kp", "data-id": kpId });
 
   const normalizedImdbId = imdbId?.trim();
   if (normalizedImdbId) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": "imdb", "data-id": normalizedImdbId });
+
+  const storedVibixId = String(vibixId ?? "").trim();
+  const storedVibixType = normalizeVibixDataType(vibixType);
+  if (storedVibixId && storedVibixType) return withRedfilmPlayerStyle({ "data-publisher-id": VIBIX_PUBLISHER_ID, "data-type": storedVibixType, "data-id": storedVibixId });
 
   return null;
 }

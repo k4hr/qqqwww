@@ -634,16 +634,27 @@ export async function importMissingFromVibixIndex(options: {
       }
 
       let videoToSave = fromPrismaJson<Parameters<typeof saveVibixVideo>[0]>(row.rawJson);
-      let lookup: Awaited<ReturnType<typeof getVibixVideoByKpIdResult>> | null = null;
+      let lookup: Awaited<ReturnType<typeof getVibixVideoByKpIdResult>> | Awaited<ReturnType<typeof getVibixVideoByImdbIdResult>> | null = null;
 
-      // Для массовой догрузки не бьём /kp/{kpId} по каждой записи: /links уже дал
-      // доступную карточку. Detail-запрос используем только если raw /links отсутствует.
-      if (!videoToSave && isRealKpId(row.kpId)) {
+      // /links may contain Vibix API id but not the exact Rendex embed_code.
+      // API id is not always the player data-id, especially for serials.
+      // If raw /links has no iframe_url/embed_code, fetch detail by KP/IMDb and use
+      // the exact embed_code returned by Vibix.
+      if ((!videoToSave || !videoHasPlayer(videoToSave as unknown as Record<string, unknown>)) && isRealKpId(row.kpId)) {
         lookup = await getVibixVideoByKpIdResult(row.kpId);
         if (lookup.video) videoToSave = lookup.video as Parameters<typeof saveVibixVideo>[0];
       }
+      if ((!videoToSave || !videoHasPlayer(videoToSave as unknown as Record<string, unknown>)) && row.imdbId) {
+        const imdbLookup = await getVibixVideoByImdbIdResult(row.imdbId);
+        if (imdbLookup.video) {
+          lookup = imdbLookup;
+          videoToSave = imdbLookup.video as Parameters<typeof saveVibixVideo>[0];
+        } else if (!lookup) {
+          lookup = imdbLookup;
+        }
+      }
       if (videoToSave && !videoHasPlayer(videoToSave as unknown as Record<string, unknown>)) {
-        const message = "Skipped: Vibix row has no iframe_url/embed_code player source.";
+        const message = "Skipped: Vibix detail has no iframe_url/embed_code player source.";
         await prisma.vibixCatalogIndex.update({ where: { id: row.id }, data: { importStatus: "SKIP_NO_PLAYER", detailCheckedAt: new Date(), detailAvailable: false, lastImportError: message } });
         result.skipped += 1;
         continue;
