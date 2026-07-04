@@ -24,6 +24,23 @@ export type CatalogAuditResult = {
 
 const REFERENCE_KINDS: VibixReferenceKind[] = ["categories", "genres", "countries", "tags", "voiceovers"];
 
+const SUSPICIOUS_FULL_CATALOG_TOTAL = envInt("VIBIX_SUSPICIOUS_FULL_CATALOG_TOTAL", 100_000, 10_000, 5_000_000);
+const AVAILABLE_INDEX_HARD_CAP = envInt("VIBIX_AVAILABLE_INDEX_HARD_CAP", 35_000, 5_000, 200_000);
+
+function envInt(name: string, fallback: number, min: number, max: number) {
+  const parsed = Number.parseInt(String(process.env[name] ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function isSuspiciousFullCatalogSnapshot(total?: number | null, lastPage?: number | null) {
+  return Boolean((total ?? 0) >= SUSPICIOUS_FULL_CATALOG_TOTAL || (lastPage ?? 0) >= Math.ceil(SUSPICIOUS_FULL_CATALOG_TOTAL / 50));
+}
+
+function hasAvailableLinkFilter(options: { existKpId?: boolean | null; categoryId?: number | null; filterKind?: string | null; filterId?: number | null; year?: number | null }) {
+  return options.existKpId === true || Boolean(options.categoryId || options.filterId || options.year || process.env.VIBIX_LINKS_AVAILABLE_QUERY?.trim());
+}
+
 function playerWhere(): Prisma.MovieWhereInput {
   return {
     OR: [
@@ -242,6 +259,11 @@ export async function refreshVibixCatalogSnapshots(): Promise<CatalogAuditResult
       continue;
     }
 
+    const total = response.meta?.total ?? response.data.length;
+    const lastPage = response.meta?.lastPage ?? null;
+    const perPage = response.meta?.perPage ?? null;
+    const suspicious = isSuspiciousFullCatalogSnapshot(total, lastPage);
+
     await prisma.vibixCatalogSnapshot.upsert({
       where: { key },
       create: {
@@ -250,9 +272,9 @@ export async function refreshVibixCatalogSnapshots(): Promise<CatalogAuditResult
         sourceType: filter.sourceType,
         filterKind,
         filterId,
-        total: response.meta?.total ?? response.data.length,
-        lastPage: response.meta?.lastPage ?? null,
-        perPage: response.meta?.perPage ?? null,
+        total,
+        lastPage,
+        perPage,
         lastCheckedAt: new Date(),
         lastError: null,
       },
@@ -261,9 +283,9 @@ export async function refreshVibixCatalogSnapshots(): Promise<CatalogAuditResult
         sourceType: filter.sourceType,
         filterKind,
         filterId,
-        total: response.meta?.total ?? response.data.length,
-        lastPage: response.meta?.lastPage ?? null,
-        perPage: response.meta?.perPage ?? null,
+        total,
+        lastPage,
+        perPage,
         lastCheckedAt: new Date(),
         lastError: null,
       },
@@ -358,11 +380,13 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
   year?: number | null;
   startPage?: number;
   pages?: number;
+  limit?: number;
   existKpId?: boolean | null;
   noAds?: boolean | null;
   lgbt?: boolean | null;
   useFields?: boolean;
   pageDelayMs?: number;
+  availableOnly?: boolean;
 }) {
   const sourceType = options.sourceType;
   const categoryId = options.categoryId ?? (options.filterKind === "category" ? options.filterId ?? null : null);
@@ -371,6 +395,7 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
   const category = categoryName(categoryId);
   const startPage = Math.max(1, Math.trunc(options.startPage ?? 1));
   const pages = Math.max(1, Math.min(100, Math.trunc(options.pages ?? 10)));
+  const limit = Math.max(1, Math.min(50, Math.trunc(options.limit ?? 50)));
   const result = {
     sourceType,
     categoryId,
@@ -393,20 +418,30 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
     errors: [] as string[],
   };
 
+  const effectiveExistKpId = options.existKpId ?? true;
+  const availableOnly = options.availableOnly ?? true;
+  const guarded = hasAvailableLinkFilter({
+    existKpId: effectiveExistKpId,
+    categoryId,
+    filterKind,
+    filterId,
+    year: options.year ?? null,
+  });
   const baseParams = {
     type: sourceType,
-    limit: 20,
+    limit,
     year: options.year ?? undefined,
     ...filterParams(filterKind, filterId),
     noAds: boolParam(options.noAds),
     lgbt: boolParam(options.lgbt),
+    availableOnly,
   };
 
   for (let page = startPage; page < startPage + pages; page += 1) {
     let response = await getVibixVideoLinks({
       ...baseParams,
       page,
-      existKpId: options.existKpId ?? undefined,
+      existKpId: effectiveExistKpId,
       fields: options.useFields === true ? VIBIX_LINK_FIELDS : undefined,
     });
 
@@ -418,7 +453,7 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
         const fallback = await getVibixVideoLinks({
           ...baseParams,
           page,
-          existKpId: options.existKpId ?? undefined,
+          existKpId: effectiveExistKpId,
           fields: undefined,
         });
         if (!fallback.requestFailed && !fallback.rateLimited) {
@@ -443,6 +478,17 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
           response = fallback;
           result.existKpFallbacks += 1;
         }
+      }
+    }
+
+    if (!response.requestFailed && !response.rateLimited) {
+      const total = response.meta?.total ?? null;
+      const lastPage = response.meta?.lastPage ?? null;
+      if (!guarded && isSuspiciousFullCatalogSnapshot(total, lastPage)) {
+        result.failed += 1;
+        result.stoppedAtPage = page;
+        result.errors.push(`links page ${page}: suspicious full Vibix catalog total=${total ?? "unknown"}, lastPage=${lastPage ?? "unknown"}. Нужно сканировать только available/in-stock слой, а не общий миллионный каталог.`);
+        break;
       }
     }
 
@@ -539,6 +585,14 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
       else result.missingImportable += 1;
     }
 
+    const indexedTotal = await prisma.vibixCatalogIndex.count({ where: { indexSource: "links" } });
+    if (indexedTotal >= AVAILABLE_INDEX_HARD_CAP) {
+      result.emptyPages += 1;
+      result.stoppedAtPage = page;
+      result.errors.push(`Достигнут безопасный лимит available-index ${AVAILABLE_INDEX_HARD_CAP}; останавливаю /links scan, чтобы не уйти в общий миллионный каталог.`);
+      break;
+    }
+
     if (options.pageDelayMs && options.pageDelayMs > 0 && page < startPage + pages - 1) {
       await sleep(Math.min(30_000, Math.max(250, Math.trunc(options.pageDelayMs))));
     }
@@ -588,6 +642,12 @@ export async function importMissingFromVibixIndex(options: {
         lookup = await getVibixVideoByKpIdResult(row.kpId);
         if (lookup.video) videoToSave = lookup.video as Parameters<typeof saveVibixVideo>[0];
       }
+      if (videoToSave && !videoHasPlayer(videoToSave as unknown as Record<string, unknown>)) {
+        const message = "Skipped: Vibix row has no iframe_url/embed_code player source.";
+        await prisma.vibixCatalogIndex.update({ where: { id: row.id }, data: { importStatus: "SKIP_NO_PLAYER", detailCheckedAt: new Date(), detailAvailable: false, lastImportError: message } });
+        result.skipped += 1;
+        continue;
+      }
       if (videoToSave) videoToSave = { ...videoToSave, category_id: row.categoryId } as Parameters<typeof saveVibixVideo>[0];
 
       if (lookup?.rateLimited || lookup?.requestFailed) {
@@ -632,6 +692,44 @@ export async function importMissingFromVibixIndex(options: {
   }
 
   return result;
+}
+
+
+export async function hideMoviesWithoutVibixPlayer(options: { limit?: number } = {}) {
+  const limit = Math.max(1, Math.min(50_000, Math.trunc(options.limit ?? 10_000)));
+  const rows = await prisma.movie.findMany({
+    where: {
+      AND: [
+        { OR: [{ vibixAvailable: false }, { NOT: playerWhere() }] },
+        { OR: [{ isPublished: true }, { isCatalogAllowed: true }, { isPublicVisible: true }, { vibixAvailable: true }] },
+      ],
+    },
+    select: { id: true },
+    take: limit,
+  });
+
+  if (!rows.length) return { scanned: 0, hidden: 0, message: "Карточек без Vibix-плеера в публичном каталоге не найдено." };
+
+  const ids = rows.map((item) => item.id);
+  const updated = await prisma.movie.updateMany({
+    where: { id: { in: ids } },
+    data: {
+      isPublished: false,
+      isCatalogAllowed: false,
+      isPublicVisible: false,
+      isHomeEligible: false,
+      isHeroEligible: false,
+      isTrendingEligible: false,
+      isPopularEligible: false,
+      isTopEligible: false,
+      isFreshEligible: false,
+      vibixAvailable: false,
+      catalogBlockReason: "NO_VIBIX_PLAYER",
+      catalogCheckedAt: new Date(),
+    },
+  });
+
+  return { scanned: rows.length, hidden: updated.count, message: `Скрыто карточек без Vibix-плеера: ${updated.count}.` };
 }
 
 
@@ -1114,7 +1212,7 @@ export async function getVibixCatalogDashboardData() {
     getMyCatalogStats(),
     prisma.vibixCatalogSnapshot.findMany({ orderBy: [{ sourceType: "asc" }, { key: "asc" }] }),
     prisma.vibixReferenceItem.groupBy({ by: ["kind"], _count: { _all: true } }),
-    prisma.vibixCatalogIndex.findMany({ select: { kpId: true, imdbId: true, vibixId: true, importStatus: true, indexSource: true, importedMovieId: true } }),
+    prisma.vibixCatalogIndex.findMany({ select: { kpId: true, imdbId: true, vibixId: true, sourceType: true, hasPlayableLink: true, importStatus: true, indexSource: true, importedMovieId: true } }),
     prisma.vibixCatalogIndex.findMany({
       where: { importStatus: { in: ["MISSING", "MISSING_IMPORTABLE", "WRONG_LOCAL_MATCH", "HIDDEN_LOCAL", "NEEDS_PLAYER_REPAIR", "NEEDS_TYPE_REPAIR", "DETAIL_MISSING", "FAILED"] } },
       orderBy: [{ updatedAt: "desc" }],
@@ -1136,6 +1234,9 @@ export async function getVibixCatalogDashboardData() {
   let rawOnly = 0;
   let detailMissing = 0;
   let playableIndex = 0;
+  let playableMovie = 0;
+  let playableSerial = 0;
+  let playableWithPlayer = 0;
   let autoRepaired = 0;
   let verifiedOk = 0;
   let lowValueSkipped = 0;
@@ -1154,7 +1255,12 @@ export async function getVibixCatalogDashboardData() {
     if (row.importStatus === "AUTO_REPAIRED") autoRepaired += 1;
     if (row.importStatus === "VERIFIED_OK") verifiedOk += 1;
     if (row.importStatus === "SKIP_LOW_VALUE") lowValueSkipped += 1;
-    if (row.indexSource === "links") playableIndex += 1;
+    if (row.indexSource === "links") {
+      playableIndex += 1;
+      if (row.sourceType === "serial") playableSerial += 1;
+      else playableMovie += 1;
+      if (row.hasPlayableLink) playableWithPlayer += 1;
+    }
     if (!existsNow && missingStatuses.has(row.importStatus) && row.indexSource === "links") missing += 1;
     if (row.importStatus === "FAILED") failed += 1;
     if (row.importStatus === "DETAIL_MISSING") detailMissing += 1;
@@ -1162,12 +1268,29 @@ export async function getVibixCatalogDashboardData() {
   }
 
   const referenceCounts = Object.fromEntries(refs.map((item) => [item.kind, item._count._all]));
+  const snapshotsByKey = new Map(snapshots.map((item) => [item.key, item]));
+  const apiMovieTotal = snapshotsByKey.get("movie_all")?.total ?? null;
+  const apiSerialTotal = snapshotsByKey.get("serial_all")?.total ?? null;
+  const apiMovieLastPage = snapshotsByKey.get("movie_all")?.lastPage ?? null;
+  const apiSerialLastPage = snapshotsByKey.get("serial_all")?.lastPage ?? null;
+  const suspiciousApiTotals = isSuspiciousFullCatalogSnapshot(apiMovieTotal, apiMovieLastPage) || isSuspiciousFullCatalogSnapshot(apiSerialTotal, apiSerialLastPage);
 
   return {
     my,
     snapshots,
     referenceCounts,
-    index: { total: indexRows.length, playable: playableIndex, rawOnly, missing, present, imported, autoRepaired, verifiedOk, lowValueSkipped, failed, detailMissing, missingPreview },
+    index: { total: indexRows.length, playable: playableIndex, playableMovie, playableSerial, playableWithPlayer, rawOnly, missing, present, imported, autoRepaired, verifiedOk, lowValueSkipped, failed, detailMissing, missingPreview },
+    safeVibix: {
+      apiMovieTotal,
+      apiSerialTotal,
+      apiKnownTotal: (apiMovieTotal ?? 0) + (apiSerialTotal ?? 0),
+      suspiciousApiTotals,
+      availableMovie: playableMovie,
+      availableSerial: playableSerial,
+      availableTotal: playableIndex,
+      availableWithPlayer: playableWithPlayer,
+      remainingToImport: missing,
+    },
     suggestedCategoryIds: VIBIX_CATEGORY_IDS,
     suggestedFilters: VIBIX_AUDIT_FILTERS.map((item) => ({
       ...item,

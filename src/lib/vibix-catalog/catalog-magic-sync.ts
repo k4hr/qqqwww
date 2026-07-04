@@ -309,13 +309,45 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
 
     if (job.currentStage === "INDEX_LINKS") {
       const sourceType = job.currentType === "serial" ? "serial" : "movie";
+      const maxAvailablePages = envInt("VIBIX_AVAILABLE_MAX_PAGES_PER_TYPE", 650, 50, 5_000);
+      if (job.nextPage > maxAvailablePages) {
+        if (sourceType === "movie") {
+          const updated = await prisma.vibixCatalogAutoJob.update({
+            where: { id: job.id },
+            data: {
+              currentType: "serial",
+              nextPage: 1,
+              message: `Достигнут безопасный лимит /links страниц для фильмов (${maxAvailablePages}). Перехожу к сериалам, чтобы не сканировать общий миллионный каталог Vibix.`,
+            },
+          });
+          return { ok: true, message: updated.message, job: updated };
+        }
+        const checkOnly = job.mode === "CHECK_VIBIX";
+        const updated = await prisma.vibixCatalogAutoJob.update({
+          where: { id: job.id },
+          data: {
+            status: checkOnly ? "COMPLETED" : "RUNNING",
+            currentStage: checkOnly ? "DONE" : "IMPORT_MISSING",
+            currentType: "both",
+            nextPage: 1,
+            finishedAt: checkOnly ? new Date() : undefined,
+            message: checkOnly
+              ? `Достигнут безопасный лимит /links страниц (${maxAvailablePages}). Проверка завершена без скана общего миллионного каталога.`
+              : `Достигнут безопасный лимит /links страниц (${maxAvailablePages}). Перехожу к импорту найденного available-индекса.`,
+          },
+        });
+        return { ok: true, message: updated.message, job: updated };
+      }
+
       const result = await buildVibixPlayableLinksIndexBatch({
         sourceType,
         startPage: job.nextPage,
         pages: job.pagesPerRun,
         pageDelayMs: job.pageDelayMs,
         useFields: false,
-        existKpId: null,
+        limit: envInt("VIBIX_CATALOG_LINKS_LIMIT", 50, 1, 50),
+        availableOnly: true,
+        existKpId: true,
         noAds: null,
         lgbt: null,
       });

@@ -17,6 +17,7 @@ import {
   diagnoseVibixManualImportAction,
   importFoundVibixCatalogAction,
   importMissingFromVibixAction,
+  hideMoviesWithoutVibixPlayerAction,
   importVibixTitleManuallyAction,
   moveMoviesToAnimeAction,
   queueDirtySimilarityAction,
@@ -140,11 +141,11 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
   const actionResult = parseResult(params.result);
   const [data, magicJob, similaritySnapshot, trendData] = await Promise.all([getVibixCatalogDashboardData(), getLatestVibixCatalogMagicJob(), getSimilarityJobSnapshot(), getTrendDashboardData()]);
   const similarityQ = params.similarityQ?.trim() || "Мстители: Война бесконечности";
-  const snapshotsByKey = new Map(data.snapshots.map((item) => [item.key, item]));
-  const movieTotal = snapshotsByKey.get("movie_all")?.total ?? null;
-  const serialTotal = snapshotsByKey.get("serial_all")?.total ?? null;
+  const movieTotal = data.safeVibix.availableMovie || null;
+  const serialTotal = data.safeVibix.availableSerial || null;
   const redfilmTotal = data.my.total;
-  const vibixKnownTotal = (movieTotal ?? 0) + (serialTotal ?? 0);
+  const vibixKnownTotal = data.safeVibix.availableTotal || null;
+  const apiKnownTotal = data.safeVibix.apiKnownTotal || null;
 
   return (
     <div className="container admin-shell py-6">
@@ -287,18 +288,23 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
 
         <div className="admin-panel p-5">
           <h2 className="text-2xl font-black text-[#222]">КАТАЛОГ VIBIX</h2>
-          <p className="mt-1 text-sm text-neutral-500">Данные из Vibix API через meta.total и справочники.</p>
+          <p className="mt-1 text-sm text-neutral-500">Главные цифры ниже считаются по REDFILM available /links index, а не по общему миллионному meta.total Vibix.</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <Stat label="Vibix movie" value={movieTotal} accent />
-            <Stat label="Vibix serial" value={serialTotal} accent />
-            <Stat label="Vibix всего известно" value={vibixKnownTotal || null} />
-            <Stat label="Разница Vibix − REDFILM" value={vibixKnownTotal ? Math.max(0, vibixKnownTotal - redfilmTotal) : null} bad={Boolean(vibixKnownTotal && vibixKnownTotal > redfilmTotal)} />
+            <Stat label="Vibix movie available" value={movieTotal} accent />
+            <Stat label="Vibix serial available" value={serialTotal} accent />
+            <Stat label="Vibix available всего" value={vibixKnownTotal || null} />
+            <Stat label="Хвост к проверке" value={vibixKnownTotal ? Math.max(0, vibixKnownTotal - redfilmTotal) : null} bad={Boolean(vibixKnownTotal && vibixKnownTotal > redfilmTotal)} />
             <Stat label="categories" value={data.referenceCounts.categories ?? 0} />
             <Stat label="genres" value={data.referenceCounts.genres ?? 0} />
             <Stat label="countries" value={data.referenceCounts.countries ?? 0} />
             <Stat label="tags" value={data.referenceCounts.tags ?? 0} />
             <Stat label="voiceovers" value={data.referenceCounts.voiceovers ?? 0} />
           </div>
+          {data.safeVibix.suspiciousApiTotals ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Общий Vibix API meta.total сейчас показывает {apiKnownTotal?.toLocaleString("ru-RU") ?? "много"} записей. Это полный технический каталог Vibix, не available-каталог REDFILM; worker больше не использует эту цифру для полной загрузки.
+            </div>
+          ) : null}
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <form action={refreshVibixCatalogAuditAction}><button className="h-12 w-full rounded-xl bg-[#e50914] px-4 font-bold text-white">Обновить всё Vibix</button></form>
             <form action={refreshVibixTotalsAction}><button className="h-12 w-full rounded-xl bg-[#333] px-4 font-bold text-white">Обновить totals</button></form>
@@ -312,9 +318,9 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
         <p className="mt-1 text-sm text-neutral-500">/links индекс — реальный доступный каталог для догрузки. /get_kpids — сырой контрольный список kpId, он может содержать ID без доступного detail.</p>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <Stat label="В индексе всего" value={data.index.total} />
-          <Stat label="/links доступных" value={data.index.playable} good />
+          <Stat label="/links available" value={data.index.playable} good />
           <Stat label="Уже есть" value={data.index.present} good />
-          <Stat label="К догрузке из /links" value={data.index.missing} bad />
+          <Stat label="Не дошло до Movie" value={data.index.missing} bad />
           <Stat label="Сырой get_kpids" value={data.index.rawOnly} />
           <Stat label="Detail 404" value={data.index.detailMissing} bad />
           <Stat label="Импортировано индексом" value={data.index.imported} good />
@@ -322,6 +328,16 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
           <Stat label="Проверено exact" value={data.index.verifiedOk} />
           <Stat label="Low-value skip" value={data.index.lowValueSkipped} />
           <Stat label="Ошибок импорта" value={data.index.failed} bad />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <form action={hideMoviesWithoutVibixPlayerAction} className="rounded-2xl border border-red-100 bg-red-50 p-4">
+            <h3 className="text-lg font-black text-[#222]">Почистить карточки без плеера</h3>
+            <p className="mt-1 text-xs text-red-900">Не удаляет из базы, а скрывает с сайта всё, где нет iframe_url/embed_code или vibixAvailable=false.</p>
+            <button className="mt-3 h-12 w-full rounded-xl bg-[#e50914] px-4 font-bold text-white">Скрыть мусор без плеера</button>
+          </form>
+          <div className="rounded-2xl border border-green-100 bg-green-50 p-4 text-sm text-green-900">
+            Покрытие теперь проверяй по связке: <b>/links available</b> → <b>Не дошло до Movie</b> → <b>Импортировано индексом</b>. Если “Не дошло до Movie” больше нуля после импорта — жми “Докачать найденное”.
+          </div>
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -334,14 +350,14 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
               <Select label="Доп. фильтр Vibix" name="filterKind" options={[ ["", "Нет"], ["category", "category[]"], ["genre", "genre[]"], ["tag", "tag[]"], ["country", "country[]"], ["voiceover", "voiceover[]"] ]} />
               <Input label="ID доп. фильтра" name="filterId" defaultValue="" min="1" max="100000" />
               <Input label="Год year[]" name="year" defaultValue="" min="1880" max="2200" />
-              <Select label="exist_kp_id" name="existKpId" options={[ ["", "Не отправлять"], ["true", "true — только с KP ID"], ["false", "false — без фильтра KP"] ]} />
+              <Select label="exist_kp_id" name="existKpId" options={[ ["true", "true — available слой с KP ID"], ["", "Не отправлять"], ["false", "false — без фильтра KP"] ]} />
               <Select label="no_ads" name="noAds" options={[ ["", "Не отправлять"], ["true", "true"], ["false", "false"] ]} />
               <Select label="lgbt" name="lgbt" options={[ ["", "Не отправлять"], ["true", "true"], ["false", "false"] ]} />
               <Input label="Начать со страницы /links" name="startPage" defaultValue="1" min="1" max="100000" />
               <Input label="Страниц за запуск" name="pages" defaultValue="50" min="1" max="100" />
             </div>
             <label className="mt-4 flex items-center gap-2 text-sm font-bold text-[#333]"><input name="useFields" type="checkbox" /> Отправлять fields[]: id, name, kp_id, imdb_id, iframe_url, poster_url, genre, country, tags</label>
-            <p className="mt-2 text-xs text-green-900">Для полного каталога оставь exist_kp_id/no_ads/lgbt в режиме “Не отправлять”. Эти флаги нужны только для точечной диагностики, иначе можно случайно обрезать выдачу.</p>
+            <p className="mt-2 text-xs text-green-900">Для REDFILM full rebuild держи exist_kp_id=true и limit=50. Без этого Vibix отдаёт общий миллионный каталог, который нам не нужен.</p>
             <button className="mt-4 h-12 w-full rounded-xl bg-[#e50914] px-4 font-bold text-white">Построить /links индекс</button>
           </form>
 

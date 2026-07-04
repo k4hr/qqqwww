@@ -103,6 +103,7 @@ type VibixLinksParams = {
   existKpId?: boolean | null;
   noAds?: boolean;
   lgbt?: boolean;
+  availableOnly?: boolean;
 };
 
 export type VibixCatalogType = "movie" | "serial";
@@ -166,12 +167,11 @@ export function sleep(ms: number) {
 }
 
 export function normalizeVibixLimit(value: unknown) {
-  const parsed = Number.parseInt(String(value ?? "20"), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 20;
-  // /publisher/videos/links in this account behaves like a 20-items page API.
-  // Do not normalize full-sync to 50/100, otherwise resume pages no longer match
-  // the already imported ~20-items-per-page progress.
-  return Math.min(20, Math.max(1, parsed));
+  const parsed = Number.parseInt(String(value ?? "50"), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 50;
+  // Vibix UI uses 50 items per page. Keeping /links at 50 prevents
+  // the worker from multiplying page count by 2.5 during REDFILM rebuilds.
+  return Math.min(50, Math.max(1, parsed));
 }
 
 export function normalizeVibixKpIdsLimit(value: unknown) {
@@ -473,6 +473,16 @@ function appendNumericArray(query: URLSearchParams, key: string, values?: number
   }
 }
 
+function appendEnvQueryString(query: URLSearchParams, value: string | undefined) {
+  const raw = value?.trim();
+  if (!raw) return;
+  const normalized = raw.startsWith("?") ? raw.slice(1) : raw;
+  for (const [key, paramValue] of new URLSearchParams(normalized).entries()) {
+    if (key) query.append(key, paramValue);
+  }
+}
+
+
 export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
   const query = new URLSearchParams({
     type: params.type ?? "movie",
@@ -498,6 +508,7 @@ export async function getVibixVideoLinks(params: VibixLinksParams = {}) {
   if (params.existKpId !== undefined && params.existKpId !== null) query.set("exist_kp_id", params.existKpId ? "true" : "false");
   if (params.noAds !== undefined && params.noAds !== null) query.set("no_ads", params.noAds ? "true" : "false");
   if (params.lgbt !== undefined && params.lgbt !== null) query.set("lgbt", params.lgbt ? "true" : "false");
+  if (params.availableOnly) appendEnvQueryString(query, process.env.VIBIX_LINKS_AVAILABLE_QUERY);
   for (const field of params.fields ?? []) query.append("fields[]", field);
 
   const response = await vibixRequest("/links", query);

@@ -5,7 +5,7 @@ services:
     plan: starter
     region: frankfurt
     branch: main
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     autoDeploy: true
@@ -14,6 +14,8 @@ services:
         value: 22
       - key: NODE_ENV
         value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
       - key: NEXT_PUBLIC_SITE_NAME
         value: REDFILM
       - key: NEXT_PUBLIC_SITE_HOST
@@ -27,11 +29,11 @@ services:
       - key: REDFILM_BASE_URL
         value: https://redfilm.win
       - key: PUBLIC_INDEXING_ENABLED
-        value: "false"
-      - key: PUBLIC_PLAYBACK_ENABLED
-        value: "false"
-      - key: EMERGENCY_DEINDEX_MODE
         value: "true"
+      - key: PUBLIC_PLAYBACK_ENABLED
+        value: "true"
+      - key: EMERGENCY_DEINDEX_MODE
+        value: "false"
       - key: NEXT_PUBLIC_YANDEX_METRIKA_ID
         value: "110229115"
       - key: DATABASE_URL
@@ -65,7 +67,7 @@ services:
     plan: starter
     region: frankfurt
     branch: main
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run render:worker
     autoDeploy: true
     envVars:
@@ -73,6 +75,8 @@ services:
         value: 22
       - key: NODE_ENV
         value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
@@ -91,6 +95,14 @@ services:
         value: "50"
       - key: VIBIX_CATALOG_PAGE_DELAY_MS
         value: "3500"
+      - key: VIBIX_CATALOG_LINKS_LIMIT
+        value: "50"
+      - key: VIBIX_AVAILABLE_MAX_PAGES_PER_TYPE
+        value: "650"
+      - key: VIBIX_AVAILABLE_INDEX_HARD_CAP
+        value: "35000"
+      - key: VIBIX_SUSPICIOUS_FULL_CATALOG_TOTAL
+        value: "100000"
       - key: VIBIX_CATALOG_429_COOLDOWN_MS
         value: "900000"
       - key: SIMILARITY_WORKER_ENABLED
@@ -115,7 +127,7 @@ services:
     region: frankfurt
     branch: main
     schedule: "0 3 * * *"
-    buildCommand: npm install
+    buildCommand: npm install --include=dev
     startCommand: npm run render:cron-daily
     envVars:
       - key: NODE_VERSION

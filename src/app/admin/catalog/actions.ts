@@ -15,6 +15,7 @@ import {
   diagnoseVibixManualImport,
   importMissingFromVibixIndex,
   importVibixTitleManually,
+  hideMoviesWithoutVibixPlayer,
   refreshVibixCatalogAudit,
   refreshVibixCatalogSnapshots,
   refreshVibixReferences,
@@ -180,6 +181,13 @@ export async function moveMoviesToAnimeAction() {
 }
 
 
+export async function hideMoviesWithoutVibixPlayerAction() {
+  const result = await hideMoviesWithoutVibixPlayer({ limit: 50_000 });
+  revalidatePath("/admin/catalog");
+  redirectWithResult({ ok: true, message: result.message, details: result });
+}
+
+
 export async function startVibixCatalogMagicAction() {
   const job = await startVibixCatalogMagicJob();
   redirectWithResult({ ok: true, message: `Волшебная загрузка запущена. Статус: ${job.status}, этап: ${job.currentStage}. Worker продолжит сам.`, details: job });
@@ -272,10 +280,11 @@ export async function buildVibixPlayableLinksIndexAction(formData: FormData) {
     year: optionalNumberField(formData, "year"),
     startPage: numberField(formData, "startPage", 1, 1, 100_000),
     pages: numberField(formData, "pages", 10, 1, 100),
-    existKpId: optionalBooleanField(formData, "existKpId"),
+    existKpId: optionalBooleanField(formData, "existKpId") ?? true,
     noAds: optionalBooleanField(formData, "noAds"),
     lgbt: optionalBooleanField(formData, "lgbt"),
     useFields: formData.get("useFields") === "on",
+    availableOnly: true,
   });
   redirectWithResult({ ok: result.failed === 0, message: `Playable /links индекс: страниц ${result.scannedPages}, записей ${result.indexed}, новых к догрузке ${result.missingImportable}, ошибок ${result.failed}.`, details: result });
 }
