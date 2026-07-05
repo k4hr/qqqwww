@@ -392,6 +392,7 @@ model VibixCatalogAutoJob {
   skipped         Int      @default(0)
   failed          Int      @default(0)
   loops           Int      @default(0)
+  noNewPages      Int      @default(0)
   lastPageDone    Int?
   lastError       String?  @db.Text
   message         String?  @db.Text

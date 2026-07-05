@@ -97,6 +97,14 @@ services:
         value: "7000"
       - key: VIBIX_CATALOG_LINKS_LIMIT
         value: "50"
+      - key: VIBIX_DAILY_MAX_PAGES_PER_TYPE
+        value: "25"
+      - key: VIBIX_DAILY_STOP_AFTER_NO_NEW_PAGES
+        value: "5"
+      - key: VIBIX_DAILY_PAGES_PER_RUN
+        value: "5"
+      - key: VIBIX_DAILY_PAGE_DELAY_MS
+        value: "7000"
       - key: VIBIX_AVAILABLE_MAX_PAGES_PER_TYPE
         value: "650"
       - key: VIBIX_AVAILABLE_INDEX_HARD_CAP

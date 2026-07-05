@@ -190,13 +190,22 @@ function toView(settings: VibixAdSettings | null | undefined): VibixAdSettingsVi
   };
 }
 
+let cachedAdSettings: { expiresAt: number; value: VibixAdSettingsView } | null = null;
+
 export async function getVibixAdSettings(): Promise<VibixAdSettingsView> {
+  const now = Date.now();
+  if (cachedAdSettings && cachedAdSettings.expiresAt > now) return cachedAdSettings.value;
+
   try {
     const settings = await prisma.vibixAdSettings.findUnique({ where: { singletonKey: "default" } });
-    return toView(settings);
+    const value = toView(settings);
+    cachedAdSettings = { value, expiresAt: now + 120_000 };
+    return value;
   } catch (error) {
     console.error("[VibixAds] Failed to read ad settings:", error);
-    return toView(null);
+    const fallback = cachedAdSettings?.value ?? toView(null);
+    cachedAdSettings = { value: fallback, expiresAt: now + 30_000 };
+    return fallback;
   }
 }
 

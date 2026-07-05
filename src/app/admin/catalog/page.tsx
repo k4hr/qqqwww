@@ -60,6 +60,14 @@ function date(value?: Date | string | null) {
   return parsed.toLocaleString("ru-RU");
 }
 
+function compactDetails(details: unknown) {
+  const text = JSON.stringify(details, null, 2);
+  if (text.length <= 8_000) return text;
+  return `${text.slice(0, 8_000)}
+
+...обрезано для стабильности админки. Полные детали смотри в логах Render/worker.`;
+}
+
 const playableWhere: Prisma.MovieWhereInput = {
   OR: [
     { AND: [{ vibixIframeUrl: { not: null } }, { vibixIframeUrl: { not: "" } }] },
@@ -164,7 +172,7 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
       {actionResult ? (
         <div className={`mt-5 rounded-xl border px-4 py-3 ${actionResult.ok === false ? "border-red-200 bg-red-50 text-red-800" : "border-green-200 bg-green-50 text-green-800"}`}>
           <div className="font-bold">{actionResult.message ?? "Готово"}</div>
-          {actionResult.details ? <pre className="mt-3 max-h-72 overflow-auto rounded-lg bg-white/70 p-3 text-xs text-[#222]">{JSON.stringify(actionResult.details, null, 2)}</pre> : null}
+          {actionResult.details ? <pre className="mt-3 max-h-72 overflow-auto rounded-lg bg-white/70 p-3 text-xs text-[#222]">{compactDetails(actionResult.details)}</pre> : null}
         </div>
       ) : null}
 
@@ -173,14 +181,14 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 className="text-2xl font-black text-[#222]">Ежедневный порядок</h2>
-            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Нажимай сверху вниз вручную или запускай весь сценарий одной кнопкой. Автоматически этот же pipeline стартует через cron в 06:00 МСК.</p>
+            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Нажимай сверху вниз вручную или запускай весь сценарий одной кнопкой. После первичной полной загрузки ежедневный сценарий проверяет только свежие первые страницы Vibix и сам останавливается после нескольких страниц без новых тайтлов.</p>
           </div>
           <form action={startDailyCatalogPipelineAction}>
             <button className="h-14 rounded-2xl bg-[#e50914] px-6 text-lg font-black text-white shadow-lg shadow-red-200">Запустить весь pipeline</button>
           </form>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <DailyStep step="1" title="Проверить новые Vibix" description="Обновить справочники, totals и /links индекс, показать сколько новых тайтлов к догрузке." action={checkNewVibixCatalogAction} />
+          <DailyStep step="1" title="Быстрая проверка Vibix" description="Проверить свежие первые страницы фильмов/сериалов, не проходя весь каталог. Стоп после страниц без новых." action={checkNewVibixCatalogAction} />
           <DailyStep step="2" title="Докачать найденное" description="Импортировать missing, обновить существующие карточки без плеера, починить watch/public." action={importFoundVibixCatalogAction} />
           <DailyStep step="3" title="Найти похожие" description="Поставить в очередь похожие для новых/dirty фильмов после импорта." action={queueDirtySimilarityAction} />
           <DailyStep step="4" title="Найти тренды" description="Запустить Vibix-first Trend Sync и проверить кандидатов в Vibix." action={runTrendSyncCatalogAction} />
@@ -192,10 +200,10 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 className="text-2xl font-black text-[#222]">Фоновая задача Vibix / Daily pipeline</h2>
-            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Здесь видно состояние активной фоновой задачи. Её запускают кнопки ежедневного порядка, ручная полная загрузка или cron. Worker продолжает стадии батчами и переживает 429.</p>
+            <p className="mt-2 max-w-4xl text-sm text-neutral-600">Здесь видно состояние активной фоновой задачи. Daily-режим проверяет свежие страницы сверху; полная загрузка нужна только аварийно/после большой пересборки.</p>
           </div>
           <form action={startVibixCatalogMagicAction}>
-            <button className="h-14 rounded-2xl bg-[#e50914] px-6 text-lg font-black text-white shadow-lg shadow-red-200">Полная загрузка Vibix</button>
+            <button className="h-14 rounded-2xl bg-[#e50914] px-6 text-lg font-black text-white shadow-lg shadow-red-200">⚠ Полная загрузка Vibix</button>
           </form>
         </div>
 
@@ -206,6 +214,7 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
           <Stat label="Проиндексировано" value={magicJob?.indexed ?? null} />
           <Stat label="К догрузке найдено" value={magicJob?.missing ?? null} bad />
           <Stat label="Импортировано" value={(magicJob?.imported ?? 0) + (magicJob?.updated ?? 0) || null} good />
+          <Stat label="Страниц без новых" value={magicJob?.noNewPages ?? null} />
         </div>
 
         {magicJob ? (
@@ -228,7 +237,7 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
         </div>
 
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Чтобы оно реально работало без кликов, в Railway нужен отдельный service/worker со Start Command: <b>npm run vibix:catalog-worker</b>. Без worker кнопка только создаст задачу, а “Продолжить сейчас” снимет паузу и сделает один шаг вручную.
+          Чтобы оно реально работало без кликов, в Render нужен отдельный background worker со Start Command: <b>npm run vibix:catalog-worker</b>. Без worker кнопка только создаст задачу, а “Продолжить сейчас” снимет паузу и сделает один шаг вручную.
         </div>
       </section>
 

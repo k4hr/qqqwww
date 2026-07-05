@@ -409,6 +409,8 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
     missingImportable: 0,
     skippedNoIdentifier: 0,
     emptyPages: 0,
+    noNewPages: 0,
+    trailingNoNewPages: 0,
     fieldFallbacks: 0,
     existKpFallbacks: 0,
     rateLimited: false,
@@ -514,6 +516,7 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
       return [{ raw, identityKey: key.key, realKpId: key.realKpId, imdbId: videoImdbId(raw), vibixId: intValue(raw.id) }];
     });
     result.skippedNoIdentifier += response.data.length - normalizedRows.length;
+    let pageMissingImportable = 0;
 
     const realKpIds = normalizedRows.map((item) => item.realKpId).filter((value): value is string => Boolean(value));
     const imdbIds = normalizedRows.map((item) => item.imdbId).filter((value): value is string => Boolean(value));
@@ -582,7 +585,17 @@ export async function buildVibixPlayableLinksIndexBatch(options: {
       });
       result.indexed += 1;
       if (existingMovieId) result.present += 1;
-      else result.missingImportable += 1;
+      else {
+        result.missingImportable += 1;
+        pageMissingImportable += 1;
+      }
+    }
+
+    if (pageMissingImportable === 0) {
+      result.noNewPages += 1;
+      result.trailingNoNewPages += 1;
+    } else {
+      result.trailingNoNewPages = 0;
     }
 
     const indexedTotal = await prisma.vibixCatalogIndex.count({ where: { indexSource: "links" } });

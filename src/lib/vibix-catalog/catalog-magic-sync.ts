@@ -50,6 +50,29 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isFreshVibixMode(mode: string) {
+  return mode === "DAILY_PIPELINE" || mode === "CHECK_VIBIX";
+}
+
+function modePagesPerRun(mode: string) {
+  if (isFreshVibixMode(mode)) return envInt("VIBIX_DAILY_PAGES_PER_RUN", 5, 1, 20);
+  return envInt("VIBIX_CATALOG_PAGES_PER_RUN", 5, 1, 30);
+}
+
+function modePageDelayMs(mode: string) {
+  if (isFreshVibixMode(mode)) return envInt("VIBIX_DAILY_PAGE_DELAY_MS", 7000, 1000, 60_000);
+  return envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 7000, 250, 60_000);
+}
+
+function modeMaxPagesPerType(mode: string) {
+  if (isFreshVibixMode(mode)) return envInt("VIBIX_DAILY_MAX_PAGES_PER_TYPE", 25, 1, 250);
+  return envInt("VIBIX_AVAILABLE_MAX_PAGES_PER_TYPE", 650, 50, 5_000);
+}
+
+function dailyStopAfterNoNewPages() {
+  return envInt("VIBIX_DAILY_STOP_AFTER_NO_NEW_PAGES", 5, 1, 50);
+}
+
 function statusLabel(status: string) {
   if (status === "QUEUED") return "в очереди";
   if (status === "RUNNING") return "работает";
@@ -143,6 +166,9 @@ async function createCatalogPipelineJob(options: CreateCatalogPipelineOptions) {
         currentStage: options.currentStage,
         currentType: options.currentStage === "INDEX_LINKS" ? "movie" : "both",
         nextPage: 1,
+        noNewPages: 0,
+        pagesPerRun: modePagesPerRun(options.mode),
+        pageDelayMs: modePageDelayMs(options.mode),
         rateLimitUntil: null,
         message: options.message,
         lastError: null,
@@ -157,9 +183,9 @@ async function createCatalogPipelineJob(options: CreateCatalogPipelineOptions) {
       currentStage: options.currentStage,
       currentType: options.currentStage === "INDEX_LINKS" || options.currentStage === "REFRESH" ? "movie" : "both",
       nextPage: 1,
-      pagesPerRun: envInt("VIBIX_CATALOG_PAGES_PER_RUN", 5, 1, 30),
+      pagesPerRun: modePagesPerRun(options.mode),
       importBatchSize: envInt("VIBIX_CATALOG_IMPORT_BATCH_SIZE", 100, 10, 500),
-      pageDelayMs: envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 7000, 250, 60_000),
+      pageDelayMs: modePageDelayMs(options.mode),
       message: options.message,
     },
   });
@@ -188,7 +214,7 @@ export async function startDailyCatalogPipelineJob(options: { restart?: boolean 
     mode: "DAILY_PIPELINE",
     currentStage: "REFRESH",
     restart: options.restart,
-    message: "Ежедневный pipeline создан: Vibix → импорт → repair → похожие → тренды → витрина.",
+    message: `Ежедневный pipeline создан: проверю только свежие страницы Vibix сверху, остановлюсь после ${dailyStopAfterNoNewPages()} страниц без новых и затем импортирую найденный хвост.`,
   });
 }
 
@@ -213,6 +239,7 @@ export async function startVibixCoverageRepairJob(options: { restart?: boolean }
         currentStage: "VERIFY_COVERAGE",
         currentType: "both",
         nextPage: 1,
+        noNewPages: 0,
         rateLimitUntil: null,
         message: "Переключаю активную задачу на автопроверку важных тайтлов Vibix: ложные совпадения, скрытые, wrong type/player.",
         lastError: null,
@@ -227,9 +254,9 @@ export async function startVibixCoverageRepairJob(options: { restart?: boolean }
       currentStage: "VERIFY_COVERAGE",
       currentType: "both",
       nextPage: 1,
-      pagesPerRun: envInt("VIBIX_CATALOG_PAGES_PER_RUN", 5, 1, 30),
+      pagesPerRun: modePagesPerRun("FULL_CATALOG"),
       importBatchSize: envInt("VIBIX_CATALOG_IMPORT_BATCH_SIZE", 100, 10, 500),
-      pageDelayMs: envInt("VIBIX_CATALOG_PAGE_DELAY_MS", 7000, 250, 60_000),
+      pageDelayMs: modePageDelayMs("FULL_CATALOG"),
       message: "Задача автопочинки создана. Worker проверит /links индекс, импортирует важные отсутствующие, поправит type/player и пересчитает каталог.",
     },
   });
@@ -323,8 +350,11 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
           currentStage: "INDEX_LINKS",
           currentType: "movie",
           nextPage: 1,
+          noNewPages: 0,
           loops: { increment: 1 },
-          message: `Vibix справочники/totals обновлены. Перехожу к индексу фильмов. ${result.message}`,
+          message: isFreshVibixMode(job.mode)
+            ? `Vibix обновлён. Перехожу к быстрой проверке свежих фильмов: первые ${modeMaxPagesPerType(job.mode)} страниц, стоп после ${dailyStopAfterNoNewPages()} страниц без новых. ${result.message}`
+            : `Vibix справочники/totals обновлены. Перехожу к индексу фильмов. ${result.message}`,
           lastError: result.ok ? null : JSON.stringify(result.details ?? result).slice(0, 2_000),
         },
       });
@@ -333,7 +363,8 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
 
     if (job.currentStage === "INDEX_LINKS") {
       const sourceType = job.currentType === "serial" ? "serial" : "movie";
-      const maxAvailablePages = envInt("VIBIX_AVAILABLE_MAX_PAGES_PER_TYPE", 650, 50, 5_000);
+      const freshMode = isFreshVibixMode(job.mode);
+      const maxAvailablePages = modeMaxPagesPerType(job.mode);
       if (job.nextPage > maxAvailablePages) {
         if (sourceType === "movie") {
           const updated = await prisma.vibixCatalogAutoJob.update({
@@ -341,7 +372,10 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
             data: {
               currentType: "serial",
               nextPage: 1,
-              message: `Достигнут безопасный лимит /links страниц для фильмов (${maxAvailablePages}). Перехожу к сериалам, чтобы не сканировать общий миллионный каталог Vibix.`,
+              noNewPages: 0,
+              message: freshMode
+                ? `Достигнут дневной лимит свежих страниц фильмов (${maxAvailablePages}). Перехожу к свежим сериалам.`
+                : `Достигнут безопасный лимит /links страниц для фильмов (${maxAvailablePages}). Перехожу к сериалам, чтобы не сканировать общий миллионный каталог Vibix.`,
             },
           });
           return { ok: true, message: updated.message, job: updated };
@@ -354,10 +388,15 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
             currentStage: checkOnly ? "DONE" : "IMPORT_MISSING",
             currentType: "both",
             nextPage: 1,
+            noNewPages: 0,
             finishedAt: checkOnly ? new Date() : undefined,
             message: checkOnly
-              ? `Достигнут безопасный лимит /links страниц (${maxAvailablePages}). Проверка завершена без скана общего миллионного каталога.`
-              : `Достигнут безопасный лимит /links страниц (${maxAvailablePages}). Перехожу к импорту найденного available-индекса.`,
+              ? (freshMode
+                ? `Достигнут дневной лимит свежих страниц (${maxAvailablePages}). Быстрая проверка завершена. К догрузке найдено: ${job.missing}.`
+                : `Достигнут безопасный лимит /links страниц (${maxAvailablePages}). Проверка завершена без скана общего миллионного каталога.`)
+              : (freshMode
+                ? `Достигнут дневной лимит свежих страниц (${maxAvailablePages}). Перехожу к импорту найденного хвоста.`
+                : `Достигнут безопасный лимит /links страниц (${maxAvailablePages}). Перехожу к импорту найденного available-индекса.`),
           },
         });
         return { ok: true, message: updated.message, job: updated };
@@ -377,6 +416,10 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
       });
       const nextPage = job.nextPage + result.scannedPages;
       const pageMessage = `${sourceType}: /links page ${job.nextPage}–${Math.max(job.nextPage, nextPage - 1)}; найдено ${result.indexed}, новых ${result.missingImportable}, уже есть ${result.present}.`;
+      const nextNoNewPages = freshMode
+        ? (result.missingImportable > 0 ? result.trailingNoNewPages : job.noNewPages + result.scannedPages)
+        : 0;
+      const shouldStopFreshType = freshMode && result.scannedPages > 0 && nextNoNewPages >= dailyStopAfterNoNewPages();
 
       if (result.failed > 0) {
         const delayMs = result.rateLimited
@@ -389,6 +432,7 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
           data: {
             nextPage,
             lastPageDone: result.scannedPages > 0 ? nextPage - 1 : job.lastPageDone,
+            noNewPages: nextNoNewPages,
             pagesPerRun: nextPagesPerRun,
             pageDelayMs: nextPageDelayMs,
             indexed: { increment: result.indexed },
@@ -408,6 +452,47 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
         return { ok: false, message: paused.message, job: paused, details: result };
       }
 
+
+      if (shouldStopFreshType) {
+        if (sourceType === "movie") {
+          const updated = await prisma.vibixCatalogAutoJob.update({
+            where: { id: job.id },
+            data: {
+              currentType: "serial",
+              nextPage: 1,
+              noNewPages: 0,
+              indexed: { increment: result.indexed },
+              present: { increment: result.present },
+              missing: { increment: result.missingImportable },
+              loops: { increment: 1 },
+              message: `${pageMessage} Уже ${nextNoNewPages} свежих страниц подряд без новых фильмов. Перехожу к сериалам, полный каталог не трогаю.`,
+            },
+          });
+          return { ok: true, message: updated.message, job: updated, details: result };
+        }
+
+        const checkOnly = job.mode === "CHECK_VIBIX";
+        const updated = await prisma.vibixCatalogAutoJob.update({
+          where: { id: job.id },
+          data: {
+            status: checkOnly ? "COMPLETED" : "RUNNING",
+            currentStage: checkOnly ? "DONE" : "IMPORT_MISSING",
+            currentType: "both",
+            nextPage: 1,
+            noNewPages: 0,
+            indexed: { increment: result.indexed },
+            present: { increment: result.present },
+            missing: { increment: result.missingImportable },
+            loops: { increment: 1 },
+            finishedAt: checkOnly ? new Date() : undefined,
+            message: checkOnly
+              ? `${pageMessage} Уже ${nextNoNewPages} свежих страниц подряд без новых сериалов. Быстрая проверка завершена.`
+              : `${pageMessage} Уже ${nextNoNewPages} свежих страниц подряд без новых сериалов. Перехожу к догрузке найденного хвоста.`,
+          },
+        });
+        return { ok: true, message: updated.message, job: updated, details: result };
+      }
+
       if (result.emptyPages > 0) {
         if (sourceType === "movie") {
           const updated = await prisma.vibixCatalogAutoJob.update({
@@ -415,6 +500,7 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
             data: {
               currentType: "serial",
               nextPage: 1,
+              noNewPages: 0,
               indexed: { increment: result.indexed },
               present: { increment: result.present },
               missing: { increment: result.missingImportable },
@@ -433,6 +519,7 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
             currentStage: checkOnly ? "DONE" : "IMPORT_MISSING",
             currentType: "both",
             nextPage: 1,
+            noNewPages: 0,
             indexed: { increment: result.indexed },
             present: { increment: result.present },
             missing: { increment: result.missingImportable },
@@ -450,12 +537,15 @@ export async function runVibixCatalogMagicJobIteration(options: { force?: boolea
         where: { id: job.id },
         data: {
           nextPage,
+          noNewPages: nextNoNewPages,
           lastPageDone: nextPage - 1,
           indexed: { increment: result.indexed },
           present: { increment: result.present },
           missing: { increment: result.missingImportable },
           loops: { increment: 1 },
-          message: `${pageMessage} Продолжаю автоматически с page ${nextPage}.`,
+          message: freshMode
+            ? `${pageMessage} Свежих страниц подряд без новых: ${nextNoNewPages}/${dailyStopAfterNoNewPages()}. Продолжаю с page ${nextPage}, полный каталог не трогаю.`
+            : `${pageMessage} Продолжаю автоматически с page ${nextPage}.`,
         },
       });
       return { ok: true, message: updated.message, job: updated, details: result };
