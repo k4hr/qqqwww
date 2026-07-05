@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getVibixVideoLinks, searchVibixVideosResult, type VibixCatalogType, type VibixVideo } from "@/lib/vibix";
 import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
-import { importVibixBrowserItemAction, moveVibixBrowserPageMoviesToAnimeAction } from "./actions";
+import { importVibixBrowserBulkAction, importVibixBrowserItemAction, moveVibixBrowserPageMoviesToAnimeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -193,6 +193,8 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
   const total = response.meta?.total ?? null;
   const lastPage = response.meta?.lastPage ?? null;
   const currentReturnTo = buildUrl({ type: sourceType, category: categoryOption.value, year, page, q: query });
+  const pageImportableVideos = response.data.filter((video) => Boolean(stringValue(video.iframe_url) || stringValue(video.embed_code)));
+  const pageImportableCount = pageImportableVideos.length;
 
   return (
     <div className="container admin-shell py-6">
@@ -249,6 +251,7 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
 
       {pageAnimeCandidateIds.length ? (
         <form action={moveVibixBrowserPageMoviesToAnimeAction} className="mt-4 rounded-2xl border border-[#e50914]/25 bg-[#fff5f5] p-4 text-sm text-[#222]">
+          <input type="hidden" name="returnTo" value={currentReturnTo} />
           <input type="hidden" name="movieIds" value={JSON.stringify(pageAnimeCandidateIds)} />
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -267,120 +270,148 @@ export default async function AdminVibixBrowserPage({ searchParams }: Props) {
         <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">Ошибка Vibix API: {response.error ? `HTTP ${response.error.status} ${response.error.statusText}` : "request failed"}</div>
       ) : null}
 
-      <section className="admin-panel mt-5 overflow-x-auto p-0">
-        <table className="w-full min-w-[1280px] text-left text-sm text-[#222]">
-          <thead className="border-b border-[#ddd] bg-[#f8f8f8] text-xs uppercase text-neutral-500">
-            <tr>
-              <th className="p-3">Добавить</th>
-              <th className="p-3">Vibix</th>
-              <th className="p-3">Название</th>
-              <th className="p-3">Тип</th>
-              <th className="p-3">Год</th>
-              <th className="p-3">Жанры</th>
-              <th className="p-3">Рейтинг</th>
-              <th className="p-3">KP / IMDb</th>
-              <th className="p-3">Добавлено в Vibix</th>
-              <th className="p-3">Статус REDFILM</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#eee]">
-            {response.data.map((video, index) => {
-              const local = matchLocal(video, localMaps);
-              const title = titleOf(video);
-              const kpId = stringValue(video.kp_id) || stringValue(video.kinopoisk_id);
-              const imdbId = stringValue(video.imdb_id);
-              const hasPlayer = Boolean(stringValue(video.iframe_url) || stringValue(video.embed_code));
-              const localWatchAvailable = local ? local.isPublished && local.vibixAvailable && Boolean(stringValue(local.vibixIframeUrl) || stringValue(local.vibixEmbedCode)) : false;
-              return (
-                <tr key={`${video.id ?? "noid"}-${kpId ?? "nokp"}-${index}`} className="align-top hover:bg-[#fff8f8]">
-                  <td className="p-3">
-                    {local ? (
-                      <div className="flex flex-col gap-2">
+      <form action={importVibixBrowserBulkAction} className="mt-5">
+        <input type="hidden" name="sourceType" value={sourceType} />
+        <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
+        <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
+        <input type="hidden" name="returnTo" value={currentReturnTo} />
+        {pageImportableVideos.map((video, index) => (
+          <input key={`all-${video.id ?? "noid"}-${index}`} type="hidden" name="allVideoJsons" value={encodedVideo(video)} />
+        ))}
+
+        <div className="admin-panel mb-4 flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="font-black text-[#222]">Массовая загрузка текущей страницы</div>
+            <div className="mt-1 text-sm text-neutral-600">
+              Отметь нужные строки галочками и нажми “Загрузить выбранные”, либо загрузи сразу всю текущую страницу. Доступно к загрузке: <b>{pageImportableCount}</b> из <b>{response.data.length}</b>.
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="submit" name="bulkMode" value="selected" className="h-11 rounded-xl bg-[#e50914] px-5 font-black text-white disabled:bg-neutral-400" disabled={!pageImportableCount}>
+              Загрузить выбранные
+            </button>
+            <button type="submit" name="bulkMode" value="page" className="h-11 rounded-xl bg-[#333] px-5 font-black text-white disabled:bg-neutral-400" disabled={!pageImportableCount}>
+              Загрузить всю страницу
+            </button>
+          </div>
+        </div>
+
+        <section className="admin-panel overflow-x-auto p-0">
+          <table className="w-full min-w-[1280px] text-left text-sm text-[#222]">
+            <thead className="border-b border-[#ddd] bg-[#f8f8f8] text-xs uppercase text-neutral-500">
+              <tr>
+                <th className="p-3">Выбор / действие</th>
+                <th className="p-3">Vibix</th>
+                <th className="p-3">Название</th>
+                <th className="p-3">Тип</th>
+                <th className="p-3">Год</th>
+                <th className="p-3">Жанры</th>
+                <th className="p-3">Рейтинг</th>
+                <th className="p-3">KP / IMDb</th>
+                <th className="p-3">Добавлено в Vibix</th>
+                <th className="p-3">Статус REDFILM</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#eee]">
+              {response.data.map((video, index) => {
+                const local = matchLocal(video, localMaps);
+                const title = titleOf(video);
+                const kpId = stringValue(video.kp_id) || stringValue(video.kinopoisk_id);
+                const imdbId = stringValue(video.imdb_id);
+                const hasPlayer = Boolean(stringValue(video.iframe_url) || stringValue(video.embed_code));
+                const localWatchAvailable = local ? local.isPublished && local.vibixAvailable && Boolean(stringValue(local.vibixIframeUrl) || stringValue(local.vibixEmbedCode)) : false;
+                const videoJson = encodedVideo(video);
+                return (
+                  <tr key={`${video.id ?? "noid"}-${kpId ?? "nokp"}-${index}`} className="align-top hover:bg-[#fff8f8]">
+                    <td className="p-3">
+                      <div className="flex min-w-[150px] flex-col gap-2">
+                        <label className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black ${hasPlayer ? "border-[#e50914]/30 bg-white text-[#222]" : "border-neutral-200 bg-neutral-100 text-neutral-400"}`}>
+                          <input className="h-4 w-4 accent-[#e50914]" type="checkbox" name="selectedVideoJsons" value={videoJson} disabled={!hasPlayer} />
+                          Выбрать
+                        </label>
                         {localWatchAvailable ? (
-                          <Link href={`/watch/${local.slug}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-[#333] px-4 text-xs font-black text-white">Открыть</Link>
+                          <Link href={`/watch/${local?.slug}`} className="inline-flex h-10 items-center justify-center rounded-xl bg-[#333] px-4 text-xs font-black text-white">Открыть</Link>
                         ) : null}
-                        <form action={importVibixBrowserItemAction}>
-                          <input type="hidden" name="sourceType" value={sourceType} />
-                          <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
-                          <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
-                          <input type="hidden" name="returnTo" value={currentReturnTo} />
-                          <input type="hidden" name="videoJson" value={encodedVideo(video)} />
-                          <button className="h-10 rounded-xl bg-[#e50914] px-4 text-xs font-black text-white disabled:bg-neutral-400" disabled={!hasPlayer}>
-                            {localWatchAvailable ? "Обновить" : "Обновить Vibix"}
-                          </button>
-                        </form>
+                        <button
+                          type="submit"
+                          formAction={importVibixBrowserItemAction}
+                          name="videoJson"
+                          value={videoJson}
+                          className="h-10 rounded-xl bg-[#e50914] px-4 text-xs font-black text-white disabled:bg-neutral-400"
+                          disabled={!hasPlayer}
+                        >
+                          {local ? (localWatchAvailable ? "Обновить" : "Обновить Vibix") : "Добавить"}
+                        </button>
                       </div>
-                    ) : (
-                      <form action={importVibixBrowserItemAction}>
-                        <input type="hidden" name="sourceType" value={sourceType} />
-                        <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
-                        <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
-                        <input type="hidden" name="returnTo" value={currentReturnTo} />
-                        <input type="hidden" name="videoJson" value={encodedVideo(video)} />
-                        <button className="h-10 rounded-xl bg-[#e50914] px-4 text-xs font-black text-white disabled:bg-neutral-400" disabled={!hasPlayer}>Добавить</button>
-                      </form>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    <div className="font-black text-[#e50914]">{video.id ?? "—"}</div>
-                    <div className="mt-1 text-xs text-neutral-500">{hasPlayer ? "player ok" : "нет player"}</div>
-                  </td>
-                  <td className="max-w-[280px] p-3">
-                    <div className="font-bold">{title}</div>
-                    {stringValue(video.name_original) || stringValue(video.name_eng) ? <div className="mt-1 text-xs text-neutral-500">{stringValue(video.name_original) || stringValue(video.name_eng)}</div> : null}
-                    {stringValue(video.quality) ? <span className="mt-2 inline-flex rounded-lg bg-[#e50914] px-2 py-1 text-xs font-bold text-white">{video.quality}</span> : null}
-                  </td>
-                  <td className="p-3">{kindOf(video, categoryOption.categoryId)}</td>
-                  <td className="p-3">{video.year ?? "—"}</td>
-                  <td className="max-w-[260px] p-3 text-xs">{compactList(video.genre)}</td>
-                  <td className="p-3 text-xs">
-                    <div>КП: <b>{video.kp_rating ?? "—"}</b></div>
-                    <div>IMDb: <b>{video.imdb_rating ?? "—"}</b></div>
-                  </td>
-                  <td className="p-3 text-xs">
-                    <div>KP: <b>{kpId ?? "—"}</b></div>
-                    <div>IMDb: <b>{imdbId ?? "—"}</b></div>
-                  </td>
-                  <td className="p-3 text-xs">
-                    <div><b>uploaded:</b> {date(video.uploaded_at)}</div>
-                    <div className="mt-1 text-neutral-500"><b>updated:</b> {date(video.updated_at)}</div>
-                  </td>
-                  <td className="p-3 text-xs">
-                    {local ? (
-                      <div>
-                        <div className="font-black text-green-700">Уже есть</div>
-                        <Link href={`/watch/${local.slug}`} className="mt-1 block max-w-[220px] truncate text-[#e50914] hover:underline">{local.titleRu} ({local.year})</Link>
-                        <div className="mt-1 text-neutral-500">type: {local.type}, watch: {localWatchAvailable ? "yes" : "no"}, public: {local.isPublicVisible ? "yes" : "no"}, vibix: {local.vibixAvailable ? "yes" : "no"}</div>
-                        {!localWatchAvailable || !local.vibixAvailable || !local.isPublicVisible ? (
-                          <form action={importVibixBrowserItemAction} className="mt-2">
-                            <input type="hidden" name="sourceType" value={sourceType} />
-                            <input type="hidden" name="sourceCategoryId" value={categoryOption.categoryId ?? ""} />
-                            <input type="hidden" name="sourceCategoryLabel" value={categoryOption.label} />
-                            <input type="hidden" name="returnTo" value={currentReturnTo} />
-                            <input type="hidden" name="videoJson" value={encodedVideo(video)} />
-                            <button className="rounded-lg bg-[#333] px-3 py-2 text-xs font-black text-white disabled:bg-neutral-400" disabled={!hasPlayer}>Обновить Vibix</button>
-                          </form>
-                        ) : null}
-                        {categoryOption.categoryId === VIBIX_CATEGORY_IDS.anime && (local.type !== "ANIME" || !local.isPublicVisible || !local.isCatalogAllowed) ? (
-                          <form action={moveVibixBrowserPageMoviesToAnimeAction} className="mt-2">
-                            <input type="hidden" name="movieIds" value={JSON.stringify([local.id])} />
-                            <button className="rounded-lg bg-[#e50914] px-3 py-2 text-xs font-black text-white">В аниме</button>
-                          </form>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className={hasPlayer ? "font-bold text-red-700" : "font-bold text-neutral-500"}>{hasPlayer ? "Нет на сайте" : "Нет player"}</div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {!response.data.length ? (
-              <tr><td className="p-5 text-neutral-500" colSpan={10}>Ничего не найдено. Попробуй другой тип, категорию, год или поиск.</td></tr>
-            ) : null}
-          </tbody>
-        </table>
-      </section>
+                    </td>
+                    <td className="p-3">
+                      <div className="font-black text-[#e50914]">{video.id ?? "—"}</div>
+                      <div className="mt-1 text-xs text-neutral-500">{hasPlayer ? "player ok" : "нет player"}</div>
+                    </td>
+                    <td className="max-w-[280px] p-3">
+                      <div className="font-bold">{title}</div>
+                      {stringValue(video.name_original) || stringValue(video.name_eng) ? <div className="mt-1 text-xs text-neutral-500">{stringValue(video.name_original) || stringValue(video.name_eng)}</div> : null}
+                      {stringValue(video.quality) ? <span className="mt-2 inline-flex rounded-lg bg-[#e50914] px-2 py-1 text-xs font-bold text-white">{video.quality}</span> : null}
+                    </td>
+                    <td className="p-3">{kindOf(video, categoryOption.categoryId)}</td>
+                    <td className="p-3">{video.year ?? "—"}</td>
+                    <td className="max-w-[260px] p-3 text-xs">{compactList(video.genre)}</td>
+                    <td className="p-3 text-xs">
+                      <div>КП: <b>{video.kp_rating ?? "—"}</b></div>
+                      <div>IMDb: <b>{video.imdb_rating ?? "—"}</b></div>
+                    </td>
+                    <td className="p-3 text-xs">
+                      <div>KP: <b>{kpId ?? "—"}</b></div>
+                      <div>IMDb: <b>{imdbId ?? "—"}</b></div>
+                    </td>
+                    <td className="p-3 text-xs">
+                      <div><b>uploaded:</b> {date(video.uploaded_at)}</div>
+                      <div className="mt-1 text-neutral-500"><b>updated:</b> {date(video.updated_at)}</div>
+                    </td>
+                    <td className="p-3 text-xs">
+                      {local ? (
+                        <div>
+                          <div className="font-black text-green-700">Уже есть</div>
+                          <Link href={`/watch/${local.slug}`} className="mt-1 block max-w-[220px] truncate text-[#e50914] hover:underline">{local.titleRu} ({local.year})</Link>
+                          <div className="mt-1 text-neutral-500">type: {local.type}, watch: {localWatchAvailable ? "yes" : "no"}, public: {local.isPublicVisible ? "yes" : "no"}, vibix: {local.vibixAvailable ? "yes" : "no"}</div>
+                          {!localWatchAvailable || !local.vibixAvailable || !local.isPublicVisible ? (
+                            <button
+                              type="submit"
+                              formAction={importVibixBrowserItemAction}
+                              name="videoJson"
+                              value={videoJson}
+                              className="mt-2 rounded-lg bg-[#333] px-3 py-2 text-xs font-black text-white disabled:bg-neutral-400"
+                              disabled={!hasPlayer}
+                            >
+                              Обновить Vibix
+                            </button>
+                          ) : null}
+                          {categoryOption.categoryId === VIBIX_CATEGORY_IDS.anime && (local.type !== "ANIME" || !local.isPublicVisible || !local.isCatalogAllowed) ? (
+                            <button
+                              type="submit"
+                              formAction={moveVibixBrowserPageMoviesToAnimeAction}
+                              name="movieIds"
+                              value={JSON.stringify([local.id])}
+                              className="mt-2 rounded-lg bg-[#e50914] px-3 py-2 text-xs font-black text-white"
+                            >
+                              В аниме
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className={hasPlayer ? "font-bold text-red-700" : "font-bold text-neutral-500"}>{hasPlayer ? "Нет на сайте" : "Нет player"}</div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!response.data.length ? (
+                <tr><td className="p-5 text-neutral-500" colSpan={10}>Ничего не найдено. Попробуй другой тип, категорию, год или поиск.</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </section>
+      </form>
 
       <div className="mt-5 flex flex-wrap gap-3">
         <Link href={buildUrl({ type: sourceType, category: categoryOption.value, year, page: Math.max(1, page - 1), q: query })} className="rounded-xl border border-[#ddd] bg-white px-5 py-3 font-bold text-[#222]">← Предыдущая</Link>
