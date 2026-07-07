@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/seo-links";
 
-export const dynamic = "force-dynamic";
+
+export const revalidate = 3600;
 
 export default function sitemap(): MetadataRoute.Sitemap {
   // Next metadata sitemap returns <urlset>, not <sitemapindex>. The real sitemap

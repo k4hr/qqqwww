@@ -8,7 +8,8 @@ import { siteUrl, watchPath } from "@/lib/seo-links";
 import { MovieCard } from "@/components/movie-card";
 import { JsonLd } from "@/components/json-ld";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
+
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

@@ -1,6 +1,7 @@
 import { ContentType } from "@prisma/client";
 import { ListPage } from "@/lib/list-page";
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
+
 export const metadata = { title: "Фильмы смотреть онлайн — REDFILM", description: "Качественный каталог фильмов REDFILM: популярные картины, новинки, топы, жанры и страны.", alternates: { canonical: "/films" } };
 type Props = { searchParams: Promise<{ sort?: string; year?: string; genre?: string; country?: string; page?: string }> };
 export default async function Page({ searchParams }: Props) {

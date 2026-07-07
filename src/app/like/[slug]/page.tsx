@@ -7,7 +7,8 @@ import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
 import { likePath, similarPath, siteUrl, watchPath } from "@/lib/seo-links";
 import { likeSeoIntro } from "@/lib/seo-text";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
+
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

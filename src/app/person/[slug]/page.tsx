@@ -10,7 +10,8 @@ import { isPublicCastLink, isPublicPersonName } from "@/lib/person-quality";
 import { normalizeSlug } from "@/lib/seo-slugs";
 import { personPath, siteUrl, watchPath } from "@/lib/seo-links";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
+
 type Props = { params: Promise<{ slug: string }> };
 
 async function findPersonBySlug(slug: string) {

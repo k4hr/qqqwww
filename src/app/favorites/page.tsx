@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ClientLibrary } from "@/components/client-library";
 
+export const revalidate = 86400;
+
 export const metadata: Metadata = { title: "Избранное — REDFILM", description: "Сохранённые на этом устройстве фильмы и сериалы REDFILM.", robots: { index: false, follow: true } };
 
 export default function FavoritesPage() {

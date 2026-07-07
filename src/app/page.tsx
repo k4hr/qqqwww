@@ -7,8 +7,8 @@ import { hasPlayableSource, isValidCinematicImage } from "@/lib/home-quality-sco
 import { isAdultLikeTitle } from "@/lib/catalog-safety";
 import { prisma } from "@/lib/prisma";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+
+export const revalidate = 120;
 
 export const metadata = {
   title: "REDFILM — фильмы и сериалы онлайн",

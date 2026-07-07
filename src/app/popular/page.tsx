@@ -1,6 +1,7 @@
 import { ContentType } from "@prisma/client";
 import { ListPage } from "@/lib/list-page";
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
+
 export const metadata = { title: "Популярные фильмы, сериалы, мультфильмы и аниме — REDFILM", description: "Автоматическая подборка популярных фильмов, сериалов, мультфильмов и аниме REDFILM по голосам, рейтингам и качеству карточек.", alternates: { canonical: "/popular" } };
 type Props = { searchParams: Promise<{ type?: string; page?: string; sort?: string; year?: string; genre?: string; country?: string }> };
 function parseType(type?: string) {

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { publicCollections } from "@/lib/collections";
 
-export const dynamic = "force-dynamic";
+
+export const revalidate = 1800;
 
 export const metadata = {
   title: "Подборки фильмов и сериалов — REDFILM",

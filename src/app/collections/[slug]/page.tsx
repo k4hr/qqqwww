@@ -15,7 +15,8 @@ import { getFranchiseConfig, sortMoviesByFranchiseOrder } from "@/lib/seo/franch
 import { readAiSeoDraft } from "@/lib/seo/ai-builder";
 import { baseRedirectForCollectionSlug } from "@/lib/seo/base-redirects";
 
-export const dynamic = "force-dynamic";
+
+export const revalidate = 1800;
 
 type Props = { params: Promise<{ slug: string }> };
 

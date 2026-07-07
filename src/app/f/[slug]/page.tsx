@@ -2,7 +2,8 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { getSeoMovieBySlug } from "@/lib/seo-pages";
 import { watchPath } from "@/lib/seo-links";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
+
 type Props = { params: Promise<{ slug: string }> };
 
 export default async function LegacyFilmPage({ params }: Props) {

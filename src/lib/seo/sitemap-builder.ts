@@ -6,6 +6,7 @@ import { countryPages, qualityPages, seoTopics } from "@/lib/seo-pages";
 import { ContentType } from "@prisma/client";
 import { countSeasonSitemapEntries, findSeasonSitemapEntries } from "@/lib/seo/season-pages";
 import { isPublicPersonName } from "@/lib/person-quality";
+import { PUBLIC_SITEMAP_CACHE_CONTROL } from "@/lib/cache-control";
 
 export const SITEMAP_PAGE_SIZE = 10_000;
 
@@ -31,7 +32,7 @@ export function sitemapIndex(items: XmlSitemap[]) {
 }
 
 export function xmlResponse(xml: string) {
-  return new Response(xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600, s-maxage=3600" } });
+  return new Response(xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": PUBLIC_SITEMAP_CACHE_CONTROL } });
 }
 
 export async function publicMovieCount(type?: ContentType) {

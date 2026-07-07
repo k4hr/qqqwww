@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ClientLibrary } from "@/components/client-library";
 
+export const revalidate = 86400;
+
 export const metadata: Metadata = { title: "Недавно смотрели — REDFILM", description: "История недавно открытых фильмов и сериалов REDFILM на этом устройстве.", robots: { index: false, follow: true } };
 
 export default function HistoryPage() {

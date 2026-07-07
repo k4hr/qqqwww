@@ -23,7 +23,8 @@ import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from
 import { watchSeoDescription, watchSeoH1, watchSeoTitle } from "@/lib/seo/meta";
 import { getContentTypeLabel, getContentTypePath, getContentTypePluralLabel } from "@/lib/content";
 
-export const dynamic = "force-dynamic";
+
+export const revalidate = 600;
 
 type Props = { params: Promise<{ slug: string }> };
 

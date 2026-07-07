@@ -10,7 +10,8 @@ import { similarPageJsonLd } from "@/lib/seo/schema";
 import { extractCountries } from "@/lib/catalog-filters";
 import { AnalyticsLink } from "@/components/analytics-link";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 1800;
+
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

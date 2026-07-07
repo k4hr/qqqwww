@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PRIVATE_CACHE_CONTROL, isPrivateCachePath, publicCacheControlForPath } from "@/lib/cache-control";
 
 const CONTENT_PREFIXES = ["/watch", "/season", "/similar", "/like", "/collections", "/person"];
 const PLAYBACK_PREFIXES = ["/watch", "/season"];
@@ -19,7 +20,7 @@ function gone(message: string) {
     headers: {
       "content-type": "text/plain; charset=utf-8",
       "x-robots-tag": "noindex, nofollow, noarchive",
-      "cache-control": "no-store, max-age=0",
+      "Cache-Control": PRIVATE_CACHE_CONTROL,
     },
   });
 }
@@ -81,6 +82,13 @@ export function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next();
+  const isPrivatePath = isPrivateCachePath(pathname);
+  response.headers.set("Cache-Control", isPrivatePath ? PRIVATE_CACHE_CONTROL : publicCacheControlForPath(pathname));
+
+  if (isPrivatePath) {
+    response.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
+  }
+
   const publicIndexingEnabled = envFlag("PUBLIC_INDEXING_ENABLED", true);
   if (!publicIndexingEnabled && !pathname.startsWith("/api") && !pathname.startsWith("/admin")) {
     response.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
@@ -94,6 +102,8 @@ function unauthorized() {
     status: 401,
     headers: {
       "WWW-Authenticate": 'Basic realm="REDFILM Admin"',
+      "Cache-Control": PRIVATE_CACHE_CONTROL,
+      "x-robots-tag": "noindex, nofollow, noarchive",
     },
   });
 }

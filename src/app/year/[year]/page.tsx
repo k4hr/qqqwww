@@ -8,7 +8,8 @@ import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 import { genrePath, watchPath } from "@/lib/seo-links";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
+
 type Props = { params: Promise<{ year: string }>; searchParams: Promise<{ sort?: string; country?: string; type?: string; genre?: string; page?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

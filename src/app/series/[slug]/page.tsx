@@ -9,7 +9,8 @@ import { availableSeasonNumbers, resolveSeasonSeoPage, seasonSeoDescription, sea
 import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from "@/lib/seo/schema";
 import { genrePath, seasonPath, similarPath, watchPath } from "@/lib/seo-links";
 
-export const dynamic = "force-dynamic";
+
+export const revalidate = 600;
 
 type Props = { params: Promise<{ slug: string }> };
 

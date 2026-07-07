@@ -1,6 +1,7 @@
 import { ListPage } from "@/lib/list-page";
 
-export const dynamic = "force-dynamic";
+
+export const revalidate = 300;
 
 type Props = { searchParams: Promise<{ sort?: string }> };
 

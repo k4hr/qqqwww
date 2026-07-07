@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ListPage } from "@/lib/list-page";
 import { isValidYear } from "@/lib/content";
 
-export const dynamic = "force-dynamic";
+
+export const revalidate = 600;
 
 type Props = { params: Promise<{ slug: string; year: string }>; searchParams: Promise<{ sort?: string }> };
 

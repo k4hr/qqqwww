@@ -8,7 +8,8 @@ import { collectionSeoIntro } from "@/lib/seo-text";
 import { franchisePath, genrePath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
 import { normalizeMovieBaseTitle } from "@/lib/seo-slugs";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 1800;
+
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

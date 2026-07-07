@@ -10,7 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { normalizeSearchQuery, searchMovies } from "@/lib/search";
 import { resolveSearchRedirectPath } from "@/lib/search-route-intents";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
+
 export const metadata = { title: "Поиск фильмов и сериалов — REDFILM", description: "Умный поиск доступных фильмов и сериалов по всей базе REDFILM.", alternates: { canonical: "/search" }, robots: { index: false, follow: true } };
 
 type Props = { searchParams: Promise<{ q?: string; country?: string; type?: string; year?: string; genre?: string }> };

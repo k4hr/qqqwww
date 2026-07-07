@@ -1,6 +1,7 @@
 import { buildLikeSitemapXml, xmlResponse } from "@/lib/seo/sitemap-builder";
 
-export const dynamic = "force-dynamic";
+
+export const revalidate = 3600;
 
 type Props = { params: Promise<{ page: string }> };
 
