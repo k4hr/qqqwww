@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { normalizeSearchQuery } from "@/lib/search";
 import { searchTvMovies, serializeTvMovie } from "@/lib/tv";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const query = normalizeSearchQuery(request.nextUrl.searchParams.get("q") ?? "").slice(0, 120);
