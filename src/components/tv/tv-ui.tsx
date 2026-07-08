@@ -33,7 +33,7 @@ export function TvHero({ movie }: { movie: TvMovie }) {
   const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
   return (
     <section className="relative min-h-[520px] overflow-hidden px-10 py-14">
-      {backdrop ? <Image src={backdrop} alt="" fill sizes="100vw" className="-z-10 object-cover opacity-34" unoptimized priority /> : null}
+      {backdrop ? <Image src={backdrop} alt="" fill sizes="100vw" className="-z-10 object-cover opacity-[.34]" unoptimized priority /> : null}
       <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,#050507_0%,rgba(5,5,7,.92)_34%,rgba(5,5,7,.35)_70%,#050507_100%)]" />
       <div className="max-w-4xl pt-10">
         <div className="mb-5 flex flex-wrap gap-3 text-lg font-black uppercase tracking-[.14em] text-[#ff4d55]"><span>REDFILM TV</span><span>•</span><span>{tvTypeLabel(movie.type)}</span><span>•</span><span>{movie.year}</span></div>
