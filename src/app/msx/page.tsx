@@ -3,7 +3,7 @@ import { TvFocusProvider } from "@/components/tv/tv-focus-provider";
 import { TvCss, TvHero, TvSection, TvShell, TvTopBar } from "@/components/tv/tv-ui";
 import { getTvHome } from "@/lib/tv";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "REDFILM TV — фильмы и сериалы для телевизора",
