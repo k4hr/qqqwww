@@ -6,7 +6,7 @@ import { TvCss, TvPosterGrid, TvShell, TvTopBar } from "@/components/tv/tv-ui";
 import { searchTvMovies } from "@/lib/tv";
 import { normalizeSearchQuery } from "@/lib/search";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Поиск — REDFILM TV",
