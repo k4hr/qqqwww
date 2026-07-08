@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { TvFocusProvider } from "@/components/tv/tv-focus-provider";
 import { TvCss, TvHero, TvSection, TvShell, TvTopBar } from "@/components/tv/tv-ui";
-import { getTvHome, TV_REVALIDATE_SECONDS } from "@/lib/tv";
+import { getTvHome } from "@/lib/tv";
 
-export const revalidate = TV_REVALIDATE_SECONDS;
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "REDFILM TV — фильмы и сериалы для телевизора",
