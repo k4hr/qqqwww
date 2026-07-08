@@ -3,10 +3,10 @@ import Link from "next/link";
 import { ArrowLeft, Search } from "lucide-react";
 import { TvFocusProvider } from "@/components/tv/tv-focus-provider";
 import { TvCss, TvPosterGrid, TvShell, TvTopBar } from "@/components/tv/tv-ui";
-import { searchTvMovies, TV_REVALIDATE_SECONDS } from "@/lib/tv";
+import { searchTvMovies } from "@/lib/tv";
 import { normalizeSearchQuery } from "@/lib/search";
 
-export const revalidate = TV_REVALIDATE_SECONDS;
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Поиск — REDFILM TV",
