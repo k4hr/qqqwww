@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getTvHome, serializeTvMovie, TV_REVALIDATE_SECONDS } from "@/lib/tv";
+import { getTvHome, serializeTvMovie } from "@/lib/tv";
 
-export const revalidate = TV_REVALIDATE_SECONDS;
+export const revalidate = 300;
 
 export async function GET() {
   const home = await getTvHome();
