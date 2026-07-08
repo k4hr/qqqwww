@@ -29,7 +29,7 @@ export default async function MsxPlayerPage({ params }: Props) {
       <TvCss />
       <TvFocusProvider />
       <div className="flex h-screen flex-col bg-black">
-        <div className="z-20 flex h-24 items-center justify-between border-b border-white/10 bg-black/86 px-8">
+        <div className="z-20 flex h-24 items-center justify-between border-b border-white/10 bg-black/[.86] px-8">
           <Link data-tv-focus data-tv-autofocus href={tvMoviePath(movie)} className="tv-pill"><ArrowLeft size={22} /> Назад к фильму</Link>
           <div className="min-w-0 text-right">
             <p className="truncate text-2xl font-black">{movie.titleRu}</p>
