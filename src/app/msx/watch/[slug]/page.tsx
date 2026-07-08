@@ -5,9 +5,9 @@ import { ArrowLeft, Film, Play } from "lucide-react";
 import { notFound } from "next/navigation";
 import { TvFocusProvider } from "@/components/tv/tv-focus-provider";
 import { TvCss, TvShell, TvTopBar } from "@/components/tv/tv-ui";
-import { getTvMovieBySlug, tvPlayerPath, tvPoster, tvTypeLabel, TV_REVALIDATE_SECONDS } from "@/lib/tv";
+import { getTvMovieBySlug, tvPlayerPath, tvPoster, tvTypeLabel } from "@/lib/tv";
 
-export const revalidate = TV_REVALIDATE_SECONDS;
+export const revalidate = 300;
 
 type Props = { params: Promise<{ slug: string }> };
 
