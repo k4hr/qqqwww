@@ -5,9 +5,9 @@ import { notFound } from "next/navigation";
 import { VibixPlayer } from "@/components/vibix-player";
 import { TvFocusProvider } from "@/components/tv/tv-focus-provider";
 import { TvCss, TvShell } from "@/components/tv/tv-ui";
-import { getTvMovieBySlug, tvMoviePath, TV_REVALIDATE_SECONDS } from "@/lib/tv";
+import { getTvMovieBySlug, tvMoviePath } from "@/lib/tv";
 
-export const revalidate = TV_REVALIDATE_SECONDS;
+export const revalidate = 300;
 
 type Props = { params: Promise<{ slug: string }> };
 
