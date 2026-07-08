@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getTvHome, serializeTvMovie } from "@/lib/tv";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const home = await getTvHome();
