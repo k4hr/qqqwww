@@ -33,7 +33,7 @@ export default async function MsxWatchPage({ params }: Props) {
       <TvFocusProvider />
       <TvTopBar />
       <section className="relative min-h-[calc(100vh-96px)] overflow-hidden px-10 py-12">
-        {movie.backdropUrl ? <Image src={movie.backdropUrl} alt="" fill sizes="100vw" className="-z-10 object-cover opacity-28" unoptimized priority /> : null}
+        {movie.backdropUrl ? <Image src={movie.backdropUrl} alt="" fill sizes="100vw" className="-z-10 object-cover opacity-[.28]" unoptimized priority /> : null}
         <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,#050507_0%,rgba(5,5,7,.94)_42%,rgba(5,5,7,.52)_100%)]" />
         <Link data-tv-focus data-tv-autofocus href="/msx" className="tv-pill mb-8 inline-flex"><ArrowLeft size={22} /> Назад</Link>
         <div className="grid max-w-[1500px] grid-cols-[340px_minmax(0,1fr)] gap-10 max-lg:grid-cols-1">
@@ -43,16 +43,16 @@ export default async function MsxWatchPage({ params }: Props) {
           <div className="min-w-0 py-2">
             <div className="flex flex-wrap gap-3 text-xl font-black uppercase tracking-[.13em] text-[#ff4d55]"><span>{tvTypeLabel(movie.type)}</span><span>•</span><span>{movie.year}</span>{movie.quality ? <><span>•</span><span>{movie.quality}</span></> : null}</div>
             <h1 className="mt-5 break-words text-[clamp(3rem,7vw,7rem)] font-black leading-[.9] tracking-[-.06em]">{movie.titleRu}</h1>
-            {movie.titleOriginal ? <p className="mt-3 text-2xl font-bold text-white/45">{movie.titleOriginal}</p> : null}
-            <div className="mt-7 flex flex-wrap items-center gap-4 text-2xl text-white/78">
+            {movie.titleOriginal ? <p className="mt-3 text-2xl font-bold text-white/[.45]">{movie.titleOriginal}</p> : null}
+            <div className="mt-7 flex flex-wrap items-center gap-4 text-2xl text-white/[.78]">
               {rating ? <span className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 font-black">★ {rating.toFixed(1)}</span> : null}
               {movie.duration ? <span>{movie.duration} мин.</span> : null}
               {movie.country ? <span>{movie.country}</span> : null}
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
-              {movie.genres.slice(0, 8).map((item) => <span key={item.genreId} className="rounded-2xl border border-white/10 bg-white/[.07] px-4 py-2 text-xl font-bold text-white/78">{item.genre.name}</span>)}
+              {movie.genres.slice(0, 8).map((item) => <span key={item.genreId} className="rounded-2xl border border-white/10 bg-white/[.07] px-4 py-2 text-xl font-bold text-white/[.78]">{item.genre.name}</span>)}
             </div>
-            <p className="mt-8 max-w-5xl text-2xl leading-relaxed text-white/72">{movie.description || "Описание скоро появится."}</p>
+            <p className="mt-8 max-w-5xl text-2xl leading-relaxed text-white/70">{movie.description || "Описание скоро появится."}</p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link data-tv-focus href={tvPlayerPath(movie)} className="tv-cta"><Play fill="currentColor" /> Смотреть</Link>
               <Link data-tv-focus href={`/watch/${movie.slug}`} className="tv-cta tv-cta-secondary">Открыть обычную страницу</Link>
