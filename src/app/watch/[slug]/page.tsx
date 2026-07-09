@@ -6,8 +6,10 @@ import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/json-ld";
 import { MovieCard } from "@/components/movie-card";
 import { PlayerBlock } from "@/components/player-block";
+import { VibixBanner, VibixFlyrollSlot } from "@/components/vibix-banner";
 import { AnalyticsEvent } from "@/components/analytics-event";
 import { WatchClientActions } from "@/components/watch-client-actions";
+import { TelegramWatchPromo } from "@/components/telegram-watch-promo";
 import { extractCountries } from "@/lib/catalog-filters";
 import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
 import { countryPath, genrePath, similarPath, watchPath, yearPath } from "@/lib/seo-links";
@@ -92,14 +94,19 @@ export default async function WatchPage({ params }: Props) {
               <Fact label="IMDb">{movie.imdbRating?.toFixed(1) ?? "—"}</Fact>
               <Fact label="Длительность">{movie.duration ? `${movie.duration} мин.` : "—"}</Fact>
               <Fact label="Страна">{countries[0] ? <Link href={countryPath(countries[0])}>{countries[0]}</Link> : "—"}</Fact>
-              <Fact label="Жанр">{movie.genres[0] ? <Link href={genrePath(movie.genres[0].genre)}>{movie.genres[0].genre.name}</Link> : "—"}</Fact>
+              <Fact label="Жанр">{primaryGenre ? <Link href={genrePath(primaryGenre)}>{primaryGenre.name}</Link> : "—"}</Fact>
             </dl>
             <WatchClientActions movie={{ id: movie.id, slug: movie.slug, title: movie.titleRu, year: movie.year, posterUrl: movie.posterUrl, type: movie.type, kpRating: movie.kpRating, imdbRating: movie.imdbRating }} />
           </div>
         </div>
       </article>
 
+      <VibixBanner slot="movie_above_player" size="728x90" />
+      <VibixFlyrollSlot slot="movie_above_player" />
       <PlayerBlock movie={movie} />
+      <TelegramWatchPromo />
+      <VibixBanner slot="movie_below_player" size="680x250" />
+      <VibixFlyrollSlot slot="movie_below_player" />
 
       <section className="mt-8">
         <div className="mb-5 flex items-center justify-between gap-3">
@@ -108,6 +115,8 @@ export default async function WatchPage({ params }: Props) {
         </div>
         {similar.length ? <div className="movie-grid">{similar.map((item) => <MovieCard key={item.id} movie={item} />)}</div> : <div className="mf-panel p-5 text-[#a1a1aa]">Похожие {contentTypeSingleLower} скоро появятся.</div>}
       </section>
+
+      <VibixBanner slot="movie_bottom" size="680x200" />
     </div>
   );
 }
