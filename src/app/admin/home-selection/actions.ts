@@ -107,13 +107,23 @@ export async function toggleHomeSelectionItem(formData: FormData) {
 export async function moveHomeSelectionItem(formData: FormData) {
   await ensureHomeSelectionTables();
   const itemId = text(formData, "itemId");
-  const direction = text(formData, "direction") === "down" ? 1 : -1;
+  const direction = text(formData, "direction") === "down" ? "down" : "up";
   if (itemId) {
-    await prisma.$executeRaw`
-      UPDATE redfilm_home_selection_items
-      SET position = GREATEST(0, position + ${direction}), updated_at = now()
-      WHERE id = ${itemId}
+    const rows = await prisma.$queryRaw<Array<{ id: string; position: number }>>`
+      SELECT id, position
+      FROM redfilm_home_selection_items
+      ORDER BY is_pinned DESC, position ASC, created_at ASC
     `;
+    const index = rows.findIndex((row) => row.id === itemId);
+    const swapIndex = direction === "down" ? index + 1 : index - 1;
+    const current = rows[index];
+    const other = rows[swapIndex];
+    if (current && other) {
+      await prisma.$transaction([
+        prisma.$executeRaw`UPDATE redfilm_home_selection_items SET position = ${other.position}, updated_at = now() WHERE id = ${current.id}`,
+        prisma.$executeRaw`UPDATE redfilm_home_selection_items SET position = ${current.position}, updated_at = now() WHERE id = ${other.id}`,
+      ]);
+    }
   }
 
   revalidatePath("/");

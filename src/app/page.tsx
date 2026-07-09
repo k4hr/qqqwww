@@ -6,6 +6,7 @@ import { VibixBanner } from "@/components/vibix-banner";
 import { hasPlayableSource, isValidCinematicImage } from "@/lib/home-quality-score";
 import { isAdultLikeTitle } from "@/lib/catalog-safety";
 import { prisma } from "@/lib/prisma";
+import { getHomeSelectionForHero } from "@/lib/home-selection";
 
 
 export const revalidate = 120;
@@ -293,6 +294,10 @@ async function getHomeMovies(currentYear: number) {
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
+  const [homeMovies, manualSelection] = await Promise.all([
+    getHomeMovies(currentYear),
+    getHomeSelectionForHero(),
+  ]);
   const {
     heroMovies,
     bestMovieCandidates,
@@ -305,17 +310,24 @@ export default async function HomePage() {
     eligibleClassics,
     heroFallback,
     legacyCandidates,
-  } = await getHomeMovies(currentYear);
+  } = homeMovies;
 
   const legacySafe = legacyCandidates.filter(isLegacyHomeSafe).sort((a, b) => legacyScore(b) - legacyScore(a));
   const strongLegacy = legacySafe.filter(isStrongKnownTitle);
 
   const legacyHero = legacySafe.filter((movie) => isValidCinematicImage(movie.backdropUrl));
-  const featured = fillMovies(
+  const autoFeatured = fillMovies(
     heroMovies,
     [...heroFallback.filter((movie) => isRussianTitle(movie) && isValidCinematicImage(movie.posterUrl) && isValidCinematicImage(movie.backdropUrl) && hasPlayableSource(movie)), ...legacyHero],
-    8,
+    manualSelection.settings.limit,
   );
+
+  const manualFeatured = manualSelection.movies.filter((movie) => isValidCinematicImage(movie.posterUrl) || isValidCinematicImage(movie.backdropUrl));
+  const featured = manualSelection.settings.isEnabled && manualSelection.settings.mode === "MANUAL"
+    ? (manualFeatured.length ? manualFeatured.slice(0, manualSelection.settings.limit) : autoFeatured)
+    : manualSelection.settings.isEnabled && manualSelection.settings.mode === "MIXED"
+      ? fillMovies(manualFeatured, autoFeatured, manualSelection.settings.limit)
+      : autoFeatured;
 
   const featuredIds = new Set(featured.map((movie) => movie.id));
 

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { addHomeSelectionItem } from "@/app/admin/home-selection/actions";
+import { getHomeSelectionMovieIds } from "@/lib/home-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -41,11 +43,13 @@ export default async function AnalyticsPage() {
     available = false;
   }
 
+  const selectedIds = available ? await getHomeSelectionMovieIds().catch(() => new Set<string>()) : new Set<string>();
+
   return <div className="container admin-shell py-6">
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-bold text-[#222]">Аналитика REDFILM</h1><p className="mt-1 text-neutral-600">Поведение пользователей без IP и персональных профилей.</p></div><Link href="/admin" className="rounded-lg bg-[#333] px-4 py-2 font-bold text-white">В админку</Link></div>
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-bold text-[#222]">Аналитика REDFILM</h1><p className="mt-1 text-neutral-600">Поведение пользователей без IP и персональных профилей. Из топа можно сразу добавить фильм в подборку главной.</p></div><div className="flex flex-wrap gap-2"><Link href="/admin/home-selection" className="rounded-lg bg-[#e50914] px-4 py-2 font-bold text-white">Подборка главной</Link><Link href="/admin" className="rounded-lg bg-[#333] px-4 py-2 font-bold text-white">В админку</Link></div></div>
     {!available ? <section className="admin-panel p-5 text-[#222]"><h2 className="text-xl font-bold">Таблицы аналитики пока не применены</h2><p className="mt-2 text-neutral-600">Примените additive Prisma migration. Публичный сайт продолжает использовать рейтинг как fallback популярности.</p></section> : <>
       <div className="mb-6 grid gap-4 md:grid-cols-3"><Stat label="Событий перехода к похожим за 7 дней" value={similarClicks} /><Stat label="Поисковых фраз за 30 дней" value={searches.reduce((sum, item) => sum + item.count, 0)} /><Stat label="Фильмов в тренде за 7 дней" value={week.length} /></div>
-      <div className="grid gap-6 xl:grid-cols-2"><Ranking title="Топ фильмов за 24 часа" rows={day} /><Ranking title="Топ фильмов за 7 дней" rows={week} /></div>
+      <div className="grid gap-6 xl:grid-cols-2"><Ranking title="Топ фильмов за 24 часа" rows={day} selectedIds={selectedIds} source="analytics_day" /><Ranking title="Топ фильмов за 7 дней" rows={week} selectedIds={selectedIds} source="analytics_week" /></div>
       <section className="admin-panel mt-6 overflow-x-auto p-5"><h2 className="mb-4 text-xl font-bold text-[#222]">Поисковые запросы за 30 дней</h2><table className="w-full min-w-[560px] text-sm text-[#222]"><thead><tr className="border-b text-left text-neutral-500"><th className="py-2">Запрос</th><th>Поисков</th><th>Средняя выдача</th><th>Сигнал</th></tr></thead><tbody>{searches.map((item) => <tr key={item.query} className="border-b border-[#eee]"><td className="py-3 font-semibold">{item.query}</td><td>{item.count}</td><td>{item.averageResults.toFixed(1)}</td><td>{item.count >= 3 && item.averageResults < 2 ? <span className="font-bold text-red-700">Высокий спрос, мало результатов</span> : "—"}</td></tr>)}</tbody></table></section>
     </>}
   </div>;
@@ -55,6 +59,6 @@ function Stat({ label, value }: { label: string; value: number }) {
   return <div className="admin-panel p-5"><div className="text-sm text-neutral-500">{label}</div><div className="mt-2 text-4xl font-black text-[#e50914]">{value}</div></div>;
 }
 
-function Ranking({ title, rows }: { title: string; rows: RankedMovie[] }) {
-  return <section className="admin-panel p-5"><h2 className="mb-4 text-xl font-bold text-[#222]">{title}</h2>{rows.length ? <ol className="space-y-2">{rows.map((movie, index) => <li key={movie.id} className="flex items-center justify-between gap-3 border-b border-[#eee] py-2 text-[#222]"><span>{index + 1}. {movie.titleRu}</span><b>{movie.score}</b></li>)}</ol> : <p className="text-neutral-500">Данных пока нет.</p>}</section>;
+function Ranking({ title, rows, selectedIds, source }: { title: string; rows: RankedMovie[]; selectedIds: Set<string>; source: string }) {
+  return <section className="admin-panel p-5"><h2 className="mb-4 text-xl font-bold text-[#222]">{title}</h2>{rows.length ? <ol className="space-y-2">{rows.map((movie, index) => <li key={movie.id} className="flex flex-col gap-2 border-b border-[#eee] py-2 text-[#222] sm:flex-row sm:items-center sm:justify-between"><span>{index + 1}. {movie.titleRu}</span><div className="flex items-center gap-3"><b>{movie.score}</b>{selectedIds.has(movie.id) ? <span className="font-bold text-green-700">В подборке</span> : <form action={addHomeSelectionItem}><input type="hidden" name="movieId" value={movie.id} /><input type="hidden" name="addedFrom" value={source} /><input type="hidden" name="returnTo" value="/admin/analytics" /><button className="rounded-lg bg-[#e50914] px-3 py-1.5 text-sm font-black text-white" type="submit">В подборку</button></form>}</div></li>)}</ol> : <p className="text-neutral-500">Данных пока нет.</p>}</section>;
 }
