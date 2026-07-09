@@ -55,25 +55,28 @@ export async function resolveSeasonSeoPage(slug: string): Promise<SeasonSeoPage 
   return { movie, season: parsed.season, slug: seasonPath(movie, parsed.season).replace("/season/", ""), maxSeason };
 }
 
+const FALLBACK_SEASON_ALIAS_COUNT = 5;
+
 export function seasonSeoTitle(page: SeasonSeoPage) {
-  return `${page.movie.titleRu} ${page.season} сезон смотреть онлайн — REDFILM`;
+  return `${page.movie.titleRu} ${page.season} сезон смотреть онлайн бесплатно — REDFILM`;
 }
 
 export function seasonSeoDescription(page: SeasonSeoPage) {
-  const genres = page.movie.genres.slice(0, 3).map((item) => item.genre.name.toLowerCase()).join(", ");
-  return `Смотрите ${page.season} сезон сериала ${page.movie.titleRu} онлайн на REDFILM. ${genres ? `Жанры: ${genres}. ` : ""}Плеер, описание, рейтинги, похожие сериалы и другие сезоны.`;
+  return `${page.movie.titleRu} ${page.season} сезон смотреть онлайн бесплатно на REDFILM.`;
 }
 
 export function availableSeasonNumbers(movie: Pick<SeoMovie, "vibixSeasonCount">) {
-  const count = movie.vibixSeasonCount && movie.vibixSeasonCount > 0 ? Math.min(movie.vibixSeasonCount, 25) : 1;
+  const count = movie.vibixSeasonCount && movie.vibixSeasonCount > 0
+    ? Math.min(movie.vibixSeasonCount, 25)
+    : FALLBACK_SEASON_ALIAS_COUNT;
   return Array.from({ length: count }, (_, index) => index + 1);
 }
 
 export async function findSeasonSitemapEntries(page: number, pageSize: number) {
   const rows = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, { type: ContentType.SERIES, vibixSeasonCount: { gt: 0 } }] },
+    where: { AND: [vibixPublicMovieWhere, { type: ContentType.SERIES }] },
     select: { slug: true, titleRu: true, vibixSeasonCount: true, updatedAt: true },
-    orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    orderBy: [{ popularScore: "desc" }, { updatedAt: "desc" }, { id: "asc" }],
     take: 50_000,
   });
   const entries = rows.flatMap((movie) => availableSeasonNumbers(movie).map((season) => ({ loc: seasonPath(movie, season), lastmod: movie.updatedAt })));
@@ -83,7 +86,7 @@ export async function findSeasonSitemapEntries(page: number, pageSize: number) {
 
 export async function countSeasonSitemapEntries() {
   const rows = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, { type: ContentType.SERIES, vibixSeasonCount: { gt: 0 } }] },
+    where: { AND: [vibixPublicMovieWhere, { type: ContentType.SERIES }] },
     select: { vibixSeasonCount: true },
     take: 50_000,
   }).catch(() => [] as Array<{ vibixSeasonCount: number | null }>);
