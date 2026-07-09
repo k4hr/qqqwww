@@ -5,24 +5,15 @@ import { Film } from "lucide-react";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/json-ld";
 import { MovieCard } from "@/components/movie-card";
-import { SectionGrid } from "@/components/section-grid";
 import { PlayerBlock } from "@/components/player-block";
-import { VibixBanner, VibixFlyrollSlot } from "@/components/vibix-banner";
 import { AnalyticsEvent } from "@/components/analytics-event";
 import { WatchClientActions } from "@/components/watch-client-actions";
-import { TelegramWatchPromo } from "@/components/telegram-watch-promo";
-import { buildDefaultCatalogCountryWhere, extractCountries } from "@/lib/catalog-filters";
-import { prisma } from "@/lib/prisma";
-import { vibixPublicMovieWhere } from "@/lib/movie-access";
-import { getPopularMovies, getRecentPopularityStats } from "@/lib/popularity";
-import { takeUniqueMovies } from "@/lib/recommendation-dedupe";
+import { extractCountries } from "@/lib/catalog-filters";
 import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
-import { buildAudienceCandidateWhere, sortAudienceMovies } from "@/lib/similar";
 import { countryPath, genrePath, similarPath, watchPath, yearPath } from "@/lib/seo-links";
 import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from "@/lib/seo/schema";
 import { watchSeoDescription, watchSeoH1, watchSeoTitle } from "@/lib/seo/meta";
 import { getContentTypeLabel, getContentTypePath, getContentTypePluralLabel } from "@/lib/content";
-
 
 export const revalidate = 600;
 
@@ -53,31 +44,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function WatchPage({ params }: Props) {
   const movie = await getSeoMovieBySlug((await params).slug);
   if (!movie) notFound();
+
   const countries = extractCountries(movie.country);
   const primaryGenre = movie.genres[0]?.genre;
-  const recommendationWhere = [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id } }];
-  const [similarCandidates, audienceCandidates, genreCandidates, yearCandidates, countryCandidates, popularityStats] = await Promise.all([
-    findSimilarSeoMovies(movie, 12),
-    prisma.movie.findMany({ where: { AND: [...recommendationWhere, buildAudienceCandidateWhere(movie)] }, include: { genres: { include: { genre: true } }, cast: { include: { person: true }, orderBy: { sortOrder: "asc" } } }, orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }], take: 180 }),
-    primaryGenre ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { genres: { some: { genreId: movie.genres[0].genreId } } }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 80 }) : Promise.resolve([]),
-    prisma.movie.findMany({ where: { AND: [...recommendationWhere, { year: movie.year }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 60 }),
-    countries[0] ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { country: { contains: countries[0], mode: "insensitive" } }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 60 }) : Promise.resolve([]),
-    getRecentPopularityStats(7),
-  ]);
-  const excluded = new Set([movie.id]);
-  const selectBlock = <T extends { id: string }>(items: T[], count = 6, minCount = 4) => {
-    const selected = takeUniqueMovies(items, count, excluded);
-    if (selected.length < minCount) return [];
-    selected.forEach((item) => excluded.add(item.id));
-    return selected;
-  };
-  const similar = selectBlock(similarCandidates, 6, 1);
-  const watchedTogether = selectBlock(sortAudienceMovies(movie, audienceCandidates, 20).length ? sortAudienceMovies(movie, audienceCandidates, 20) : getPopularMovies(genreCandidates, popularityStats, 20));
-  const moreInGenre = selectBlock(genreCandidates);
-  const sameYear = selectBlock(yearCandidates);
-  const sameCountry = sameYear.length ? [] : selectBlock(countryCandidates);
+  const similarCandidates = await findSimilarSeoMovies(movie, 12);
+  const similar = similarCandidates.filter((item) => item.id !== movie.id).slice(0, 12);
   const description = movie.description.trim() || "Описание скоро появится";
-  const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
   const contentTypePath = getContentTypePath(movie.type);
   const contentTypePlural = getContentTypePluralLabel(movie.type);
   const contentTypeSingleLower = getContentTypeLabel(movie.type).toLocaleLowerCase("ru-RU");
@@ -127,22 +99,15 @@ export default async function WatchPage({ params }: Props) {
         </div>
       </article>
 
-      <VibixBanner slot="movie_above_player" size="728x90" />
-      <VibixFlyrollSlot slot="movie_above_player" />
       <PlayerBlock movie={movie} />
-      <TelegramWatchPromo />
-      <VibixBanner slot="movie_below_player" size="680x250" />
-      <VibixFlyrollSlot slot="movie_below_player" />
 
       <section className="mt-8">
-        <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">{similarTitle}</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>
-        {similar.length ? <div className="movie-grid">{similar.map((item) => <MovieCard key={item.id} movie={item} />)}</div> : <div className="mf-panel p-5 text-[#a1a1aa]">Похожие фильмы скоро появятся.</div>}
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <h2 className="text-2xl font-black text-white">{similarTitle}</h2>
+          <Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link>
+        </div>
+        {similar.length ? <div className="movie-grid">{similar.map((item) => <MovieCard key={item.id} movie={item} />)}</div> : <div className="mf-panel p-5 text-[#a1a1aa]">Похожие {contentTypeSingleLower} скоро появятся.</div>}
       </section>
-      {watchedTogether.length ? <SectionGrid title={`С этим ${contentTypeSingleLower} смотрят`} href={primaryGenre ? genrePath(primaryGenre) : "/top"} movies={watchedTogether} showSorts={false} mobileCarousel /> : null}
-      {moreInGenre.length && primaryGenre ? <SectionGrid title={`Ещё в жанре ${primaryGenre.name}`} href={genrePath(primaryGenre)} movies={moreInGenre} showSorts={false} mobileCarousel /> : null}
-      {sameYear.length ? <SectionGrid title={`${contentTypePlural} ${movie.year} года`} href={yearPath(movie)} movies={sameYear} showSorts={false} mobileCarousel /> : null}
-      {sameCountry.length && countries[0] ? <SectionGrid title={`${contentTypePlural} ${countries[0]}`} href={countryPath(countries[0])} movies={sameCountry} showSorts={false} mobileCarousel /> : null}
-      <VibixBanner slot="movie_bottom" size="680x200" />
     </div>
   );
 }
