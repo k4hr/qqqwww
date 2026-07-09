@@ -10,16 +10,20 @@ import { VibixBanner, VibixFlyrollSlot } from "@/components/vibix-banner";
 import { AnalyticsEvent } from "@/components/analytics-event";
 import { WatchClientActions } from "@/components/watch-client-actions";
 import { TelegramWatchPromo } from "@/components/telegram-watch-promo";
-import { extractCountries } from "@/lib/catalog-filters";
-import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
+import { buildDefaultCatalogCountryWhere, extractCountries } from "@/lib/catalog-filters";
+import { getSeoMovieBySlug, type SeoMovie } from "@/lib/seo-pages";
 import { countryPath, genrePath, similarPath, watchPath, yearPath } from "@/lib/seo-links";
 import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from "@/lib/seo/schema";
 import { watchSeoDescription, watchSeoH1, watchSeoTitle } from "@/lib/seo/meta";
 import { getContentTypeLabel, getContentTypePath, getContentTypePluralLabel } from "@/lib/content";
+import { prisma } from "@/lib/prisma";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 export const revalidate = 600;
 
 type Props = { params: Promise<{ slug: string }> };
+
+type SimilarCardMovie = React.ComponentProps<typeof MovieCard>["movie"];
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const movie = await getSeoMovieBySlug((await params).slug);
@@ -43,14 +47,54 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+async function getWatchSimilarMovies(movie: SeoMovie, limit = 12): Promise<SimilarCardMovie[]> {
+  const cached = await prisma.movieSimilarity.findMany({
+    where: { sourceMovieId: movie.id },
+    orderBy: [{ score: "desc" }, { updatedAt: "desc" }],
+    take: limit,
+  });
+
+  const cachedIds = cached.map((item) => item.targetMovieId);
+  const movies = cachedIds.length
+    ? await prisma.movie.findMany({
+        where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { in: cachedIds } }] },
+        select: { id: true, slug: true, titleRu: true, year: true, type: true, posterUrl: true, quality: true, kpRating: true, imdbRating: true },
+      })
+    : [];
+
+  const byId = new Map(movies.map((item) => [item.id, item]));
+  const result = cached.map((item) => byId.get(item.targetMovieId)).filter((item): item is SimilarCardMovie => Boolean(item));
+
+  if (result.length >= Math.min(limit, 6)) return result.slice(0, limit);
+
+  const usedIds = [movie.id, ...result.map((item) => item.id)];
+  const genreIds = movie.genres.map((item) => item.genreId);
+  if (!genreIds.length) return result.slice(0, limit);
+
+  const fallback = await prisma.movie.findMany({
+    where: {
+      AND: [
+        vibixPublicMovieWhere,
+        buildDefaultCatalogCountryWhere(),
+        { id: { notIn: usedIds }, type: movie.type },
+        { genres: { some: { genreId: { in: genreIds } } } },
+      ],
+    },
+    select: { id: true, slug: true, titleRu: true, year: true, type: true, posterUrl: true, quality: true, kpRating: true, imdbRating: true },
+    orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
+    take: limit - result.length,
+  });
+
+  return [...result, ...fallback].slice(0, limit);
+}
+
 export default async function WatchPage({ params }: Props) {
   const movie = await getSeoMovieBySlug((await params).slug);
   if (!movie) notFound();
 
   const countries = extractCountries(movie.country);
   const primaryGenre = movie.genres[0]?.genre;
-  const similarCandidates = await findSimilarSeoMovies(movie, 12);
-  const similar = similarCandidates.filter((item) => item.id !== movie.id).slice(0, 12);
+  const similar = await getWatchSimilarMovies(movie, 12);
   const description = movie.description.trim() || "Описание скоро появится";
   const contentTypePath = getContentTypePath(movie.type);
   const contentTypePlural = getContentTypePluralLabel(movie.type);
