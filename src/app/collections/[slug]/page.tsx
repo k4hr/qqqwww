@@ -14,6 +14,7 @@ import { whereForSeoLanding } from "@/lib/seo/keyword-engine";
 import { getFranchiseConfig, sortMoviesByFranchiseOrder } from "@/lib/seo/franchise-orders";
 import { readAiSeoDraft } from "@/lib/seo/ai-builder";
 import { baseRedirectForCollectionSlug } from "@/lib/seo/base-redirects";
+import { getCreatorHubMetadata, renderCreatorHubPage } from "@/lib/collaboration/public-pages";
 
 
 export const revalidate = 1800;
@@ -22,6 +23,8 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props) {
   const { slug } = await params;
+  const creatorMetadata = await getCreatorHubMetadata(slug);
+  if (creatorMetadata) return creatorMetadata;
   const topic = getSeoTopic(slug);
   if (topic) return { title: `${topic[1]} смотреть онлайн — REDFILM`, description: `${topic[1]}: тематическая подборка доступных фильмов и сериалов с рейтингами и описаниями.`, alternates: { canonical: `/collections/${slug}` } };
   const collection = getCollection(slug);
@@ -45,6 +48,8 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function CollectionPage({ params }: Props) {
   const { slug } = await params;
+  const creatorPage = await renderCreatorHubPage(slug);
+  if (creatorPage) return creatorPage;
   const baseRedirect = baseRedirectForCollectionSlug(slug);
   if (baseRedirect) permanentRedirect(baseRedirect);
 

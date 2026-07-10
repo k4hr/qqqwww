@@ -11,6 +11,7 @@ import { VibixBanner, VibixFlyrollSlot } from "@/components/vibix-banner";
 import { AnalyticsEvent } from "@/components/analytics-event";
 import { WatchClientActions } from "@/components/watch-client-actions";
 import { TelegramWatchPromo } from "@/components/telegram-watch-promo";
+import { PartnerTrack } from "@/components/partner-track";
 import { buildDefaultCatalogCountryWhere, extractCountries } from "@/lib/catalog-filters";
 import { prisma } from "@/lib/prisma";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
@@ -86,6 +87,7 @@ export default async function WatchPage({ params }: Props) {
   return (
     <div className="container py-5 sm:py-7">
       <AnalyticsEvent type="page_view" movieId={movie.id} />
+      <PartnerTrack type="MOVIE_OPEN" movieId={movie.id} />
       <JsonLd data={[
         movieJsonLd(movie),
         videoObjectJsonLd(movie),

@@ -28,6 +28,7 @@ export default async function AdminPage() {
           <Link href="/admin/telegram" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">Telegram</Link>
           <Link href="/admin/ads" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">РЕКЛАМА</Link>
           <Link href="/admin/home-selection" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">Подборка главной</Link>
+          <Link href="/admin/collaboration" className="bg-[#e50914] text-white font-bold px-5 py-3 rounded-sm">Сотрудничество</Link>
           <Link href="/admin/analytics" className="bg-[#333] text-white font-bold px-5 py-3 rounded-sm">Аналитика</Link>
         </div>
       </div>

@@ -636,3 +636,309 @@ model SeoLandingPage {
   @@index([isIndexable, sitemapIncluded])
   @@index([totalDemand])
 }
+
+enum PartnerStatus {
+  ACTIVE
+  PAUSED
+  BLOCKED
+}
+
+enum PartnerAttributionModel {
+  FIRST_CLICK_LOCKED
+  LAST_CLICK
+}
+
+enum PartnerLinkTargetType {
+  AUTHOR_HUB
+  COLLECTION
+  MOVIE
+  HOME
+  CUSTOM
+}
+
+enum PartnerEventType {
+  LINK_CLICK
+  UNIQUE_VISITOR
+  RETURN_VISIT
+  AUTHOR_HUB_OPEN
+  COLLECTION_OPEN
+  MOVIE_OPEN
+  PLAYER_START
+  AD_VIEW
+  AD_CLICK
+}
+
+enum CreatorCollectionStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+enum PartnerRevenueStatus {
+  DRAFT
+  CALCULATED
+  CONFIRMED
+  CLOSED
+  PAID
+}
+
+enum PartnerPayoutStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum PartnerRevenuePeriodType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+model Partner {
+  id                          String                    @id @default(cuid())
+  name                        String
+  publicName                  String?
+  cabinetTitle                String?
+  slug                        String                    @unique
+  login                       String                    @unique
+  passwordHash                String
+  email                       String?
+  avatarUrl                   String?
+  coverUrl                    String?
+  description                 String?                   @db.Text
+  commissionPercent           Decimal                   @db.Decimal(5, 2)
+  attributionDays             Int                       @default(30)
+  attributionModel            PartnerAttributionModel   @default(FIRST_CLICK_LOCKED)
+  status                      PartnerStatus             @default(ACTIVE)
+  canManageCollections        Boolean                   @default(true)
+  requireCollectionModeration Boolean                   @default(true)
+  showFinancials              Boolean                   @default(true)
+  linksBlocked                Boolean                   @default(false)
+  adminComment                String?                   @db.Text
+  lastLoginAt                 DateTime?
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PartnerSession {
+  id         String   @id @default(cuid())
+  partnerId  String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([partnerId])
+  @@index([expiresAt])
+}
+
+model PartnerLoginAttempt {
+  id        String   @id @default(cuid())
+  login     String
+  ipHash    String?
+  success   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([login, createdAt])
+  @@index([ipHash, createdAt])
+}
+
+model PartnerLink {
+  id           String                @id @default(cuid())
+  partnerId    String
+  name         String
+  slug         String
+  source       String?
+  targetType   PartnerLinkTargetType
+  targetUrl    String?
+  collectionId String?
+  movieId      String?
+  isActive     Boolean               @default(true)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@unique([partnerId, slug])
+  @@index([partnerId, isActive])
+  @@index([collectionId])
+  @@index([movieId])
+}
+
+model PartnerVisitor {
+  id            String   @id @default(cuid())
+  visitorId     String   @unique
+  firstVisitAt  DateTime @default(now())
+  lastVisitAt   DateTime @default(now())
+  ipHash        String?
+  userAgentHash String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([lastVisitAt])
+}
+
+model PartnerAttribution {
+  id               String                  @id @default(cuid())
+  visitorId        String
+  partnerId        String
+  partnerLinkId    String?
+  attributionModel PartnerAttributionModel
+  startedAt        DateTime                @default(now())
+  expiresAt        DateTime
+  isActive         Boolean                 @default(true)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([visitorId, isActive, expiresAt])
+  @@index([partnerId, startedAt])
+  @@index([partnerLinkId])
+}
+
+model PartnerEvent {
+  id             String           @id @default(cuid())
+  partnerId      String
+  attributionId  String?
+  visitorId      String
+  partnerLinkId  String?
+  collectionId   String?
+  movieId        String?
+  type           PartnerEventType
+  revenueAmount  Decimal?         @db.Decimal(18, 8)
+  source         String?
+  metadataJson   Json?
+  createdAt      DateTime         @default(now())
+
+  @@index([partnerId, createdAt])
+  @@index([visitorId, createdAt])
+  @@index([type, createdAt])
+  @@index([partnerLinkId, createdAt])
+  @@index([collectionId, createdAt])
+  @@index([movieId, createdAt])
+}
+
+model CreatorHub {
+  id          String   @id @default(cuid())
+  partnerId   String   @unique
+  title       String
+  slug        String   @unique
+  description String?  @db.Text
+  coverUrl    String?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished])
+}
+
+model CreatorCollection {
+  id                  String                  @id @default(cuid())
+  hubId               String
+  partnerId           String
+  title               String
+  slug                String
+  description         String?                 @db.Text
+  coverUrl            String?
+  position            Int                     @default(0)
+  status              CreatorCollectionStatus @default(DRAFT)
+  moderationComment   String?                 @db.Text
+  submittedAt         DateTime?
+  publishedAt         DateTime?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@unique([hubId, slug])
+  @@index([partnerId, status])
+  @@index([hubId, position])
+}
+
+model CreatorCollectionMovie {
+  id            String   @id @default(cuid())
+  collectionId  String
+  movieId       String
+  position      Int
+  authorComment String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([collectionId, movieId])
+  @@index([collectionId, position])
+  @@index([movieId])
+}
+
+model MonetizationRate {
+  id              String   @id @default(cuid())
+  playerStartRate Decimal  @db.Decimal(18, 8)
+  videoViewRate   Decimal  @db.Decimal(18, 8)
+  videoClickRate  Decimal  @db.Decimal(18, 8)
+  currency        String   @default("USD")
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([effectiveFrom, effectiveTo])
+}
+
+model PartnerCommissionRate {
+  id            String   @id @default(cuid())
+  partnerId     String
+  percent       Decimal  @db.Decimal(5, 2)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime @default(now())
+  createdBy      String?
+
+  @@index([partnerId, effectiveFrom])
+}
+
+model PartnerRevenuePeriod {
+  id                        String                   @id @default(cuid())
+  partnerId                 String
+  periodType                PartnerRevenuePeriodType @default(CUSTOM)
+  periodFrom                DateTime
+  periodTo                  DateTime
+  playerStarts              Int                      @default(0)
+  videoViews                Int                      @default(0)
+  videoClicks               Int                      @default(0)
+  playerStartRateSnapshot   Decimal                  @db.Decimal(18, 8)
+  videoViewRateSnapshot     Decimal                  @db.Decimal(18, 8)
+  videoClickRateSnapshot    Decimal                  @db.Decimal(18, 8)
+  commissionPercentSnapshot Decimal                  @db.Decimal(5, 2)
+  estimatedGrossRevenue     Decimal                  @db.Decimal(18, 8)
+  confirmedGrossRevenue     Decimal?                 @db.Decimal(18, 8)
+  manualAdjustment          Decimal                  @default(0) @db.Decimal(18, 8)
+  partnerCommission         Decimal?                 @db.Decimal(18, 8)
+  currency                  String                   @default("USD")
+  status                    PartnerRevenueStatus     @default(DRAFT)
+  confirmedAt               DateTime?
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+
+  @@unique([partnerId, periodFrom, periodTo])
+  @@index([partnerId, status])
+  @@index([periodFrom, periodTo])
+}
+
+model PartnerPayout {
+  id          String              @id @default(cuid())
+  partnerId   String
+  revenuePeriodId String?
+  periodFrom  DateTime
+  periodTo    DateTime
+  amount      Decimal             @db.Decimal(18, 8)
+  currency    String              @default("USD")
+  status      PartnerPayoutStatus @default(PENDING)
+  paidAt      DateTime?
+  comment     String?             @db.Text
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([partnerId, status])
+  @@index([revenuePeriodId])
+  @@index([createdAt])
+}

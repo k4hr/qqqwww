@@ -1,0 +1,46 @@
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { adminModerateCollection } from "@/app/admin/collaboration/actions";
+import { buttonClass, CollaborationAdminShell, Field, inputClass } from "@/app/admin/collaboration/_components";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminCreatorCollectionsPage() {
+  const [collections, partners, hubs] = await Promise.all([
+    prisma.creatorCollection.findMany({ orderBy: [{ status: "asc" }, { updatedAt: "desc" }], take: 200 }),
+    prisma.partner.findMany({ take: 200 }),
+    prisma.creatorHub.findMany({ take: 200 }),
+  ]);
+  const partnerById = new Map(partners.map((partner) => [partner.id, partner]));
+  const hubById = new Map(hubs.map((hub) => [hub.id, hub]));
+
+  return (
+    <CollaborationAdminShell title="Авторские подборки" description="Очередь модерации и публикация подборок партнёров.">
+      <section className="grid gap-4">
+        {collections.map((collection) => {
+          const partner = partnerById.get(collection.partnerId);
+          const hub = hubById.get(collection.hubId);
+          return (
+            <article key={collection.id} className="admin-panel p-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 className="text-xl font-black text-[#222]">{collection.title}</h2>
+                  <div className="mt-1 text-sm text-neutral-500">{partner?.publicName || partner?.name || collection.partnerId} · {collection.status} · /collections/{hub?.slug}/{collection.slug}</div>
+                  {collection.description ? <p className="mt-2 text-sm text-neutral-600">{collection.description}</p> : null}
+                </div>
+                {hub ? <Link className="rounded-xl border border-[#ddd] px-4 py-2 text-sm font-bold text-[#333]" href={`/collections/${hub.slug}/${collection.slug}`}>Открыть</Link> : null}
+              </div>
+              <form action={adminModerateCollection} className="mt-4 grid gap-3 md:grid-cols-[220px_minmax(0,1fr)_auto] md:items-end">
+                <input type="hidden" name="id" value={collection.id} />
+                <Field label="Статус"><select name="status" defaultValue={collection.status} className={inputClass}><option value="DRAFT">DRAFT</option><option value="PENDING_REVIEW">PENDING_REVIEW</option><option value="PUBLISHED">PUBLISHED</option><option value="REJECTED">REJECTED</option><option value="ARCHIVED">ARCHIVED</option></select></Field>
+                <Field label="Комментарий модератора"><input name="moderationComment" defaultValue={collection.moderationComment || ""} className={inputClass} /></Field>
+                <button className={buttonClass}>Сохранить</button>
+              </form>
+            </article>
+          );
+        })}
+        {!collections.length ? <div className="admin-panel p-5 text-neutral-500">Подборок пока нет.</div> : null}
+      </section>
+    </CollaborationAdminShell>
+  );
+}

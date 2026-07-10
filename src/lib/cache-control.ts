@@ -5,6 +5,7 @@ export const PRIVATE_CACHE_CONTROL = "private, no-store, max-age=0, must-revalid
 const PRIVATE_PREFIXES = [
   "/admin",
   "/api",
+  "/partner",
   "/tg",
   "/telegram",
 ] as const;

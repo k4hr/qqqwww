@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Play } from "lucide-react";
+import { trackPartnerPlayerStart } from "@/components/partner-track";
 
 type VibixPlayerProps = {
   title?: string | null;
@@ -12,6 +13,7 @@ type VibixPlayerProps = {
   embedCode?: string | null;
   iframeUrl?: string | null;
   posterUrl?: string | null;
+  movieId?: string | null;
 };
 
 type VibixDataType = "movie" | "series" | "serial" | "kp" | "imdb";
@@ -158,13 +160,20 @@ function normalizeIframeUrl(iframeUrl?: string | null) {
   }
 }
 
-export function VibixPlayer({ title, kinopoiskId, imdbId, vibixId, vibixType, embedCode, iframeUrl, posterUrl }: VibixPlayerProps) {
+export function VibixPlayer({ title, kinopoiskId, imdbId, vibixId, vibixType, embedCode, iframeUrl, posterUrl, movieId }: VibixPlayerProps) {
   const attrs = useMemo(() => buildVibixAttrs({ kinopoiskId, imdbId, vibixId, vibixType, embedCode }), [kinopoiskId, imdbId, vibixId, vibixType, embedCode]);
   const attrsKey = attrs ? `${attrs["data-type"]}-${attrs["data-id"]}` : null;
   const normalizedIframeUrl = useMemo(() => normalizeIframeUrl(iframeUrl), [iframeUrl]);
   const [iframeFailed, setIframeFailed] = useState(false);
   const iframeTimeoutRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const partnerStartTrackedRef = useRef(false);
+
+  const trackPartnerStartOnce = () => {
+    if (partnerStartTrackedRef.current) return;
+    partnerStartTrackedRef.current = true;
+    trackPartnerPlayerStart(movieId);
+  };
 
   useEffect(() => {
     if (embedCode?.trim() && !buildEmbedAttrs(embedCode)) {
@@ -240,7 +249,7 @@ export function VibixPlayer({ title, kinopoiskId, imdbId, vibixId, vibixType, em
 
   if (attrs && attrsKey) {
     return (
-      <div ref={containerRef} className="vibix-player-shell">
+      <div ref={containerRef} className="vibix-player-shell" onPointerDown={trackPartnerStartOnce}>
         <ins key={attrsKey} {...attrs} />
       </div>
     );
@@ -248,7 +257,7 @@ export function VibixPlayer({ title, kinopoiskId, imdbId, vibixId, vibixType, em
 
   if (normalizedIframeUrl && !iframeFailed) {
     return (
-      <div className="vibix-player-shell">
+      <div className="vibix-player-shell" onPointerDown={trackPartnerStartOnce}>
         <iframe
           src={normalizedIframeUrl}
           allowFullScreen
