@@ -82,17 +82,30 @@ export async function renderCreatorCollectionPage(partnerSlug: string, collectio
         <p className="mt-3 max-w-4xl text-[#a1a1aa]">{collection.description || hub.description || "Авторская подборка REDFILM."}</p>
       </section>
       <section className="mt-6 grid gap-5">
-        {ordered.map(({ item, movie }) => movie ? (
-          <div key={item.id} className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
-            <MovieCard movie={movie} />
-            <div className="mf-panel p-5">
-              <h2 className="text-2xl font-black text-white">{movie.titleRu}</h2>
-              <div className="mt-2 text-sm text-[#a1a1aa]">{movie.year} · КП {movie.kpRating?.toFixed(1) ?? "—"} · IMDb {movie.imdbRating?.toFixed(1) ?? "—"}</div>
-              {item.authorComment ? <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-[#d4d4d8]"><b className="text-white">Почему советую:</b><br />{item.authorComment}</div> : null}
-              <Link href={watchPath(movie)} className="mt-4 inline-flex rounded-xl bg-[#e50914] px-4 py-2 text-sm font-black text-white">Смотреть</Link>
+        {ordered.map(({ item, movie }) => {
+          if (!movie) return null;
+
+          const authorComment = item.authorComment?.trim();
+          const fallbackDescription = movie.description?.trim();
+          const displayText = authorComment || fallbackDescription;
+
+          return (
+            <div key={item.id} className="grid items-start gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
+              <MovieCard movie={movie} />
+              <div className="mf-panel self-start p-5">
+                <h2 className="text-2xl font-black text-white">{movie.titleRu}</h2>
+                <div className="mt-2 text-sm text-[#a1a1aa]">{movie.year} · КП {movie.kpRating?.toFixed(1) ?? "—"} · IMDb {movie.imdbRating?.toFixed(1) ?? "—"}</div>
+                {displayText ? (
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-[#d4d4d8]">
+                    {authorComment ? <div className="mb-2 font-black text-white">Почему советую</div> : null}
+                    <p className="line-clamp-6 whitespace-pre-line leading-7">{displayText}</p>
+                  </div>
+                ) : null}
+                <Link href={watchPath(movie)} className="mt-4 inline-flex rounded-xl bg-[#e50914] px-4 py-2 text-sm font-black text-white">Смотреть</Link>
+              </div>
             </div>
-          </div>
-        ) : null)}
+          );
+        })}
       </section>
     </div>
   );
