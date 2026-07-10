@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requirePartnerSession } from "@/lib/collaboration/auth";
-import { partnerRemoveMovie, partnerReorderMovies, partnerSubmitCollection, partnerUpdateCollection } from "@/app/partner/actions";
+import { partnerReorderMovies, partnerSubmitCollection, partnerUpdateCollection } from "@/app/partner/actions";
 import { PartnerCatalogSearch } from "@/app/partner/collections/[id]/catalog-search";
 import { PartnerField, partnerButton, partnerInput, PartnerShell } from "@/app/partner/_components";
 import { ImageUploadField } from "@/components/image-upload-field";
@@ -63,7 +63,7 @@ export default async function PartnerCollectionEditorPage({ params }: Props) {
                 </div>
                 <div className="grid gap-3">
                   <label className="grid gap-1 text-sm font-bold text-white"><span>Позиция в подборке</span><input name={`position:${item.id}`} type="number" min="0" defaultValue={item.position} className={partnerInput} /></label>
-                  <button formAction={partnerRemoveMovie} name="id" value={item.id} className="rounded-xl border border-white/10 px-3 py-2 text-sm font-bold text-white hover:border-[#e50914]">Удалить</button>
+                  <button type="submit" name="removeId" value={item.id} className="rounded-xl border border-white/10 px-3 py-2 text-sm font-bold text-white hover:border-[#e50914]">Удалить</button>
                 </div>
               </div>
             );

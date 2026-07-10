@@ -161,6 +161,7 @@ export async function partnerRemoveMovie(formData: FormData) {
   if (!item || !collection || collection.partnerId !== partner.id) redirect("/partner/collections?error=not_found");
   await prisma.creatorCollectionMovie.delete({ where: { id } });
   refreshPartner();
+  revalidatePath(`/partner/collections/${collection.id}`);
   redirect(`/partner/collections/${collection.id}?removed=1`);
 }
 
@@ -169,6 +170,15 @@ export async function partnerReorderMovies(formData: FormData) {
   const collectionId = readText(formData, "collectionId");
   const collection = collectionId ? await prisma.creatorCollection.findUnique({ where: { id: collectionId } }) : null;
   if (!collection || collection.partnerId !== partner.id) redirect("/partner/collections?error=not_found");
+
+  const removeId = readText(formData, "removeId");
+  if (removeId) {
+    await prisma.creatorCollectionMovie.deleteMany({ where: { id: removeId, collectionId } });
+    refreshPartner();
+    revalidatePath(`/partner/collections/${collectionId}`);
+    redirect(`/partner/collections/${collectionId}?removed=1`);
+  }
+
   const updates: Array<Prisma.PrismaPromise<unknown>> = [];
   for (const [key, value] of formData.entries()) {
     if (!key.startsWith("position:") || typeof value !== "string") continue;
@@ -177,6 +187,6 @@ export async function partnerReorderMovies(formData: FormData) {
   }
   await prisma.$transaction(updates);
   refreshPartner();
+  revalidatePath(`/partner/collections/${collectionId}`);
   redirect(`/partner/collections/${collectionId}?ordered=1`);
 }
-
