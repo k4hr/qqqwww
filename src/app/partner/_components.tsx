@@ -6,7 +6,6 @@ const nav = [
   ["/partner", "Обзор"],
   ["/partner/links", "Мои ссылки"],
   ["/partner/collections", "Мои подборки"],
-  ["/partner/collections/new", "Каталог"],
   ["/partner/statistics", "Статистика"],
   ["/partner/revenue", "Доход"],
   ["/partner/payouts", "Выплаты"],

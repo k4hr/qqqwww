@@ -1,12 +1,13 @@
 "use server";
 
-import { Prisma, type PartnerLinkTargetType } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { clearPartnerSession, createPartnerSession, getRequestFingerprint, requirePartnerSession } from "@/lib/collaboration/auth";
 import { clampNumber, readText, verifyPassword } from "@/lib/collaboration/security";
+import { readImageDataUrl } from "@/lib/collaboration/image-upload";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 function partnerPaths() {
@@ -17,8 +18,19 @@ function refreshPartner() {
   for (const path of partnerPaths()) revalidatePath(path);
 }
 
-function validTargetType(value: string): PartnerLinkTargetType {
-  return ["AUTHOR_HUB", "COLLECTION", "MOVIE", "HOME", "CUSTOM"].includes(value) ? value as PartnerLinkTargetType : "AUTHOR_HUB";
+async function uniqueCollectionSlug(hubId: string, partnerId: string, title: string, excludeId?: string) {
+  const base = slugify(title) || "podborka";
+  let candidate = base;
+  let suffix = 2;
+  while (true) {
+    const [collection, link] = await Promise.all([
+      prisma.creatorCollection.findFirst({ where: { hubId, slug: candidate, ...(excludeId ? { id: { not: excludeId } } : {}) }, select: { id: true } }),
+      prisma.partnerLink.findFirst({ where: { partnerId, slug: candidate, ...(excludeId ? { collectionId: { not: excludeId } } : {}) }, select: { id: true } }),
+    ]);
+    if (!collection && !link) return candidate;
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
 }
 
 export async function partnerLogin(formData: FormData) {
@@ -53,9 +65,11 @@ export async function partnerCreateCollection(formData: FormData) {
   const hub = await prisma.creatorHub.findUnique({ where: { partnerId: partner.id } });
   if (!hub) redirect("/partner/collections?error=hub");
   const title = readText(formData, "title", 160);
-  const slug = slugify(readText(formData, "slug", 120) || title);
-  if (!title || !slug) redirect("/partner/collections/new?error=required");
+  if (!title) redirect("/partner/collections/new?error=required");
+  const slug = await uniqueCollectionSlug(hub.id, partner.id, title);
+  const lastCollection = await prisma.creatorCollection.findFirst({ where: { hubId: hub.id }, orderBy: { position: "desc" }, select: { position: true } });
   const status = partner.requireCollectionModeration ? "DRAFT" : "PUBLISHED";
+  const coverUrl = await readImageDataUrl(formData, "coverImage");
   const collection = await prisma.creatorCollection.create({
     data: {
       hubId: hub.id,
@@ -63,11 +77,16 @@ export async function partnerCreateCollection(formData: FormData) {
       title,
       slug,
       description: readText(formData, "description", 1000) || null,
-      coverUrl: readText(formData, "coverUrl", 500) || null,
-      position: Math.floor(clampNumber(readText(formData, "position"), 0, 0, 10_000)),
+      coverUrl,
+      position: (lastCollection?.position ?? -1) + 1,
       status,
       publishedAt: status === "PUBLISHED" ? new Date() : null,
     },
+  });
+  await prisma.partnerLink.upsert({
+    where: { partnerId_slug: { partnerId: partner.id, slug } },
+    update: { name: collection.title, targetType: "COLLECTION", targetUrl: `/collections/${partner.slug}/${slug}`, collectionId: collection.id, isActive: true },
+    create: { partnerId: partner.id, name: collection.title, slug, targetType: "COLLECTION", targetUrl: `/collections/${partner.slug}/${slug}`, collectionId: collection.id, isActive: true },
   });
   refreshPartner();
   revalidatePath(`/collections/${hub.slug}`);
@@ -80,19 +99,27 @@ export async function partnerUpdateCollection(formData: FormData) {
   const collection = id ? await prisma.creatorCollection.findUnique({ where: { id } }) : null;
   if (!collection || collection.partnerId !== partner.id) redirect("/partner/collections?error=not_found");
   const title = readText(formData, "title", 160);
-  const slug = slugify(readText(formData, "slug", 120) || title);
-  await prisma.creatorCollection.update({
-    where: { id },
-    data: {
-      title,
-      slug,
-      description: readText(formData, "description", 1000) || null,
-      coverUrl: readText(formData, "coverUrl", 500) || null,
-      position: Math.floor(clampNumber(readText(formData, "position"), collection.position, 0, 10_000)),
-      status: collection.status === "PUBLISHED" && partner.requireCollectionModeration ? "PENDING_REVIEW" : collection.status,
-      submittedAt: collection.status === "PUBLISHED" && partner.requireCollectionModeration ? new Date() : collection.submittedAt,
-    },
-  });
+  if (!title) redirect(`/partner/collections/${id}?error=required`);
+  const slug = await uniqueCollectionSlug(collection.hubId, partner.id, title, collection.id);
+  const coverUrl = await readImageDataUrl(formData, "coverImage", collection.coverUrl);
+  await prisma.$transaction([
+    prisma.creatorCollection.update({
+      where: { id },
+      data: {
+        title,
+        slug,
+        description: readText(formData, "description", 1000) || null,
+        coverUrl,
+        status: collection.status === "PUBLISHED" && partner.requireCollectionModeration ? "PENDING_REVIEW" : collection.status,
+        submittedAt: collection.status === "PUBLISHED" && partner.requireCollectionModeration ? new Date() : collection.submittedAt,
+      },
+    }),
+    prisma.partnerLink.upsert({
+      where: { partnerId_slug: { partnerId: partner.id, slug: collection.slug } },
+      update: { slug, name: title, targetUrl: `/collections/${partner.slug}/${slug}`, collectionId: id, targetType: "COLLECTION", isActive: true },
+      create: { partnerId: partner.id, name: title, slug, targetType: "COLLECTION", targetUrl: `/collections/${partner.slug}/${slug}`, collectionId: id, isActive: true },
+    }),
+  ]);
   refreshPartner();
   redirect(`/partner/collections/${id}?saved=1`);
 }
@@ -153,35 +180,3 @@ export async function partnerReorderMovies(formData: FormData) {
   redirect(`/partner/collections/${collectionId}?ordered=1`);
 }
 
-export async function partnerCreateLink(formData: FormData) {
-  const { partner } = await requirePartnerSession();
-  if (partner.linksBlocked) redirect("/partner/links?error=blocked");
-  const name = readText(formData, "name", 120);
-  const slug = slugify(readText(formData, "slug", 120) || name);
-  if (!name || !slug) redirect("/partner/links?error=required");
-  const collectionId = readText(formData, "collectionId") || null;
-  const movieId = readText(formData, "movieId") || null;
-  if (collectionId) {
-    const collection = await prisma.creatorCollection.findFirst({ where: { id: collectionId, partnerId: partner.id } });
-    if (!collection) redirect("/partner/links?error=collection");
-  }
-  if (movieId) {
-    const movie = await prisma.movie.findFirst({ where: { AND: [vibixPublicMovieWhere, { id: movieId }] }, select: { id: true } });
-    if (!movie) redirect("/partner/links?error=movie");
-  }
-  await prisma.partnerLink.create({
-    data: {
-      partnerId: partner.id,
-      name,
-      slug,
-      source: readText(formData, "source", 80) || null,
-      targetType: validTargetType(readText(formData, "targetType")),
-      targetUrl: readText(formData, "targetUrl", 500) || null,
-      collectionId,
-      movieId,
-      isActive: true,
-    },
-  });
-  refreshPartner();
-  redirect("/partner/links?created=1");
-}

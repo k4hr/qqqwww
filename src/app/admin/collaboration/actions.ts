@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { calculateGrossRevenue, calculatePartnerCommission, getCurrentMonetizationRate } from "@/lib/collaboration/revenue";
 import { clampNumber, hashPassword, randomToken, readBool, readText } from "@/lib/collaboration/security";
+import { readImageDataUrl } from "@/lib/collaboration/image-upload";
 
 const ADMIN_COLLAB_PATHS = ["/admin/collaboration", "/admin/collaboration/partners", "/admin/collaboration/collections", "/admin/collaboration/revenue", "/admin/collaboration/payouts", "/admin/collaboration/settings"];
 
@@ -58,6 +59,8 @@ export async function adminCreatePartner(formData: FormData) {
   if (!name || !login || !slug || password.length < 8) redirect("/admin/collaboration/partners?error=required");
 
   const publicName = readText(formData, "publicName", 120);
+  const avatarUrl = await readImageDataUrl(formData, "avatarImage");
+  const coverUrl = await readImageDataUrl(formData, "coverImage");
   const partner = await prisma.partner.create({
     data: {
       name,
@@ -67,8 +70,8 @@ export async function adminCreatePartner(formData: FormData) {
       login,
       passwordHash: hashPassword(password),
       email: readText(formData, "email", 200) || null,
-      avatarUrl: readText(formData, "avatarUrl", 500) || null,
-      coverUrl: readText(formData, "coverUrl", 500) || null,
+      avatarUrl,
+      coverUrl,
       description: readText(formData, "description", 2000) || null,
       commissionPercent,
       attributionDays,
@@ -104,17 +107,6 @@ export async function adminCreatePartner(formData: FormData) {
         isActive: true,
       },
     }),
-    prisma.creatorCollection.create({
-      data: {
-        hubId: hub.id,
-        partnerId: partner.id,
-        title: "Моя первая подборка",
-        slug: "moya-pervaya-podborka",
-        description: "Черновик авторской подборки.",
-        position: 0,
-        status: "DRAFT",
-      },
-    }),
   ]);
 
   refreshAdmin();
@@ -124,7 +116,11 @@ export async function adminCreatePartner(formData: FormData) {
 export async function adminUpdatePartner(formData: FormData) {
   const id = readText(formData, "id");
   if (!id) redirect("/admin/collaboration/partners?error=id");
+  const existing = await prisma.partner.findUnique({ where: { id }, select: { avatarUrl: true, coverUrl: true } });
+  if (!existing) redirect("/admin/collaboration/partners?error=id");
   const slug = slugify(readText(formData, "slug", 90));
+  const avatarUrl = await readImageDataUrl(formData, "avatarImage", existing.avatarUrl);
+  const coverUrl = await readImageDataUrl(formData, "coverImage", existing.coverUrl);
   await prisma.partner.update({
     where: { id },
     data: {
@@ -133,8 +129,8 @@ export async function adminUpdatePartner(formData: FormData) {
       cabinetTitle: readText(formData, "cabinetTitle", 160) || null,
       slug,
       email: readText(formData, "email", 200) || null,
-      avatarUrl: readText(formData, "avatarUrl", 500) || null,
-      coverUrl: readText(formData, "coverUrl", 500) || null,
+      avatarUrl,
+      coverUrl,
       description: readText(formData, "description", 2000) || null,
       attributionDays: Math.floor(clampNumber(readText(formData, "attributionDays"), 30, 1, 365)),
       attributionModel: validAttributionModel(readText(formData, "attributionModel")),
@@ -148,7 +144,7 @@ export async function adminUpdatePartner(formData: FormData) {
   });
   await prisma.creatorHub.updateMany({
     where: { partnerId: id },
-    data: { slug, title: `Подборки ${readText(formData, "publicName", 120) || readText(formData, "name", 120)}`, description: readText(formData, "description", 2000) || null, coverUrl: readText(formData, "coverUrl", 500) || null, isPublished: validStatus(readText(formData, "status")) === "ACTIVE" },
+    data: { slug, title: `Подборки ${readText(formData, "publicName", 120) || readText(formData, "name", 120)}`, description: readText(formData, "description", 2000) || null, coverUrl, isPublished: validStatus(readText(formData, "status")) === "ACTIVE" },
   });
   refreshAdmin();
   redirect("/admin/collaboration/partners?updated=1");

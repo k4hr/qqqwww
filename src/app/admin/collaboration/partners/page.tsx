@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { adminChangePartnerCommission, adminCreatePartner, adminEndPartnerAttributions, adminResetPartnerPassword, adminSetPartnerStatus, adminUpdatePartner } from "@/app/admin/collaboration/actions";
 import { buttonClass, CollaborationAdminShell, Field, ghostButtonClass, inputClass } from "@/app/admin/collaboration/_components";
 import { siteUrl } from "@/lib/seo-links";
+import { ImageUploadField } from "@/components/image-upload-field";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function PartnersPage({ searchParams }: Props) {
 
       <section className="admin-panel p-5">
         <h2 className="text-xl font-black text-[#222]">Создать партнёра</h2>
-        <form action={adminCreatePartner} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <form action={adminCreatePartner} encType="multipart/form-data" className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Имя"><input name="name" required className={inputClass} /></Field>
           <Field label="Публичное имя"><input name="publicName" className={inputClass} /></Field>
           <Field label="Название кабинета"><input name="cabinetTitle" className={inputClass} /></Field>
@@ -45,8 +46,8 @@ export default async function PartnersPage({ searchParams }: Props) {
           <Field label="Логин"><input name="login" required className={inputClass} /></Field>
           <Field label="Пароль"><input name="password" minLength={8} className={inputClass} placeholder="минимум 8 символов или пусто для генерации" /></Field>
           <Field label="Email"><input name="email" type="email" className={inputClass} /></Field>
-          <Field label="Аватар"><input name="avatarUrl" className={inputClass} /></Field>
-          <Field label="Обложка"><input name="coverUrl" className={inputClass} /></Field>
+          <ImageUploadField name="avatarImage" label="Аватар блогера" />
+          <ImageUploadField name="coverImage" label="Обложка страницы блогера" />
           <Field label="Процент"><input name="commissionPercent" defaultValue="30" className={inputClass} /></Field>
           <Field label="Срок атрибуции, дней"><input name="attributionDays" defaultValue="30" className={inputClass} /></Field>
           <Field label="Модель"><select name="attributionModel" className={inputClass}><option value="FIRST_CLICK_LOCKED">FIRST_CLICK_LOCKED</option><option value="LAST_CLICK">LAST_CLICK</option></select></Field>
@@ -85,15 +86,15 @@ export default async function PartnersPage({ searchParams }: Props) {
 
               <details className="mt-4 rounded-2xl border border-[#eee] p-4">
                 <summary className="cursor-pointer font-black text-[#222]">Редактировать</summary>
-                <form action={adminUpdatePartner} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <form action={adminUpdatePartner} encType="multipart/form-data" className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <input type="hidden" name="id" value={partner.id} />
                   <Field label="Имя"><input name="name" defaultValue={partner.name} className={inputClass} /></Field>
                   <Field label="Публичное имя"><input name="publicName" defaultValue={partner.publicName || ""} className={inputClass} /></Field>
                   <Field label="Название кабинета"><input name="cabinetTitle" defaultValue={partner.cabinetTitle || ""} className={inputClass} /></Field>
                   <Field label="Slug"><input name="slug" defaultValue={partner.slug} className={inputClass} /></Field>
                   <Field label="Email"><input name="email" defaultValue={partner.email || ""} className={inputClass} /></Field>
-                  <Field label="Аватар"><input name="avatarUrl" defaultValue={partner.avatarUrl || ""} className={inputClass} /></Field>
-                  <Field label="Обложка"><input name="coverUrl" defaultValue={partner.coverUrl || ""} className={inputClass} /></Field>
+                  <ImageUploadField name="avatarImage" label="Аватар блогера" currentUrl={partner.avatarUrl} />
+                  <ImageUploadField name="coverImage" label="Обложка страницы блогера" currentUrl={partner.coverUrl} />
                   <Field label="Срок атрибуции"><input name="attributionDays" defaultValue={partner.attributionDays} className={inputClass} /></Field>
                   <Field label="Модель"><select name="attributionModel" defaultValue={partner.attributionModel} className={inputClass}><option value="FIRST_CLICK_LOCKED">FIRST_CLICK_LOCKED</option><option value="LAST_CLICK">LAST_CLICK</option></select></Field>
                   <Field label="Статус"><select name="status" defaultValue={partner.status} className={inputClass}><option value="ACTIVE">ACTIVE</option><option value="PAUSED">PAUSED</option><option value="BLOCKED">BLOCKED</option></select></Field>
