@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
 import { clearPartnerSession, createPartnerSession, getRequestFingerprint, requirePartnerSession } from "@/lib/collaboration/auth";
 import { clampNumber, readText, verifyPassword } from "@/lib/collaboration/security";
-import { readImageDataUrl } from "@/lib/collaboration/image-upload";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 function partnerPaths() {
@@ -69,7 +68,6 @@ export async function partnerCreateCollection(formData: FormData) {
   const slug = await uniqueCollectionSlug(hub.id, partner.id, title);
   const lastCollection = await prisma.creatorCollection.findFirst({ where: { hubId: hub.id }, orderBy: { position: "desc" }, select: { position: true } });
   const status = partner.requireCollectionModeration ? "DRAFT" : "PUBLISHED";
-  const coverUrl = await readImageDataUrl(formData, "coverImage");
   const collection = await prisma.creatorCollection.create({
     data: {
       hubId: hub.id,
@@ -77,7 +75,6 @@ export async function partnerCreateCollection(formData: FormData) {
       title,
       slug,
       description: readText(formData, "description", 1000) || null,
-      coverUrl,
       position: (lastCollection?.position ?? -1) + 1,
       status,
       publishedAt: status === "PUBLISHED" ? new Date() : null,
@@ -101,7 +98,6 @@ export async function partnerUpdateCollection(formData: FormData) {
   const title = readText(formData, "title", 160);
   if (!title) redirect(`/partner/collections/${id}?error=required`);
   const slug = await uniqueCollectionSlug(collection.hubId, partner.id, title, collection.id);
-  const coverUrl = await readImageDataUrl(formData, "coverImage", collection.coverUrl);
   await prisma.$transaction([
     prisma.creatorCollection.update({
       where: { id },
@@ -109,7 +105,6 @@ export async function partnerUpdateCollection(formData: FormData) {
         title,
         slug,
         description: readText(formData, "description", 1000) || null,
-        coverUrl,
         status: collection.status === "PUBLISHED" && partner.requireCollectionModeration ? "PENDING_REVIEW" : collection.status,
         submittedAt: collection.status === "PUBLISHED" && partner.requireCollectionModeration ? new Date() : collection.submittedAt,
       },

@@ -6,7 +6,6 @@ import { requirePartnerSession } from "@/lib/collaboration/auth";
 import { partnerReorderMovies, partnerSubmitCollection, partnerUpdateCollection } from "@/app/partner/actions";
 import { PartnerCatalogSearch } from "@/app/partner/collections/[id]/catalog-search";
 import { PartnerField, partnerButton, partnerInput, PartnerShell } from "@/app/partner/_components";
-import { ImageUploadField } from "@/components/image-upload-field";
 import { watchPath } from "@/lib/seo-links";
 
 export const dynamic = "force-dynamic";
@@ -33,11 +32,11 @@ export default async function PartnerCollectionEditorPage({ params }: Props) {
   return (
     <PartnerShell title={collection.title} description={`Статус подборки: ${statusLabel[collection.status] || collection.status}`}>
       <section className="mf-panel p-5">
-        <form action={partnerUpdateCollection} className="grid gap-4" encType="multipart/form-data">
+        <form action={partnerUpdateCollection} className="grid gap-4">
           <input type="hidden" name="id" value={collection.id} />
           <PartnerField label="Название подборки"><input name="title" defaultValue={collection.title} required className={partnerInput} /></PartnerField>
           <PartnerField label="Описание подборки"><textarea name="description" defaultValue={collection.description || ""} className={`${partnerInput} min-h-32`} placeholder="Расскажите, что объединяет фильмы и сериалы в этой подборке" /></PartnerField>
-          <ImageUploadField name="coverImage" label="Обложка подборки" currentUrl={collection.coverUrl} dark />
+          <p className="text-sm text-[#a1a1aa]">Обложка создаётся автоматически из постера первого фильма в подборке.</p>
           {collection.moderationComment ? <div className="rounded-2xl border border-[#e50914]/40 bg-[#e50914]/10 p-4 text-sm text-white"><b>Комментарий модератора:</b> {collection.moderationComment}</div> : null}
           <div className="flex flex-wrap gap-2"><button className={partnerButton}>Сохранить изменения</button><Link className="mf-btn" href="/partner/collections">Назад к подборкам</Link></div>
         </form>

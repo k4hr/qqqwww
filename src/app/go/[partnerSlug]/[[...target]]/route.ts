@@ -44,5 +44,5 @@ export async function GET(request: Request, { params }: Props) {
     }).catch(() => undefined);
   }
 
-  return NextResponse.redirect(new URL(redirectPath, url.origin), 302);
+  return NextResponse.redirect(siteUrl(redirectPath), 302);
 }
