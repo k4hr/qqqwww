@@ -6,8 +6,6 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 declare global {
   interface Window {
     ym?: (...args: unknown[]) => void;
-    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
-    cancelIdleCallback?: (handle: number) => void;
     __redfilmYandexMetrikaInitialized110229115?: boolean;
   }
 }

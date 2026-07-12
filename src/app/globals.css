@@ -529,3 +529,14 @@ html.is-telegram-webapp header {
     margin-top: 12px;
   }
 }
+
+
+/* Performance: skip rendering below-the-fold panels until they approach the viewport. */
+.cinematic-page .mf-panel {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 760px;
+}
+
+.cinematic-page .mf-card {
+  contain: layout paint style;
+}

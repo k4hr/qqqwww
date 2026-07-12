@@ -6,6 +6,7 @@ import { VibixUnion } from "@/components/vibix-union";
 import { MobileZoomLock } from "@/components/mobile-zoom-lock";
 import { TelegramWebAppBridge } from "@/components/telegram-webapp-bridge";
 import { YandexMetrika } from "@/components/yandex-metrika";
+import { AnalyticsClickBridge } from "@/components/analytics-click-bridge";
 import { getVibixAdSettings, getVibixAddTypesAttribute } from "@/lib/vibix-ads";
 import { siteUrl } from "@/lib/seo-links";
 
@@ -45,6 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <MobileZoomLock />
         <TelegramWebAppBridge />
         <YandexMetrika />
+        <AnalyticsClickBridge />
         <Header />
         <main className="cinematic-page">{children}</main>
         <Footer />

@@ -1,13 +1,11 @@
 # REDFILM performance patch
 
-Изменения:
-
-- LCP hero больше не является CSS `background-image`.
-- Первый hero-кадр рендерится как `<Image>` с `priority`, `fetchPriority="high"` и `loading="eager"`.
-- Одновременно загружается только активный hero-кадр, а не все backdrop-картинки слайдера.
-- Постер справа больше не конкурирует с LCP-картинкой за высокий приоритет.
-- Тяжёлые PNG-фоны заменены на WebP: примерно 1.88 МБ -> 125 КБ каждый.
-- Telegram WebApp SDK не загружается в обычном браузере; он подключается только при Telegram launch data.
-- Яндекс Метрика перенесена на idle/отложенную загрузку вместо блокировки первого экрана.
-
-Проверка сборки в среде подготовки была ограничена отсутствием сетевого доступа к binaries.prisma.sh. Изменённые TS/TSX-файлы отдельно прошли синтаксическую компиляцию TypeScript.
+- Enabled responsive Next.js image optimization (AVIF/WebP) for Yandex/TMDB posters and hero images.
+- Removed `unoptimized` from homepage cards and hero assets.
+- Added a 30-day optimized image cache TTL.
+- Converted movie cards back to Server Components.
+- Replaced per-card React click handlers with one delegated analytics listener.
+- Deferred below-the-fold panel rendering with `content-visibility: auto`.
+- Removed obsolete multi-megabyte PNG background assets.
+- Kept Yandex Metrika delayed until idle time.
+- Fixed npm lockfile registry URLs so production builds use registry.npmjs.org.

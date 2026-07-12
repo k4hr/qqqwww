@@ -85,7 +85,7 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
         fetchPriority={activeIndex === 0 ? "high" : "auto"}
         loading={activeIndex === 0 ? "eager" : "lazy"}
         sizes="(max-width: 768px) 100vw, 1280px"
-        unoptimized
+        quality={72}
         className="object-cover object-center opacity-65 transition-[opacity,transform] duration-700"
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_25%,rgba(229,9,20,.3),transparent_34%),linear-gradient(90deg,rgba(4,4,6,.98)_0%,rgba(4,4,6,.84)_43%,rgba(4,4,6,.2)_100%)] max-md:bg-[linear-gradient(0deg,rgba(4,4,6,.98)_4%,rgba(4,4,6,.78)_64%,rgba(4,4,6,.24)_100%)]" />
@@ -122,12 +122,12 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
                 fill
                 className="object-cover"
                 sizes="300px"
-                unoptimized
+                quality={70}
                 loading="lazy"
                 fetchPriority="low"
               />
             ) : (
-              <Image src={backgroundUrl} alt="" fill className="object-cover" sizes="300px" unoptimized loading="lazy" />
+              <Image src={backgroundUrl} alt="" fill className="object-cover" sizes="300px" quality={70} loading="lazy" />
             )}
           </div>
         </div>
