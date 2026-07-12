@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Movie, Prisma } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
 import { Film } from "lucide-react";
@@ -26,6 +27,34 @@ import { getContentTypeLabel, getContentTypePath, getContentTypePluralLabel } fr
 
 
 export const revalidate = 600;
+
+const movieCardSelect = {
+  id: true,
+  slug: true,
+  titleRu: true,
+  year: true,
+  type: true,
+  posterUrl: true,
+  quality: true,
+  kpRating: true,
+  imdbRating: true,
+} satisfies Prisma.MovieSelect;
+
+type MovieCardData = Pick<Movie, "id" | "slug" | "titleRu" | "year" | "type" | "posterUrl" | "quality" | "kpRating" | "imdbRating">;
+
+function toMovieCardData(movie: MovieCardData): MovieCardData {
+  return {
+    id: movie.id,
+    slug: movie.slug,
+    titleRu: movie.titleRu,
+    year: movie.year,
+    type: movie.type,
+    posterUrl: movie.posterUrl,
+    quality: movie.quality,
+    kpRating: movie.kpRating,
+    imdbRating: movie.imdbRating,
+  };
+}
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -59,10 +88,10 @@ export default async function WatchPage({ params }: Props) {
   const recommendationWhere = [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), { id: { not: movie.id } }];
   const [similarCandidates, audienceCandidates, genreCandidates, yearCandidates, countryCandidates, popularityStats] = await Promise.all([
     findSimilarSeoMovies(movie, 12),
-    prisma.movie.findMany({ where: { AND: [...recommendationWhere, buildAudienceCandidateWhere(movie)] }, include: { genres: { include: { genre: true } }, cast: { include: { person: true }, orderBy: { sortOrder: "asc" } } }, orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }], take: 180 }),
-    primaryGenre ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { genres: { some: { genreId: movie.genres[0].genreId } } }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 80 }) : Promise.resolve([]),
-    prisma.movie.findMany({ where: { AND: [...recommendationWhere, { year: movie.year }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 60 }),
-    countries[0] ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { country: { contains: countries[0], mode: "insensitive" } }] }, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 60 }) : Promise.resolve([]),
+    prisma.movie.findMany({ where: { AND: [...recommendationWhere, buildAudienceCandidateWhere(movie)] }, include: { genres: { include: { genre: true } }, cast: { include: { person: true }, orderBy: { sortOrder: "asc" } } }, orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }], take: 72 }),
+    primaryGenre ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { genres: { some: { genreId: movie.genres[0].genreId } } }] }, select: movieCardSelect, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 36 }) : Promise.resolve([]),
+    prisma.movie.findMany({ where: { AND: [...recommendationWhere, { year: movie.year }] }, select: movieCardSelect, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 30 }),
+    countries[0] ? prisma.movie.findMany({ where: { AND: [...recommendationWhere, { country: { contains: countries[0], mode: "insensitive" } }] }, select: movieCardSelect, orderBy: [{ kpRating: "desc" }, { createdAt: "desc" }], take: 30 }) : Promise.resolve([]),
     getRecentPopularityStats(7),
   ]);
   const excluded = new Set([movie.id]);
@@ -72,11 +101,20 @@ export default async function WatchPage({ params }: Props) {
     selected.forEach((item) => excluded.add(item.id));
     return selected;
   };
-  const similar = selectBlock(similarCandidates, 6, 1);
-  const watchedTogether = selectBlock(sortAudienceMovies(movie, audienceCandidates, 20).length ? sortAudienceMovies(movie, audienceCandidates, 20) : getPopularMovies(genreCandidates, popularityStats, 20));
-  const moreInGenre = selectBlock(genreCandidates);
-  const sameYear = selectBlock(yearCandidates);
-  const sameCountry = sameYear.length ? [] : selectBlock(countryCandidates);
+  const similarFull = selectBlock(similarCandidates, 6, 1);
+  const audienceRanked = sortAudienceMovies(movie, audienceCandidates, 20);
+  const watchedTogetherFull = selectBlock(audienceRanked.length ? audienceRanked : getPopularMovies(genreCandidates, popularityStats, 20));
+  const moreInGenreFull = selectBlock(genreCandidates);
+  const sameYearFull = selectBlock(yearCandidates);
+  const sameCountryFull = sameYearFull.length ? [] : selectBlock(countryCandidates);
+
+  // Передаём в клиентские карточки только реально используемые поля.
+  // Это сохраняет все существующие блоки и внешний вид, но заметно уменьшает RSC/HTML payload.
+  const similar = similarFull.map(toMovieCardData);
+  const watchedTogether = watchedTogetherFull.map(toMovieCardData);
+  const moreInGenre = moreInGenreFull.map(toMovieCardData);
+  const sameYear = sameYearFull.map(toMovieCardData);
+  const sameCountry = sameCountryFull.map(toMovieCardData);
   const description = movie.description.trim() || "Описание скоро появится";
   const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
   const contentTypePath = getContentTypePath(movie.type);

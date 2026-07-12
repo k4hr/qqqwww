@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { vibixPublicMovieWhere, vibixWatchMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere, buildCountryFilterWhere } from "@/lib/catalog-filters";
@@ -12,9 +13,9 @@ export const movieSeoInclude = {
 
 export type SeoMovie = Prisma.MovieGetPayload<{ include: typeof movieSeoInclude }>;
 
-export async function getSeoMovieBySlug(slug: string) {
+export const getSeoMovieBySlug = cache(async (slug: string) => {
   return prisma.movie.findFirst({ where: { slug, ...vibixWatchMovieWhere }, include: movieSeoInclude });
-}
+});
 
 export async function getSeoMovieByFilmSlug(slug: string) {
   const movieSlug = movieSlugFromFilmSeoSlug(slug);
