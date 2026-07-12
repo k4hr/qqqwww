@@ -57,9 +57,9 @@ function YandexMetrikaInner() {
     if (!enabled) return;
 
     let idleId: number | undefined;
-    const timeoutId = window.setTimeout(loadMetrika, 3500);
+    const timeoutId = window.setTimeout(loadMetrika, 8000);
     if (window.requestIdleCallback) {
-      idleId = window.requestIdleCallback(loadMetrika, { timeout: 3000 });
+      idleId = window.requestIdleCallback(loadMetrika, { timeout: 7500 });
     }
 
     return () => {

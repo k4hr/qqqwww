@@ -23,7 +23,9 @@ export type HeroMovie = {
 export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [showDesktopPoster, setShowDesktopPoster] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
   const slideCount = movies.length;
 
   const showSlide = useCallback((index: number) => {
@@ -33,9 +35,29 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
 
   useEffect(() => {
     if (paused || slideCount < 2) return;
-    const timer = window.setInterval(() => setActiveIndex((current) => (current + 1) % slideCount), 7000);
-    return () => window.clearInterval(timer);
+    const startTimer = window.setTimeout(() => {
+      const interval = window.setInterval(() => setActiveIndex((current) => (current + 1) % slideCount), 7000);
+      intervalRef.current = interval;
+    }, 7000);
+    return () => {
+      window.clearTimeout(startTimer);
+      if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    };
   }, [paused, slideCount]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 768px)");
+    if (!media.matches) return;
+    let idleId: number | undefined;
+    const reveal = () => setShowDesktopPoster(true);
+    const timer = window.setTimeout(reveal, 1800);
+    if (window.requestIdleCallback) idleId = window.requestIdleCallback(reveal, { timeout: 1800 });
+    return () => {
+      window.clearTimeout(timer);
+      if (idleId !== undefined) window.cancelIdleCallback?.(idleId);
+    };
+  }, []);
 
   if (!slideCount) {
     return (
@@ -85,7 +107,7 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
         fetchPriority={activeIndex === 0 ? "high" : "auto"}
         loading={activeIndex === 0 ? "eager" : "lazy"}
         sizes="(max-width: 768px) 100vw, 1280px"
-        quality={72}
+        quality={66}
         className="object-cover object-center opacity-65 transition-[opacity,transform] duration-700"
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_25%,rgba(229,9,20,.3),transparent_34%),linear-gradient(90deg,rgba(4,4,6,.98)_0%,rgba(4,4,6,.84)_43%,rgba(4,4,6,.2)_100%)] max-md:bg-[linear-gradient(0deg,rgba(4,4,6,.98)_4%,rgba(4,4,6,.78)_64%,rgba(4,4,6,.24)_100%)]" />
@@ -115,20 +137,22 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
         <div className="relative mx-auto hidden w-full max-w-[285px] md:block">
           <div className="absolute -inset-8 rounded-full bg-[#e50914]/20 blur-3xl" />
           <div className="poster-fallback relative aspect-[2/3] overflow-hidden rounded-[26px] border border-white/15 shadow-[0_30px_80px_rgba(0,0,0,.65)]">
-            {movie.posterUrl ? (
-              <Image
-                src={movie.posterUrl}
-                alt={movie.titleRu}
-                fill
-                className="object-cover"
-                sizes="300px"
-                quality={70}
-                loading="lazy"
-                fetchPriority="low"
-              />
-            ) : (
-              <Image src={backgroundUrl} alt="" fill className="object-cover" sizes="300px" quality={70} loading="lazy" />
-            )}
+            {showDesktopPoster ? (
+              movie.posterUrl ? (
+                <Image
+                  src={movie.posterUrl}
+                  alt={movie.titleRu}
+                  fill
+                  className="object-cover"
+                  sizes="285px"
+                  quality={66}
+                  loading="lazy"
+                  fetchPriority="low"
+                />
+              ) : (
+                <Image src={backgroundUrl} alt="" fill className="object-cover" sizes="285px" quality={66} loading="lazy" fetchPriority="low" />
+              )
+            ) : null}
           </div>
         </div>
       </div>

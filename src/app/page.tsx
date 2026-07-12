@@ -17,7 +17,7 @@ export const metadata = {
   alternates: { canonical: "/" },
 };
 
-const HOME_SECTION_LIMIT = 12;
+const HOME_SECTION_LIMIT = 8;
 const HOMEPAGE_CANDIDATE_LIMIT = 120;
 
 function maxRating(movie: Pick<Movie, "kpRating" | "imdbRating" | "tmdbRating">) {
@@ -273,7 +273,7 @@ async function getHomeMovies(currentYear: number) {
         { imdbRating: "desc" },
         { year: "desc" },
       ],
-      take: 700,
+      take: 240,
     }),
   ]);
 
@@ -372,8 +372,21 @@ export default async function HomePage() {
     withoutIds(strongLegacy.filter((movie) => movie.year <= currentYear - 5), bestMovieIds),
   );
 
+  const featuredForClient = featured.slice(0, 5).map((movie) => ({
+    id: movie.id,
+    slug: movie.slug,
+    titleRu: movie.titleRu,
+    description: movie.description,
+    year: movie.year,
+    quality: movie.quality,
+    posterUrl: movie.posterUrl,
+    backdropUrl: movie.backdropUrl,
+    kpRating: movie.kpRating,
+    imdbRating: movie.imdbRating,
+  }));
+
   return <div className="container py-4 sm:py-7">
-    <MovieHeroSlider movies={featured} />
+    <MovieHeroSlider movies={featuredForClient} />
     <SectionGrid title="В тренде" href="/trending" movies={trending} showSorts={false} mobileCarousel />
     <SectionGrid title="Лучшие фильмы" href="/films/top-100" movies={bestMovies} showSorts={false} mobileCarousel />
     <ClientLibrary mode="recent-home" />

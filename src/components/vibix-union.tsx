@@ -17,11 +17,26 @@ export function VibixUnion({ publisherId, adTypes, enabled = true, scriptUrl = "
 
   useEffect(() => {
     if (disabled || document.querySelector('script[data-redfilm-vibix-union="true"]')) return;
-    const script = document.createElement("script");
-    script.src = scriptUrl;
-    script.async = true;
-    script.dataset.redfilmVibixUnion = "true";
-    document.head.appendChild(script);
+
+    let idleId: number | undefined;
+    let loaded = false;
+    const loadScript = () => {
+      if (loaded || document.querySelector('script[data-redfilm-vibix-union="true"]')) return;
+      loaded = true;
+      const script = document.createElement("script");
+      script.src = scriptUrl;
+      script.async = true;
+      script.dataset.redfilmVibixUnion = "true";
+      document.head.appendChild(script);
+    };
+
+    const timeoutId = window.setTimeout(loadScript, 6500);
+    if (window.requestIdleCallback) idleId = window.requestIdleCallback(loadScript, { timeout: 6000 });
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (idleId !== undefined) window.cancelIdleCallback?.(idleId);
+    };
   }, [disabled, scriptUrl]);
 
   if (disabled) return null;

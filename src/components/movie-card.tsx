@@ -26,9 +26,10 @@ export function MovieCard({ movie }: Props) {
             alt={movie.titleRu}
             fill
             loading="lazy"
+            fetchPriority="low"
             className="object-cover transition duration-500 group-hover:scale-[1.055] group-hover:brightness-[.52]"
-            sizes="(max-width: 640px) calc(50vw - 20px), (max-width: 899px) 33vw, (max-width: 1099px) 25vw, 210px"
-            quality={68}
+            sizes="(max-width: 639px) calc(50vw - 22px), (max-width: 899px) 30vw, (max-width: 1099px) 23vw, 210px"
+            quality={66}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[#52525b]">
