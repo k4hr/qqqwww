@@ -79,11 +79,25 @@ export function TelegramWebAppBridge() {
       const telegramWindow = window as unknown as { Telegram?: { WebApp?: TelegramWebApp } };
       webApp = telegramWindow.Telegram?.WebApp;
 
-      if (!webApp || !isRealTelegramMiniApp(webApp)) {
+      if (!webApp) {
+        const isTelegramLaunch = window.location.hash.includes("tgWebAppData=") || window.location.search.includes("tgWebAppData=");
+        if (!isTelegramLaunch) return;
+
+        if (!document.getElementById("telegram-webapp-sdk")) {
+          const script = document.createElement("script");
+          script.id = "telegram-webapp-sdk";
+          script.src = "https://telegram.org/js/telegram-web-app.js";
+          script.async = true;
+          script.onload = run;
+          document.head.appendChild(script);
+        }
+
         attempts += 1;
         if (attempts <= 30) timer = setTimeout(run, 150);
         return;
       }
+
+      if (!isRealTelegramMiniApp(webApp)) return;
 
       initTelegramWebApp(webApp);
       const updateViewport = () => setTelegramCssVariables(webApp as TelegramWebApp);

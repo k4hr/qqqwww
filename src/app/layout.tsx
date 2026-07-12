@@ -1,6 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
-
 import "./globals.css";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -46,58 +44,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="site-shell">
         <MobileZoomLock />
         <TelegramWebAppBridge />
-        <Script id="telegram-webapp-sdk" src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.ym = window.ym || function(){
-                (window.ym.a = window.ym.a || []).push(arguments);
-              };
-              window.ym.l = window.ym.l || 1 * new Date();
-            `,
-          }}
-        />
-        <script id="yandex-metrika-tag" async src="https://mc.yandex.ru/metrika/tag.js" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function(){
-                var counterId = 110229115;
-                var isAdmin = window.location.pathname.indexOf("/admin") === 0;
-                if (isAdmin || window.__redfilmYandexMetrikaInitialized110229115) return;
-
-                window.__redfilmYandexMetrikaInitialized110229115 = true;
-                window.ym(counterId, "init", {
-                  ssr: true,
-                  webvisor: true,
-                  clickmap: true,
-                  ecommerce: "dataLayer",
-                  accurateTrackBounce: true,
-                  trackLinks: true
-                });
-
-                if (window.location.search.indexOf("_ym_status-check=110229115") !== -1) {
-                  window.setTimeout(function(){
-                    if (typeof window.ym === "function") {
-                      window.ym(counterId, "hit", window.location.href);
-                    }
-                  }, 800);
-
-                  window.setTimeout(function(){
-                    var pixel = new Image();
-                    pixel.referrerPolicy = "strict-origin-when-cross-origin";
-                    pixel.src = "https://mc.yandex.ru/watch/110229115?rn=" + Date.now() + "&page-url=" + encodeURIComponent(window.location.href);
-                  }, 1200);
-                }
-              })();
-            `,
-          }}
-        />
-        <noscript>
-          <div>
-            <img src="https://mc.yandex.ru/watch/110229115" style={{ position: "absolute", left: "-9999px" }} alt="" />
-          </div>
-        </noscript>
         <YandexMetrika />
         <Header />
         <main className="cinematic-page">{children}</main>

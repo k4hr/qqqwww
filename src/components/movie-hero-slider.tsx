@@ -33,14 +33,22 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
 
   useEffect(() => {
     if (paused || slideCount < 2) return;
-    const timer = window.setInterval(() => setActiveIndex((current) => (current + 1) % slideCount), 5000);
+    const timer = window.setInterval(() => setActiveIndex((current) => (current + 1) % slideCount), 7000);
     return () => window.clearInterval(timer);
   }, [paused, slideCount]);
 
   if (!slideCount) {
     return (
       <section className="hero-slider poster-fallback relative overflow-hidden rounded-[30px] border border-white/10">
-        <div className="absolute inset-0 bg-[url('/redfilm-hero.png')] bg-cover bg-center opacity-45" />
+        <Image
+          src="/redfilm-hero.webp"
+          alt=""
+          fill
+          priority
+          fetchPriority="high"
+          sizes="100vw"
+          className="object-cover object-center opacity-45"
+        />
         <div className="background-overlay absolute inset-0" />
         <div className="hero-layout relative z-10 flex min-h-[460px] max-w-2xl flex-col justify-end p-5 sm:min-h-[560px] sm:p-12">
           <h1 className="hero-title text-[clamp(2rem,10vw,3.75rem)] font-black tracking-[-.045em] text-white">REDFILM</h1>
@@ -51,7 +59,7 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
   }
 
   const movie = movies[activeIndex];
-  const backgroundUrl = movie.backdropUrl || movie.posterUrl || "/redfilm-hero.png";
+  const backgroundUrl = movie.backdropUrl || movie.posterUrl || "/redfilm-hero.webp";
 
   return (
     <section
@@ -68,17 +76,18 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
       aria-roledescription="carousel"
       aria-label="Избранные фильмы"
     >
-      {movies.map((item, index) => {
-        const imageUrl = item.backdropUrl || item.posterUrl || "/redfilm-hero.png";
-        return (
-          <div
-            key={item.slug}
-            className={`absolute inset-0 bg-cover bg-center transition-all duration-700 ${index === activeIndex ? "scale-100 opacity-65" : "pointer-events-none scale-105 opacity-0"}`}
-            style={{ backgroundImage: `url(${imageUrl})` }}
-            aria-hidden={index !== activeIndex}
-          />
-        );
-      })}
+      <Image
+        key={backgroundUrl}
+        src={backgroundUrl}
+        alt=""
+        fill
+        priority={activeIndex === 0}
+        fetchPriority={activeIndex === 0 ? "high" : "auto"}
+        loading={activeIndex === 0 ? "eager" : "lazy"}
+        sizes="(max-width: 768px) 100vw, 1280px"
+        unoptimized
+        className="object-cover object-center opacity-65 transition-[opacity,transform] duration-700"
+      />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_25%,rgba(229,9,20,.3),transparent_34%),linear-gradient(90deg,rgba(4,4,6,.98)_0%,rgba(4,4,6,.84)_43%,rgba(4,4,6,.2)_100%)] max-md:bg-[linear-gradient(0deg,rgba(4,4,6,.98)_4%,rgba(4,4,6,.78)_64%,rgba(4,4,6,.24)_100%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(0deg,#050505_0%,transparent_36%)]" />
 
@@ -106,7 +115,20 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
         <div className="relative mx-auto hidden w-full max-w-[285px] md:block">
           <div className="absolute -inset-8 rounded-full bg-[#e50914]/20 blur-3xl" />
           <div className="poster-fallback relative aspect-[2/3] overflow-hidden rounded-[26px] border border-white/15 shadow-[0_30px_80px_rgba(0,0,0,.65)]">
-            {movie.posterUrl ? <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="300px" unoptimized priority /> : <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${backgroundUrl})` }} />}
+            {movie.posterUrl ? (
+              <Image
+                src={movie.posterUrl}
+                alt={movie.titleRu}
+                fill
+                className="object-cover"
+                sizes="300px"
+                unoptimized
+                loading="lazy"
+                fetchPriority="low"
+              />
+            ) : (
+              <Image src={backgroundUrl} alt="" fill className="object-cover" sizes="300px" unoptimized loading="lazy" />
+            )}
           </div>
         </div>
       </div>
