@@ -35,12 +35,13 @@ const movieCardSelect = {
   year: true,
   type: true,
   posterUrl: true,
+  backdropUrl: true,
   quality: true,
   kpRating: true,
   imdbRating: true,
 } satisfies Prisma.MovieSelect;
 
-type MovieCardData = Pick<Movie, "id" | "slug" | "titleRu" | "year" | "type" | "posterUrl" | "quality" | "kpRating" | "imdbRating">;
+type MovieCardData = Pick<Movie, "id" | "slug" | "titleRu" | "year" | "type" | "posterUrl" | "backdropUrl" | "quality" | "kpRating" | "imdbRating">;
 
 function toMovieCardData(movie: MovieCardData): MovieCardData {
   return {
@@ -50,6 +51,7 @@ function toMovieCardData(movie: MovieCardData): MovieCardData {
     year: movie.year,
     type: movie.type,
     posterUrl: movie.posterUrl,
+    backdropUrl: movie.backdropUrl,
     quality: movie.quality,
     kpRating: movie.kpRating,
     imdbRating: movie.imdbRating,
