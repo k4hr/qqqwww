@@ -17,7 +17,7 @@ export const metadata = {
   alternates: { canonical: "/" },
 };
 
-const HOME_SECTION_LIMIT = 8;
+const HOME_SECTION_LIMIT = 6;
 const HOMEPAGE_CANDIDATE_LIMIT = 120;
 
 function maxRating(movie: Pick<Movie, "kpRating" | "imdbRating" | "tmdbRating">) {
