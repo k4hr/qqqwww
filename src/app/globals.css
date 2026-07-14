@@ -540,3 +540,102 @@ html.is-telegram-webapp header {
 .cinematic-page .mf-card {
   contain: layout paint style;
 }
+
+
+/* Creator collections: stable responsive layout for narrow phones and in-app browsers. */
+.creator-collection-page,
+.creator-collection-page * {
+  min-inline-size: 0;
+}
+
+.creator-collection-page {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.creator-collection-hero,
+.creator-collection-list,
+.creator-collection-item,
+.creator-collection-poster,
+.creator-collection-details,
+.creator-collection-comment {
+  width: 100%;
+  max-width: 100%;
+}
+
+.creator-collection-title,
+.creator-collection-description,
+.creator-collection-movie-title,
+.creator-collection-comment-text {
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: auto;
+}
+
+.creator-collection-poster .mf-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.creator-collection-comment-text {
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .creator-collection-page.container {
+    padding-inline: max(10px, env(safe-area-inset-left));
+    padding-right: max(10px, env(safe-area-inset-right));
+  }
+
+  .creator-collection-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .creator-collection-details {
+    border-radius: 18px;
+  }
+
+  .creator-collection-comment {
+    border-radius: 14px;
+  }
+
+  .creator-collection-watch {
+    width: auto;
+    min-width: 116px;
+  }
+}
+
+@media (max-width: 380px) {
+  .creator-collection-page.container {
+    padding-inline: 8px;
+  }
+
+  .creator-collection-hero {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .creator-collection-details {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .creator-collection-comment {
+    margin-top: 12px;
+    padding: 12px;
+  }
+
+  .creator-collection-comment-text {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .creator-collection-meta {
+    font-size: 12px;
+  }
+
+  .creator-collection-watch {
+    width: 100%;
+  }
+}

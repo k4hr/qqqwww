@@ -67,7 +67,7 @@ export async function renderCreatorHubPage(slug: string) {
     <div className="container py-6">
       <PartnerTrack type="AUTHOR_HUB_OPEN" partnerSlug={partner.slug} />
       <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: hub.title, url: siteUrl(`/collections/${hub.slug}`) }} />
-      <section className="glass-panel section-glow overflow-hidden rounded-[26px] p-5 sm:p-7">
+      <section className="creator-collection-hero glass-panel section-glow min-w-0 overflow-hidden rounded-[22px] p-4 sm:rounded-[26px] sm:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           {partner.avatarUrl ? <Image src={partner.avatarUrl} alt={partner.publicName || partner.name} width={92} height={92} className="rounded-full border border-white/10 object-cover" unoptimized /> : null}
           <div>
@@ -112,16 +112,16 @@ export async function renderCreatorCollectionPage(partnerSlug: string, collectio
   const firstMovie = ordered[0]?.movie;
 
   return (
-    <div className="container py-6">
+    <div className="creator-collection-page container py-4 sm:py-6">
       <PartnerTrack type="COLLECTION_OPEN" partnerSlug={partner.slug} collectionId={collection.id} />
       <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: collection.title, url: siteUrl(`/collections/${hub.slug}/${collection.slug}`), mainEntity: { "@type": "ItemList", itemListElement: ordered.map(({ movie }, index) => ({ "@type": "ListItem", position: index + 1, name: movie!.titleRu, url: siteUrl(watchPath(movie!)), image: movie!.posterUrl || undefined })) } }} />
       <section className="glass-panel section-glow overflow-hidden rounded-[26px] p-5 sm:p-7">
         {firstMovie?.posterUrl ? <div className="relative mb-5 aspect-[16/9] overflow-hidden rounded-3xl bg-white/5"><Image src={firstMovie.posterUrl} alt={firstMovie.titleRu || collection.title} fill className="object-cover object-[center_30%]" unoptimized /></div> : null}
         <Link href={`/collections/${hub.slug}`} className="text-sm font-bold text-[#ff4d55]">← {hub.title}</Link>
-        <h1 className="mt-3 text-3xl font-black text-white">{collection.title}</h1>
-        <p className="mt-3 max-w-4xl text-[#a1a1aa]">{collection.description || hub.description || "Авторская подборка REDFILM."}</p>
+        <h1 className="creator-collection-title mt-3 min-w-0 break-words text-[clamp(1.65rem,7vw,2.25rem)] font-black leading-tight text-white">{collection.title}</h1>
+        <p className="creator-collection-description mt-3 max-w-4xl whitespace-pre-line break-words text-sm leading-6 text-[#a1a1aa] sm:text-base sm:leading-7">{collection.description || hub.description || "Авторская подборка REDFILM."}</p>
       </section>
-      <section className="mt-6 grid gap-5">
+      <section className="creator-collection-list mt-4 grid min-w-0 gap-4 sm:mt-6 sm:gap-5">
         {ordered.map(({ item, movie }) => {
           if (!movie) return null;
 
@@ -130,20 +130,20 @@ export async function renderCreatorCollectionPage(partnerSlug: string, collectio
           const displayText = authorComment || fallbackDescription;
 
           return (
-            <div key={item.id} className="grid items-start gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
-              <MovieCard movie={movie} />
-              <div className="mf-panel self-start p-5">
-                <h2 className="text-2xl font-black text-white">{movie.titleRu}</h2>
-                <div className="mt-2 text-sm text-[#a1a1aa]">{movie.year} · КП {movie.kpRating?.toFixed(1) ?? "—"} · IMDb {movie.imdbRating?.toFixed(1) ?? "—"}</div>
+            <article key={item.id} className="creator-collection-item grid min-w-0 items-start gap-3 sm:gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
+              <div className="creator-collection-poster min-w-0 overflow-hidden"><MovieCard movie={movie} /></div>
+              <div className="creator-collection-details mf-panel min-w-0 self-start overflow-hidden p-4 sm:p-5">
+                <h2 className="creator-collection-movie-title min-w-0 break-words text-[clamp(1.35rem,6vw,1.75rem)] font-black leading-tight text-white">{movie.titleRu}</h2>
+                <div className="creator-collection-meta mt-2 flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-sm text-[#a1a1aa]"><span>{movie.year}</span><span>· КП {movie.kpRating?.toFixed(1) ?? "—"}</span><span>· IMDb {movie.imdbRating?.toFixed(1) ?? "—"}</span></div>
                 {displayText ? (
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-[#d4d4d8]">
+                  <div className="creator-collection-comment mt-4 min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-3.5 text-[#d4d4d8] sm:p-4">
                     {authorComment ? <div className="mb-2 font-black text-white">Почему советую</div> : null}
-                    <p className="line-clamp-6 whitespace-pre-line leading-7">{displayText}</p>
+                    <p className="creator-collection-comment-text whitespace-pre-line break-words text-[15px] leading-6 sm:text-base sm:leading-7">{displayText}</p>
                   </div>
                 ) : null}
-                <Link href={watchPath(movie)} className="mt-4 inline-flex rounded-xl bg-[#e50914] px-4 py-2 text-sm font-black text-white">Смотреть</Link>
+                <Link href={watchPath(movie)} className="creator-collection-watch mt-4 inline-flex min-h-11 max-w-full items-center justify-center rounded-xl bg-[#e50914] px-5 py-2.5 text-sm font-black text-white">Смотреть</Link>
               </div>
-            </div>
+            </article>
           );
         })}
       </section>
