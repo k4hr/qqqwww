@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Clapperboard, X } from "lucide-react";
-import { buildVibixAttrs, type VibixAttributes } from "@/components/vibix-player";
+import type { VibixAttributes } from "@/components/vibix-player";
 
 type Props = {
   title: string;
@@ -19,23 +19,55 @@ type RendexWindow = Window & {
   Vibix?: { init?: () => void };
 };
 
-export function VibixTrailer({ title, kinopoiskId, imdbId, vibixId, vibixType, embedCode }: Props) {
+const PUBLISHER_ID = "678353780";
+
+export function VibixTrailer({ title, kinopoiskId, imdbId }: Props) {
   const [open, setOpen] = useState(false);
-  const baseAttrs = useMemo(
-    () => buildVibixAttrs({ kinopoiskId, imdbId, vibixId, vibixType, embedCode }),
-    [kinopoiskId, imdbId, vibixId, vibixType, embedCode],
-  );
 
   const trailerAttrs = useMemo<VibixAttributes | null>(() => {
-    if (!baseAttrs) return null;
-    return {
-      ...baseAttrs,
-      "data-trailer": "only",
-      "data-poster": "true",
-      "data-nopreload": "true",
-      "data-autoplay": "true",
-    };
-  }, [baseAttrs]);
+    const kpId = String(kinopoiskId ?? "").trim();
+    const normalizedImdbId = String(imdbId ?? "").trim();
+
+    // For trailers use external catalogue IDs only.
+    // Reusing movie/series data-id can make the SDK open the full Vibix player.
+    if (kpId) {
+      return {
+        "data-publisher-id": PUBLISHER_ID,
+        "data-type": "kp",
+        "data-id": kpId,
+        "data-trailer": "only",
+        "data-poster": "true",
+        "data-nopreload": "true",
+        "data-autoplay": "true",
+        "data-design": "5",
+        "data-color1": "#e50914",
+        "data-color2": "#ffffff",
+        "data-color3": "#a7a7b0",
+        "data-color4": "#ff1f2d",
+        "data-color5": "#050507",
+      };
+    }
+
+    if (normalizedImdbId) {
+      return {
+        "data-publisher-id": PUBLISHER_ID,
+        "data-type": "imdb",
+        "data-id": normalizedImdbId,
+        "data-trailer": "only",
+        "data-poster": "true",
+        "data-nopreload": "true",
+        "data-autoplay": "true",
+        "data-design": "5",
+        "data-color1": "#e50914",
+        "data-color2": "#ffffff",
+        "data-color3": "#a7a7b0",
+        "data-color4": "#ff1f2d",
+        "data-color5": "#050507",
+      };
+    }
+
+    return null;
+  }, [kinopoiskId, imdbId]);
 
   useEffect(() => {
     if (!open || !trailerAttrs) return;
@@ -43,12 +75,10 @@ export function VibixTrailer({ title, kinopoiskId, imdbId, vibixId, vibixType, e
     const initialize = () => {
       const sdk = window as RendexWindow;
       sdk.Rendex?.init?.();
-      sdk.rendex?.init?.();
-      sdk.Vibix?.init?.();
       window.dispatchEvent(new Event("resize"));
     };
 
-    const timeouts = [0, 350, 1_000, 2_000].map((delay) => window.setTimeout(initialize, delay));
+    const timeouts = [0, 400, 1_200].map((delay) => window.setTimeout(initialize, delay));
     return () => timeouts.forEach((timeout) => window.clearTimeout(timeout));
   }, [open, trailerAttrs]);
 
@@ -80,7 +110,10 @@ export function VibixTrailer({ title, kinopoiskId, imdbId, vibixId, vibixType, e
             </button>
           </div>
           <div className="vibix-player-shell overflow-hidden rounded-2xl bg-black">
-            <ins key={`trailer-${trailerAttrs["data-type"]}-${trailerAttrs["data-id"]}`} {...trailerAttrs} />
+            <ins
+              key={`trailer-${trailerAttrs["data-type"]}-${trailerAttrs["data-id"]}`}
+              {...trailerAttrs}
+            />
           </div>
         </div>
       )}
