@@ -1,6 +1,7 @@
 import type { Movie } from "@prisma/client";
 import { VibixPlayer } from "@/components/vibix-player";
 import { AnalyticsEvent } from "@/components/analytics-event";
+import { VibixTrailer } from "@/components/vibix-trailer";
 
 type Props = {
   movie: Pick<Movie, "id" | "titleRu" | "year" | "kinopoiskId" | "imdbId" | "vibixId" | "vibixType" | "vibixIframeUrl" | "vibixEmbedCode" | "posterUrl">;
@@ -32,6 +33,14 @@ export function PlayerBlock({ movie }: Props) {
           posterUrl={movie.posterUrl}
         />
       </div>
+      <VibixTrailer
+        title={movie.titleRu}
+        kinopoiskId={movie.kinopoiskId}
+        imdbId={movie.imdbId}
+        vibixId={movie.vibixId}
+        vibixType={movie.vibixType}
+        embedCode={movie.vibixEmbedCode}
+      />
     </section>
   );
 }

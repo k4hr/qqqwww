@@ -17,7 +17,7 @@ type VibixPlayerProps = {
 };
 
 type VibixDataType = "movie" | "series" | "serial" | "kp" | "imdb";
-type VibixAttributes = {
+export type VibixAttributes = {
   "data-publisher-id": string;
   "data-type": VibixDataType;
   "data-id": string;
@@ -37,6 +37,7 @@ type VibixAttributes = {
   "data-color3"?: string;
   "data-color4"?: string;
   "data-color5"?: string;
+  "data-trailer"?: "true" | "only";
 };
 
 type VibixSdkWindow = Window & {
@@ -53,6 +54,7 @@ const REDFILM_PLAYER_DEFAULT_ATTRS = {
   "data-design": "5",
   "data-poster": "true",
   "data-nopreload": "true",
+  "data-autoplay": "true",
   "data-color1": "#e50914",
   "data-color2": "#ffffff",
   "data-color3": "#a7a7b0",
@@ -91,6 +93,8 @@ function withRedfilmPlayerStyle(attrs: VibixAttributes, parsed: Record<`data-${s
   next["data-design"] = next["data-design"] || REDFILM_PLAYER_DEFAULT_ATTRS["data-design"];
   next["data-poster"] = next["data-poster"] || REDFILM_PLAYER_DEFAULT_ATTRS["data-poster"];
   next["data-nopreload"] = next["data-nopreload"] || REDFILM_PLAYER_DEFAULT_ATTRS["data-nopreload"];
+  // Always request autoplay for the primary movie/series player.
+  next["data-autoplay"] = "true";
   return next;
 }
 
