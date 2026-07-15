@@ -640,7 +640,7 @@ html.is-telegram-webapp header {
   }
 }
 
-/* Collections author cards: hide the source image horizon line by cropping and repositioning. */
+/* Collections author cards: disable image scaling on the collections page. */
 .collections-author-card {
   isolation: isolate;
   background: #08080c;
@@ -656,7 +656,6 @@ html.is-telegram-webapp header {
   z-index: 1;
   overflow: hidden;
   background: #08080c;
-  transform: translateZ(0);
 }
 
 .collections-author-card-image {
@@ -667,15 +666,13 @@ html.is-telegram-webapp header {
   height: 100% !important;
   max-width: none !important;
   object-fit: cover !important;
-  object-position: center 36% !important;
-  transform: translateZ(0) scale(1.08);
-  transform-origin: center center;
-  backface-visibility: hidden;
-  transition: transform 300ms ease;
+  object-position: center center !important;
+  transform: none !important;
+  transition: none !important;
 }
 
 .collections-author-card:hover .collections-author-card-image {
-  transform: translateZ(0) scale(1.11);
+  transform: none !important;
 }
 
 .collections-author-card-body {
@@ -685,4 +682,3 @@ html.is-telegram-webapp header {
   border-top: 0;
   background: #08080c;
 }
-
