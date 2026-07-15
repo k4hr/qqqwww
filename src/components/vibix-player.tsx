@@ -52,7 +52,7 @@ const VIBIX_DATA_TYPES = new Set<VibixDataType>(["movie", "series", "serial", "k
 
 const REDFILM_PLAYER_DEFAULT_ATTRS = {
   "data-design": "5",
-  "data-poster": "true",
+  "data-poster": "false",
   "data-nopreload": "true",
   "data-autoplay": "true",
   "data-color1": "#e50914",
