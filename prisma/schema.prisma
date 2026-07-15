@@ -104,6 +104,7 @@ model Movie {
   providerLinks   ProviderLink[]
   telegramFavorites TelegramFavorite[]
   telegramHistory TelegramWatchHistory[]
+  homeSelectionItems RedfilmHomeSelectionItem[]
 
   @@index([type, year])
   @@index([isPublished])
@@ -943,3 +944,35 @@ model PartnerPayout {
   @@index([revenuePeriodId])
   @@index([createdAt])
 }
+
+model RedfilmHomeSelectionSettings {
+  singletonKey String   @id @default("default") @map("singleton_key")
+  title        String   @default("В подборке REDFILM")
+  subtitle     String?
+  limit        Int      @default(8) @map("limit_count")
+  mode         String   @default("MIXED")
+  isEnabled    Boolean  @default(true) @map("is_enabled")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("redfilm_home_selection_settings")
+}
+
+model RedfilmHomeSelectionItem {
+  id        String   @id
+  movieId   String   @unique(map: "redfilm_home_selection_items_movie_id_key") @map("movie_id")
+  position  Int      @default(0)
+  isActive  Boolean  @default(true) @map("is_active")
+  isPinned  Boolean  @default(false) @map("is_pinned")
+  note      String?
+  addedFrom String?  @map("added_from")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  movie Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@index([isActive, isPinned, position], map: "redfilm_home_selection_items_active_position_idx")
+  @@index([movieId], map: "redfilm_home_selection_items_movie_idx")
+  @@map("redfilm_home_selection_items")
+}
+
