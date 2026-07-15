@@ -13,7 +13,7 @@ export function PlayerBlock({ movie }: Props) {
         <h2 className="min-w-0 break-words text-base font-bold text-white sm:text-lg">Смотреть онлайн {movie.titleRu} ({movie.year})</h2>
         <div className="shrink-0 text-left sm:text-right">
           <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-[#e50914] sm:text-xs">REDFILM</span>
-          <span className="mt-1 block text-[11px] font-semibold leading-snug text-white sm:text-xs">Не работает плеер? Придется отключить VPN.</span>
+          <span className="mt-1 block text-[11px] font-semibold leading-snug text-white sm:text-xs">Не загрузился плеер? Отключите VPN или смените сервер VPN.</span>
         </div>
       </div>
 
