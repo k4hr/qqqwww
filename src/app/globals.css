@@ -639,3 +639,47 @@ html.is-telegram-webapp header {
     width: 100%;
   }
 }
+
+/* Collections author cards: remove the mf-panel overlay seam and crop image edges safely. */
+.collections-author-card {
+  isolation: isolate;
+  background: #08080c;
+}
+
+.collections-author-card::before {
+  content: none !important;
+  display: none !important;
+}
+
+.collections-author-card-cover {
+  position: relative;
+  z-index: 1;
+  margin-bottom: -2px;
+  background: #08080c;
+  transform: translateZ(0);
+}
+
+.collections-author-card-image {
+  display: block !important;
+  top: -2px !important;
+  left: -2px !important;
+  width: calc(100% + 4px) !important;
+  height: calc(100% + 4px) !important;
+  max-width: none !important;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  transition: transform 300ms ease;
+}
+
+.collections-author-card:hover .collections-author-card-image {
+  transform: translateZ(0) scale(1.025);
+}
+
+.collections-author-card-body {
+  position: relative;
+  z-index: 2;
+  margin-top: 0;
+  border-top: 0;
+  background: #08080c;
+}
+
