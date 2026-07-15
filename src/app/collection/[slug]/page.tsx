@@ -1,154 +1,36 @@
-import Image from "next/image";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { publicCollections } from "@/lib/collections";
+import { notFound } from "next/navigation";
+import { JsonLd } from "@/components/json-ld";
+import { MovieCard } from "@/components/movie-card";
+import { findFranchiseByCollectionSlug, matchingSeoTopics } from "@/lib/seo-pages";
+import { collectionSeoIntro } from "@/lib/seo-text";
+import { franchisePath, genrePath, similarPath, siteUrl, watchPath, yearPath } from "@/lib/seo-links";
+import { normalizeMovieBaseTitle } from "@/lib/seo-slugs";
 
-export const revalidate = 900;
+export const revalidate = 1800;
 
-export const metadata = {
-  title: "Подборки фильмов и сериалов — REDFILM",
-  description: "Авторские подборки блогеров и редакционные подборки REDFILM.",
-  alternates: { canonical: "/collections" },
-};
+type Props = { params: Promise<{ slug: string }> };
 
-type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const parts = await findFranchiseByCollectionSlug((await params).slug);
+  if (parts.length < 2) return {};
+  const baseTitle = normalizeMovieBaseTitle(parts[0].titleRu);
+  const canonical = franchisePath(parts[0]);
+  return { title: `${baseTitle} все части по порядку смотреть онлайн — REDFILM`, description: `Все части ${baseTitle} по порядку: годы выхода, описания и ссылки на просмотр.`, alternates: { canonical } };
+}
 
-export default async function CollectionsPage({ searchParams }: Props) {
-  const params = await searchParams;
-  const current = (Array.isArray(params.view) ? params.view[0] : params.view) === "redfilm" ? "redfilm" : "bloggers";
-
-  const hubs = current === "bloggers"
-    ? await prisma.creatorHub.findMany({
-        where: { isPublished: true },
-        orderBy: { updatedAt: "desc" },
-      })
-    : [];
-
-  const partnerIds = hubs.map((hub) => hub.partnerId);
-
-  const [partners, collectionCounts] = current === "bloggers"
-    ? await Promise.all([
-        prisma.partner.findMany({
-          where: {
-            id: { in: partnerIds },
-            status: "ACTIVE",
-          },
-        }),
-        prisma.creatorCollection.groupBy({
-          where: {
-            partnerId: { in: partnerIds },
-            status: "PUBLISHED",
-          },
-          by: ["partnerId"],
-          _count: { _all: true },
-        }),
-      ])
-    : [[], []];
-
-  const partnerById = new Map(partners.map((partner) => [partner.id, partner]));
-  const countByPartner = new Map(collectionCounts.map((row) => [row.partnerId, row._count._all]));
-
-  return (
-    <div className="container py-6">
-      <h1 className="text-3xl font-black tracking-[-.035em] text-white">
-        Подборки фильмов и сериалов
-      </h1>
-
-      <div className="mt-5 inline-flex rounded-2xl border border-white/10 bg-white/[0.03] p-1">
-        <Link
-          href="/collections?view=bloggers"
-          className={`rounded-xl px-4 py-2 text-sm font-black ${
-            current === "bloggers" ? "bg-[#e50914] text-white" : "text-white/70"
-          }`}
-        >
-          Подборки блогеров
-        </Link>
-
-        <Link
-          href="/collections?view=redfilm"
-          className={`rounded-xl px-4 py-2 text-sm font-black ${
-            current === "redfilm" ? "bg-[#e50914] text-white" : "text-white/70"
-          }`}
-        >
-          Подборки REDFILM
-        </Link>
-      </div>
-
-      {current === "bloggers" ? (
-        <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {hubs.map((hub) => {
-            const partner = partnerById.get(hub.partnerId);
-            if (!partner) return null;
-
-            return (
-              <Link
-                key={hub.id}
-                href={`/collections/${hub.slug}`}
-                className="mf-panel collections-author-card group overflow-hidden p-0 hover:border-[#e50914]/50"
-              >
-                <div className="collections-author-card-cover relative h-44 overflow-hidden bg-[#08080c]">
-                  {hub.coverUrl ? (
-                    <Image
-                      src={hub.coverUrl}
-                      alt={hub.title}
-                      fill
-                      unoptimized
-                      sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 33vw"
-                      className="collections-author-card-image object-cover"
-                    />
-                  ) : null}
-
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#08080c]/90 via-black/10 to-transparent" />
-
-                  {partner.avatarUrl ? (
-                    <Image
-                      src={partner.avatarUrl}
-                      alt={partner.publicName || partner.name}
-                      width={72}
-                      height={72}
-                      unoptimized
-                      className="absolute bottom-4 left-4 h-18 w-18 rounded-full border-2 border-white object-cover"
-                    />
-                  ) : null}
-                </div>
-
-                <div className="collections-author-card-body relative bg-[#08080c] p-5">
-                  <h2 className="text-xl font-black text-white">
-                    {partner.publicName || partner.name}
-                  </h2>
-
-                  <p className="mt-2 line-clamp-2 text-sm text-[#a1a1aa]">
-                    {hub.description || partner.description || "Авторские подборки фильмов и сериалов."}
-                  </p>
-
-                  <div className="mt-4 text-sm font-bold text-[#ff4d55]">
-                    Подборок: {countByPartner.get(partner.id) || 0}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-
-          {!hubs.length ? (
-            <div className="mf-panel p-5 text-[#a1a1aa]">
-              Опубликованных подборок блогеров пока нет.
-            </div>
-          ) : null}
-        </div>
-      ) : (
-        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {publicCollections.map((collection) => (
-            <Link
-              key={collection.slug}
-              href={`/collections/${collection.slug}`}
-              className="glass-panel section-glow rounded-3xl p-5 transition-all hover:-translate-y-1 hover:border-[#e50914]/60"
-            >
-              <h2 className="mb-2 text-xl font-black text-white">{collection.h1}</h2>
-              <p className="leading-relaxed text-[#a1a1aa]">{collection.description}</p>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+export default async function FranchisePage({ params }: Props) {
+  const parts = await findFranchiseByCollectionSlug((await params).slug);
+  if (parts.length < 2) notFound();
+  const baseTitle = normalizeMovieBaseTitle(parts[0].titleRu);
+  const topics = matchingSeoTopics(parts[0]);
+  return <div className="container py-6">
+    <JsonLd data={{ "@context": "https://schema.org", "@type": "ItemList", name: `${baseTitle} все части по порядку`, itemListElement: parts.map((movie, index) => ({ "@type": "ListItem", position: index + 1, name: movie.titleRu, url: siteUrl(watchPath(movie)), image: movie.posterUrl || undefined })) }} />
+    <nav className="mb-5 text-sm text-[#85858f]"><Link href="/">REDFILM</Link> / Все части</nav>
+    <section className="mf-panel p-5 sm:p-7"><h1 className="text-[clamp(1.8rem,5vw,3rem)] font-black text-white">{baseTitle} все части по порядку</h1><p className="mt-4 max-w-4xl leading-relaxed text-[#b7b7c0]">{collectionSeoIntro(baseTitle, parts.length)}</p></section>
+    <section className="mt-7"><h2 className="mb-5 text-2xl font-black text-white">Порядок просмотра</h2><div className="movie-grid">{parts.map((movie) => <MovieCard key={movie.id} movie={movie} />)}</div></section>
+    <ol className="mf-panel mt-6 space-y-4 p-5 sm:p-6">{parts.map((movie, index) => <li key={movie.id} className="border-b border-white/10 pb-4 last:border-0 last:pb-0"><h3 className="text-lg font-black text-white">{index + 1}. {movie.titleRu} ({movie.year})</h3><p className="line-clamp-3 mt-2 text-sm leading-relaxed text-[#a9a9b2]">{movie.description || "Описание скоро появится"}</p><Link href={watchPath(movie)} className="mf-btn mf-btn-primary mt-3">Смотреть</Link></li>)}</ol>
+    <section className="mf-panel mt-6 p-5 sm:p-6"><h2 className="text-xl font-black text-white">Ещё о франшизе</h2><div className="mt-4 flex flex-wrap gap-3"><Link href={similarPath(parts[0])} className="mf-btn">Похожие фильмы</Link>{parts[0].genres.slice(0, 4).map((item) => <Link key={item.genreId} href={genrePath(item.genre)} className="mf-btn">{item.genre.name}</Link>)}{parts.map((movie) => <Link key={movie.id} href={yearPath(movie)} className="mf-btn">Фильмы {movie.year} года</Link>)}{topics.map((topic) => <Link key={topic[0]} href={`/collections/${topic[0]}`} className="mf-btn">{topic[1]}</Link>)}</div></section>
+  </div>;
 }
