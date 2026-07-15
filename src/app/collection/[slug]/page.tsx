@@ -42,8 +42,12 @@ export default async function CollectionsPage({ searchParams }: Props) {
             const partner = partnerById.get(hub.partnerId);
             if (!partner) return null;
             return (
-            <Link key={hub.id} href={`/collections/${hub.slug}`} className="mf-panel group overflow-hidden p-0 hover:border-[#e50914]/50">
-              <div className="relative h-44 overflow-hidden bg-black">
+            <Link
+              key={hub.id}
+              href={`/collections/${hub.slug}`}
+              className="mf-panel group overflow-hidden p-0 hover:border-[#e50914]/50 [&::before]:hidden"
+            >
+              <div className="relative h-44 overflow-hidden bg-[#08080c]">
                 {hub.coverUrl ? (
                   <Image
                     src={hub.coverUrl}
@@ -51,10 +55,11 @@ export default async function CollectionsPage({ searchParams }: Props) {
                     fill
                     unoptimized
                     sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 33vw"
-                    className="block scale-[1.01] object-cover transform-gpu transition-transform duration-300 ease-out will-change-transform group-hover:scale-[1.04]"
+                    className="block object-cover"
                   />
                 ) : null}
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#08080c]/95 via-black/10 to-transparent" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-[#08080c]" />
                 {partner.avatarUrl ? (
                   <Image
                     src={partner.avatarUrl}
@@ -66,7 +71,7 @@ export default async function CollectionsPage({ searchParams }: Props) {
                   />
                 ) : null}
               </div>
-              <div className="p-5">
+              <div className="relative -mt-px bg-[#08080c] p-5">
                 <h2 className="text-xl font-black text-white">{partner.publicName || partner.name}</h2>
                 <p className="mt-2 line-clamp-2 text-sm text-[#a1a1aa]">{hub.description || partner.description || "Авторские подборки фильмов и сериалов."}</p>
                 <div className="mt-4 text-sm font-bold text-[#ff4d55]">Подборок: {countByPartner.get(partner.id) || 0}</div>
