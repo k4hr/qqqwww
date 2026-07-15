@@ -22,32 +22,34 @@ export default async function CollectionsPage({ searchParams }: Props) {
       ? "redfilm"
       : "bloggers";
 
-  const hubs =
+  const collectionCounts =
     current === "bloggers"
-      ? await prisma.creatorHub.findMany({
-          where: { isPublished: true },
-          orderBy: { updatedAt: "desc" },
+      ? await prisma.creatorCollection.groupBy({
+          where: { status: "PUBLISHED" },
+          by: ["partnerId"],
+          _count: { _all: true },
         })
       : [];
 
-  const partnerIds = hubs.map((hub) => hub.partnerId);
+  const partnerIdsWithPublishedCollections = collectionCounts
+    .filter((row) => row._count._all > 0)
+    .map((row) => row.partnerId);
 
-  const [partners, collectionCounts] =
-    current === "bloggers"
+  const [hubs, partners] =
+    current === "bloggers" && partnerIdsWithPublishedCollections.length > 0
       ? await Promise.all([
+          prisma.creatorHub.findMany({
+            where: {
+              isPublished: true,
+              partnerId: { in: partnerIdsWithPublishedCollections },
+            },
+            orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
+          }),
           prisma.partner.findMany({
             where: {
-              id: { in: partnerIds },
+              id: { in: partnerIdsWithPublishedCollections },
               status: "ACTIVE",
             },
-          }),
-          prisma.creatorCollection.groupBy({
-            where: {
-              partnerId: { in: partnerIds },
-              status: "PUBLISHED",
-            },
-            by: ["partnerId"],
-            _count: { _all: true },
           }),
         ])
       : [[], []];

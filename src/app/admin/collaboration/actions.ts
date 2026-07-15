@@ -217,6 +217,23 @@ export async function adminCreatePartnerLink(formData: FormData) {
   redirect("/admin/collaboration/links?created=1");
 }
 
+export async function adminUpdateCreatorHubPosition(formData: FormData) {
+  const id = readText(formData, "id");
+  const rawPosition = Number(readText(formData, "position"));
+  const position = Number.isFinite(rawPosition) ? Math.max(0, Math.floor(rawPosition)) : 0;
+
+  if (!id) redirect("/admin/collaboration/collections?error=hub-id");
+
+  await prisma.creatorHub.update({
+    where: { id },
+    data: { position },
+  });
+
+  refreshAdmin();
+  revalidatePath("/collections");
+  redirect("/admin/collaboration/collections?order=saved");
+}
+
 export async function adminModerateCollection(formData: FormData) {
   const id = readText(formData, "id");
   const status = validCollectionStatus(readText(formData, "status"));
@@ -230,6 +247,7 @@ export async function adminModerateCollection(formData: FormData) {
     },
   });
   refreshAdmin();
+  revalidatePath("/collections");
   revalidatePath("/collections/[slug]", "page");
   redirect("/admin/collaboration/collections?moderated=1");
 }

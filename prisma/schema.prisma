@@ -830,10 +830,11 @@ model CreatorHub {
   description String?  @db.Text
   coverUrl    String?
   isPublished Boolean  @default(false)
+  position    Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([isPublished])
+  @@index([isPublished, position])
 }
 
 model CreatorCollection {
