@@ -50,9 +50,11 @@ const VIBIX_PUBLISHER_ID = "678353780";
 const VIBIX_SDK_URL = "https://graphicslab.io/sdk/v2/rendex-sdk.min.js";
 const VIBIX_DATA_TYPES = new Set<VibixDataType>(["movie", "series", "serial", "kp", "imdb"]);
 
+const REDFILM_PLAYER_POSTER_URL = "https://redfilm.win/player-poster.webp";
+
 const REDFILM_PLAYER_DEFAULT_ATTRS = {
   "data-design": "5",
-  "data-poster": "false",
+  "data-poster": REDFILM_PLAYER_POSTER_URL,
   "data-nopreload": "true",
   "data-autoplay": "true",
   "data-color1": "#e50914",
@@ -91,7 +93,9 @@ function withRedfilmPlayerStyle(attrs: VibixAttributes, parsed: Record<`data-${s
 
   // REDFILM style should be applied even when the stored Vibix embed code only has id/type.
   next["data-design"] = next["data-design"] || REDFILM_PLAYER_DEFAULT_ATTRS["data-design"];
-  next["data-poster"] = next["data-poster"] || REDFILM_PLAYER_DEFAULT_ATTRS["data-poster"];
+  // Always use the same REDFILM-hosted poster for every movie and series.
+  // This intentionally overrides data-poster from the stored Vibix embed code.
+  next["data-poster"] = REDFILM_PLAYER_POSTER_URL;
   next["data-nopreload"] = next["data-nopreload"] || REDFILM_PLAYER_DEFAULT_ATTRS["data-nopreload"];
   // Always request autoplay for the primary movie/series player.
   next["data-autoplay"] = "true";
