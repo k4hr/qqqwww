@@ -640,7 +640,7 @@ html.is-telegram-webapp header {
   }
 }
 
-/* Collections author cards: remove the mf-panel overlay seam and crop image edges safely. */
+/* Collections author cards: hide the source image horizon line by cropping and repositioning. */
 .collections-author-card {
   isolation: isolate;
   background: #08080c;
@@ -654,25 +654,28 @@ html.is-telegram-webapp header {
 .collections-author-card-cover {
   position: relative;
   z-index: 1;
-  margin-bottom: -2px;
+  overflow: hidden;
   background: #08080c;
   transform: translateZ(0);
 }
 
 .collections-author-card-image {
   display: block !important;
-  top: -2px !important;
-  left: -2px !important;
-  width: calc(100% + 4px) !important;
-  height: calc(100% + 4px) !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
   max-width: none !important;
-  transform: translateZ(0);
+  object-fit: cover !important;
+  object-position: center 36% !important;
+  transform: translateZ(0) scale(1.08);
+  transform-origin: center center;
   backface-visibility: hidden;
   transition: transform 300ms ease;
 }
 
 .collections-author-card:hover .collections-author-card-image {
-  transform: translateZ(0) scale(1.025);
+  transform: translateZ(0) scale(1.11);
 }
 
 .collections-author-card-body {
