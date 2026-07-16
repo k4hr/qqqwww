@@ -3,6 +3,7 @@ import { requirePartnerSession } from "@/lib/collaboration/auth";
 import { CopyButton } from "@/components/copy-button";
 import { PartnerShell } from "@/app/partner/_components";
 import { siteUrl } from "@/lib/seo-links";
+import { MovieReferralLinkBuilder } from "@/app/partner/links/movie-referral-link-builder";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,10 @@ export default async function PartnerLinksPage() {
         <div className="mt-2 flex flex-wrap items-center gap-3"><code className="rounded-xl bg-black/35 px-3 py-2 text-white">{siteUrl(`/go/${partner.slug}`)}</code><CopyButton value={siteUrl(`/go/${partner.slug}`)} /></div>
         <p className="mt-3 text-sm text-[#a1a1aa]">Она ведёт на вашу страницу со всеми опубликованными подборками и учитывает пришедших пользователей.</p>
       </section>
+
+      <div className="mt-6">
+        <MovieReferralLinkBuilder partnerSlug={partner.slug} />
+      </div>
 
       <section className="mt-6 grid gap-3">
         <h2 className="text-xl font-black text-white">Ссылки на подборки</h2>
