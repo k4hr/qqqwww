@@ -22,9 +22,28 @@ export default async function PartnersPage({ searchParams }: Props) {
   const hubByPartner = new Map(hubs.map((hub) => [hub.partnerId, hub]));
   const created = first(params.created);
   const password = first(params.password);
+  const updated = first(params.updated);
+  const updatedLogin = first(params.login);
+  const updatedSlug = first(params.slug);
+  const error = first(params.error);
 
   return (
     <CollaborationAdminShell title="Партнёры" description="Создание блогеров, ручной процент, срок атрибуции, статус и доступ к подборкам.">
+      {updated ? (
+        <div className="admin-panel mb-6 border-l-4 border-emerald-500 p-5 text-[#222]">
+          <h2 className="text-xl font-black">Данные партнёра сохранены</h2>
+          <div className="mt-2 text-sm">Логин для входа: <b>{updatedLogin}</b> · маркер в ссылках: <b>/{updatedSlug}</b></div>
+        </div>
+      ) : null}
+
+      {error === "login_taken" ? (
+        <div className="admin-panel mb-6 border-l-4 border-[#e50914] p-5 text-[#222]">Этот логин уже занят другим партнёром.</div>
+      ) : null}
+
+      {error === "slug_taken" ? (
+        <div className="admin-panel mb-6 border-l-4 border-[#e50914] p-5 text-[#222]">Этот маркер ссылок уже занят другим партнёром.</div>
+      ) : null}
+
       {created && password ? (
         <div className="admin-panel mb-6 border-l-4 border-[#e50914] p-5">
           <h2 className="text-xl font-black text-[#222]">Партнёр создан. Пароль показывается один раз.</h2>
@@ -91,7 +110,8 @@ export default async function PartnersPage({ searchParams }: Props) {
                   <Field label="Имя"><input name="name" defaultValue={partner.name} className={inputClass} /></Field>
                   <Field label="Публичное имя"><input name="publicName" defaultValue={partner.publicName || ""} className={inputClass} /></Field>
                   <Field label="Название кабинета"><input name="cabinetTitle" defaultValue={partner.cabinetTitle || ""} className={inputClass} /></Field>
-                  <Field label="Slug"><input name="slug" defaultValue={partner.slug} className={inputClass} /></Field>
+                  <Field label="Логин для входа"><input name="login" defaultValue={partner.login} required className={inputClass} /></Field>
+                  <Field label="Маркер в партнёрских ссылках"><input name="slug" defaultValue={partner.slug} required className={inputClass} placeholder="elena" /></Field>
                   <Field label="Email"><input name="email" defaultValue={partner.email || ""} className={inputClass} /></Field>
                   <ImageUploadField name="avatarImage" label="Аватар блогера" currentUrl={partner.avatarUrl} />
                   <ImageUploadField name="coverImage" label="Обложка страницы блогера" currentUrl={partner.coverUrl} />
@@ -106,7 +126,10 @@ export default async function PartnersPage({ searchParams }: Props) {
                     <label><input name="showFinancials" type="checkbox" defaultChecked={partner.showFinancials} /> Показывать финансы</label>
                     <label><input name="linksBlocked" type="checkbox" defaultChecked={partner.linksBlocked} /> Заблокировать ссылки</label>
                   </div>
-                  <div className="md:col-span-2 xl:col-span-3"><button className={buttonClass}>Сохранить</button></div>
+                  <div className="md:col-span-2 xl:col-span-3">
+                    <p className="mb-3 text-xs text-neutral-500">Логин используется для входа в кабинет. Маркер используется в ссылках: /go/маркер и /watch/фильм/маркер.</p>
+                    <button className={buttonClass}>Сохранить</button>
+                  </div>
                 </form>
               </details>
 

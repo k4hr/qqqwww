@@ -116,38 +116,92 @@ export async function adminCreatePartner(formData: FormData) {
 export async function adminUpdatePartner(formData: FormData) {
   const id = readText(formData, "id");
   if (!id) redirect("/admin/collaboration/partners?error=id");
-  const existing = await prisma.partner.findUnique({ where: { id }, select: { avatarUrl: true, coverUrl: true } });
+
+  const existing = await prisma.partner.findUnique({
+    where: { id },
+    select: { avatarUrl: true, coverUrl: true, login: true, slug: true },
+  });
   if (!existing) redirect("/admin/collaboration/partners?error=id");
+
+  const name = readText(formData, "name", 120);
+  const publicName = readText(formData, "publicName", 120);
+  const login = readText(formData, "login", 80).trim().toLowerCase();
   const slug = slugify(readText(formData, "slug", 90));
+  if (!name || !login || !slug) redirect("/admin/collaboration/partners?error=required");
+
+  const [loginOwner, slugOwner] = await Promise.all([
+    prisma.partner.findFirst({ where: { login, id: { not: id } }, select: { id: true } }),
+    prisma.partner.findFirst({ where: { slug, id: { not: id } }, select: { id: true } }),
+  ]);
+  if (loginOwner) redirect("/admin/collaboration/partners?error=login_taken");
+  if (slugOwner) redirect("/admin/collaboration/partners?error=slug_taken");
+
   const avatarUrl = await readImageDataUrl(formData, "avatarImage", existing.avatarUrl);
   const coverUrl = await readImageDataUrl(formData, "coverImage", existing.coverUrl);
-  await prisma.partner.update({
-    where: { id },
-    data: {
-      name: readText(formData, "name", 120),
-      publicName: readText(formData, "publicName", 120) || null,
-      cabinetTitle: readText(formData, "cabinetTitle", 160) || null,
-      slug,
-      email: readText(formData, "email", 200) || null,
-      avatarUrl,
-      coverUrl,
-      description: readText(formData, "description", 2000) || null,
-      attributionDays: Math.floor(clampNumber(readText(formData, "attributionDays"), 30, 1, 365)),
-      attributionModel: validAttributionModel(readText(formData, "attributionModel")),
-      status: validStatus(readText(formData, "status")),
-      canManageCollections: readBool(formData, "canManageCollections", true),
-      requireCollectionModeration: readBool(formData, "requireCollectionModeration", true),
-      showFinancials: readBool(formData, "showFinancials", true),
-      linksBlocked: readBool(formData, "linksBlocked", false),
-      adminComment: readText(formData, "adminComment", 2000) || null,
-    },
-  });
-  await prisma.creatorHub.updateMany({
-    where: { partnerId: id },
-    data: { slug, title: `Подборки ${readText(formData, "publicName", 120) || readText(formData, "name", 120)}`, description: readText(formData, "description", 2000) || null, coverUrl, isPublished: validStatus(readText(formData, "status")) === "ACTIVE" },
-  });
+  const description = readText(formData, "description", 2000) || null;
+  const status = validStatus(readText(formData, "status"));
+
+  await prisma.$transaction([
+    prisma.partner.update({
+      where: { id },
+      data: {
+        name,
+        publicName: publicName || null,
+        cabinetTitle: readText(formData, "cabinetTitle", 160) || null,
+        slug,
+        login,
+        email: readText(formData, "email", 200) || null,
+        avatarUrl,
+        coverUrl,
+        description,
+        attributionDays: Math.floor(clampNumber(readText(formData, "attributionDays"), 30, 1, 365)),
+        attributionModel: validAttributionModel(readText(formData, "attributionModel")),
+        status,
+        canManageCollections: readBool(formData, "canManageCollections", true),
+        requireCollectionModeration: readBool(formData, "requireCollectionModeration", true),
+        showFinancials: readBool(formData, "showFinancials", true),
+        linksBlocked: readBool(formData, "linksBlocked", false),
+        adminComment: readText(formData, "adminComment", 2000) || null,
+      },
+    }),
+    prisma.creatorHub.updateMany({
+      where: { partnerId: id },
+      data: {
+        slug,
+        title: `Подборки ${publicName || name}`,
+        description,
+        coverUrl,
+        isPublished: status === "ACTIVE",
+      },
+    }),
+    prisma.partnerLink.updateMany({
+      where: { partnerId: id, targetType: "AUTHOR_HUB" },
+      data: { targetUrl: `/collections/${slug}` },
+    }),
+  ]);
+
+  // Collection link targets contain the partner slug, so refresh them after a slug change.
+  if (existing.slug !== slug) {
+    const collectionLinks = await prisma.partnerLink.findMany({
+      where: { partnerId: id, targetType: "COLLECTION" },
+      select: { id: true, slug: true },
+    });
+    if (collectionLinks.length) {
+      await prisma.$transaction(
+        collectionLinks.map((link) =>
+          prisma.partnerLink.update({
+            where: { id: link.id },
+            data: { targetUrl: `/collections/${slug}/${link.slug}` },
+          }),
+        ),
+      );
+    }
+  }
+
   refreshAdmin();
-  redirect("/admin/collaboration/partners?updated=1");
+  revalidatePath("/collections");
+  revalidatePath(`/collections/${slug}`);
+  redirect(`/admin/collaboration/partners?updated=1&login=${encodeURIComponent(login)}&slug=${encodeURIComponent(slug)}`);
 }
 
 export async function adminChangePartnerCommission(formData: FormData) {
