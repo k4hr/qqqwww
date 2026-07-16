@@ -27,7 +27,7 @@ export function CountryFilter({ country, preserve }: Props) {
             key={option.value}
             href={countryHref(option.value, preserve)}
             aria-current={activeCountry === option.value ? "page" : undefined}
-            className={`mf-pill min-h-11 shrink-0 ${activeCountry === option.value ? "active border-[#e50914] bg-[#e50914] text-white" : ""}`}
+            className={`${activeCountry === option.value ? "mf-btn mf-btn-primary" : "mf-btn"} shrink-0`}
           >
             {option.label}
           </Link>
