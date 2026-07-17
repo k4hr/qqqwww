@@ -262,12 +262,17 @@ export async function bulkImportFromKinopoisk(formData: FormData) {
 export async function toggleMoviePublished(formData: FormData) {
   const id = text(formData, "id");
   const current = text(formData, "isPublished") === "true";
-  if (!id) redirect("/admin");
+  const requestedReturnTo = text(formData, "returnTo");
+  const returnTo = requestedReturnTo === "/admin" || requestedReturnTo.startsWith("/admin?")
+    ? requestedReturnTo
+    : "/admin";
+
+  if (!id) redirect(returnTo);
 
   await prisma.movie.update({ where: { id }, data: { isPublished: !current } });
   revalidatePath("/");
   revalidatePath("/admin");
-  redirect("/admin");
+  redirect(returnTo);
 }
 
 export async function refreshMissingPosters(formData: FormData) {
