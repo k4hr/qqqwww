@@ -13,7 +13,28 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminCreatorCollectionsPage() {
+type Props = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+const errorMessages: Record<string, string> = {
+  id: "Не передан идентификатор подборки.",
+  not_found: "Подборка не найдена. Обновите страницу и повторите действие.",
+  broken_relation: "У подборки повреждена связь с партнёром или публичной страницей.",
+  partner_inactive: "Нельзя опубликовать подборку: партнёр не находится в статусе ACTIVE.",
+  empty_collection: "Нельзя опубликовать пустую подборку. Добавьте хотя бы один доступный фильм или сериал.",
+};
+
+export default async function AdminCreatorCollectionsPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const error = firstParam(params.error);
+  const moderated = firstParam(params.moderated) === "1";
+  const moderatedStatus = firstParam(params.status);
+
   const [collections, partners, hubs, publishedCounts] = await Promise.all([
     prisma.creatorCollection.findMany({
       orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
@@ -42,6 +63,18 @@ export default async function AdminCreatorCollectionsPage() {
       title="Авторские подборки"
       description="Очередь модерации, публикация подборок и порядок партнёров на публичной странице /collections."
     >
+      {error ? (
+        <div className="mb-5 rounded-2xl border border-red-300 bg-red-50 p-4 text-sm font-bold text-red-800">
+          {errorMessages[error] || "Не удалось изменить статус подборки."}
+        </div>
+      ) : null}
+
+      {moderated ? (
+        <div className="mb-5 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">
+          Статус подборки сохранён{moderatedStatus ? `: ${moderatedStatus}` : ""}. Публичные страницы и ссылки обновлены.
+        </div>
+      ) : null}
+
       <section className="admin-panel mb-6 p-5">
         <h2 className="text-xl font-black text-[#222]">
           Порядок партнёров на странице подборок
@@ -100,6 +133,11 @@ export default async function AdminCreatorCollectionsPage() {
         {collections.map((collection) => {
           const partner = partnerById.get(collection.partnerId);
           const hub = hubById.get(collection.hubId);
+          const isPublic = Boolean(
+            collection.status === "PUBLISHED" &&
+              hub?.isPublished &&
+              partner?.status === "ACTIVE",
+          );
 
           return (
             <article key={collection.id} className="admin-panel p-5">
@@ -119,14 +157,18 @@ export default async function AdminCreatorCollectionsPage() {
                   ) : null}
                 </div>
 
-                {hub ? (
+                {hub && isPublic ? (
                   <Link
                     className="rounded-xl border border-[#ddd] px-4 py-2 text-sm font-bold text-[#333]"
                     href={`/collections/${hub.slug}/${collection.slug}`}
                   >
-                    Открыть
+                    Открыть опубликованную страницу
                   </Link>
-                ) : null}
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[#ddd] px-4 py-2 text-sm font-bold text-neutral-500">
+                    Публичная страница пока скрыта
+                  </div>
+                )}
               </div>
 
               <form
@@ -154,7 +196,7 @@ export default async function AdminCreatorCollectionsPage() {
                     className={inputClass}
                   />
                 </Field>
-                <button className={buttonClass}>Сохранить</button>
+                <button type="submit" className={buttonClass}>Сохранить и применить</button>
               </form>
             </article>
           );

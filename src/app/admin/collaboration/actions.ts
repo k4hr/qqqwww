@@ -8,6 +8,12 @@ import { slugify } from "@/lib/slug";
 import { calculateGrossRevenue, calculatePartnerCommission, getCurrentMonetizationRate } from "@/lib/collaboration/revenue";
 import { clampNumber, hashPassword, randomToken, readBool, readText } from "@/lib/collaboration/security";
 import { readImageDataUrl } from "@/lib/collaboration/image-upload";
+import {
+  revalidateCollectionPublication,
+  syncCreatorHubVisibility,
+  syncCollectionPartnerLink,
+} from "@/lib/collaboration/collection-publication";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
 const ADMIN_COLLAB_PATHS = ["/admin/collaboration", "/admin/collaboration/partners", "/admin/collaboration/collections", "/admin/collaboration/revenue", "/admin/collaboration/payouts", "/admin/collaboration/settings"];
 
@@ -91,7 +97,8 @@ export async function adminCreatePartner(formData: FormData) {
       title: `Подборки ${partner.publicName || partner.name}`,
       description: partner.description,
       coverUrl: partner.coverUrl,
-      isPublished: partner.status === "ACTIVE",
+      // A hub becomes public together with its first published collection.
+      isPublished: false,
     },
   });
 
@@ -171,7 +178,6 @@ export async function adminUpdatePartner(formData: FormData) {
         title: `Подборки ${publicName || name}`,
         description,
         coverUrl,
-        isPublished: status === "ACTIVE",
       },
     }),
     prisma.partnerLink.updateMany({
@@ -180,26 +186,59 @@ export async function adminUpdatePartner(formData: FormData) {
     }),
   ]);
 
+  const updatedHub = await prisma.creatorHub.findUnique({ where: { partnerId: id } });
+  if (updatedHub) {
+    const publishedCount = await prisma.creatorCollection.count({
+      where: { hubId: updatedHub.id, status: "PUBLISHED" },
+    });
+    await prisma.creatorHub.update({
+      where: { id: updatedHub.id },
+      data: { isPublished: status === "ACTIVE" && publishedCount > 0 },
+    });
+    revalidateCollectionPublication({
+      hubSlug: updatedHub.slug,
+    });
+  }
+
   // Collection link targets contain the partner slug, so refresh them after a slug change.
   if (existing.slug !== slug) {
     const collectionLinks = await prisma.partnerLink.findMany({
       where: { partnerId: id, targetType: "COLLECTION" },
-      select: { id: true, slug: true },
+      select: { id: true, collectionId: true },
     });
     if (collectionLinks.length) {
+      const collectionIds = collectionLinks.flatMap((link) =>
+        link.collectionId ? [link.collectionId] : [],
+      );
+      const collections = collectionIds.length
+        ? await prisma.creatorCollection.findMany({
+            where: { id: { in: collectionIds } },
+            select: { id: true, slug: true },
+          })
+        : [];
+      const collectionById = new Map(
+        collections.map((collection) => [collection.id, collection]),
+      );
+
       await prisma.$transaction(
-        collectionLinks.map((link) =>
-          prisma.partnerLink.update({
+        collectionLinks.flatMap((link) => {
+          const collection = link.collectionId
+            ? collectionById.get(link.collectionId)
+            : null;
+          return collection
+            ? [prisma.partnerLink.update({
             where: { id: link.id },
-            data: { targetUrl: `/collections/${slug}/${link.slug}` },
-          }),
-        ),
+                data: { targetUrl: `/collections/${slug}/${collection.slug}` },
+              })]
+            : [];
+        }),
       );
     }
   }
 
   refreshAdmin();
   revalidatePath("/collections");
+  revalidatePath(`/collections/${existing.slug}`);
   revalidatePath(`/collections/${slug}`);
   redirect(`/admin/collaboration/partners?updated=1&login=${encodeURIComponent(login)}&slug=${encodeURIComponent(slug)}`);
 }
@@ -236,7 +275,19 @@ export async function adminSetPartnerStatus(formData: FormData) {
   const status = validStatus(readText(formData, "status"));
   if (!partnerId) redirect("/admin/collaboration/partners?error=partner");
   await prisma.partner.update({ where: { id: partnerId }, data: { status } });
-  await prisma.creatorHub.updateMany({ where: { partnerId }, data: { isPublished: status === "ACTIVE" } });
+  const hub = await prisma.creatorHub.findUnique({ where: { partnerId } });
+  if (hub) {
+    const publishedCount = await prisma.creatorCollection.count({
+      where: { hubId: hub.id, status: "PUBLISHED" },
+    });
+    await prisma.creatorHub.update({
+      where: { id: hub.id },
+      data: { isPublished: status === "ACTIVE" && publishedCount > 0 },
+    });
+    revalidateCollectionPublication({
+      hubSlug: hub.slug,
+    });
+  }
   refreshAdmin();
   redirect("/admin/collaboration/partners?status=1");
 }
@@ -292,18 +343,79 @@ export async function adminModerateCollection(formData: FormData) {
   const id = readText(formData, "id");
   const status = validCollectionStatus(readText(formData, "status"));
   if (!id) redirect("/admin/collaboration/collections?error=id");
-  await prisma.creatorCollection.update({
-    where: { id },
-    data: {
-      status,
-      moderationComment: readText(formData, "moderationComment", 1000) || null,
-      publishedAt: status === "PUBLISHED" ? new Date() : null,
-    },
+
+  const collection = await prisma.creatorCollection.findUnique({ where: { id } });
+  if (!collection) redirect("/admin/collaboration/collections?error=not_found");
+
+  const [hub, partner, items] = await Promise.all([
+    prisma.creatorHub.findUnique({ where: { id: collection.hubId } }),
+    prisma.partner.findUnique({ where: { id: collection.partnerId } }),
+    prisma.creatorCollectionMovie.findMany({
+      where: { collectionId: collection.id },
+      select: { movieId: true },
+    }),
+  ]);
+
+  if (!hub || !partner) redirect("/admin/collaboration/collections?error=broken_relation");
+  if (status === "PUBLISHED" && partner.status !== "ACTIVE") {
+    redirect("/admin/collaboration/collections?error=partner_inactive");
+  }
+  const publishableMovieCount = items.length
+    ? await prisma.movie.count({
+        where: {
+          AND: [
+            vibixPublicMovieWhere,
+            { id: { in: items.map((item) => item.movieId) } },
+          ],
+        },
+      })
+    : 0;
+  if (status === "PUBLISHED" && publishableMovieCount < 1) {
+    redirect("/admin/collaboration/collections?error=empty_collection");
+  }
+
+  const now = new Date();
+  const moderationComment = readText(formData, "moderationComment", 1000) || null;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.creatorCollection.update({
+      where: { id },
+      data: {
+        status,
+        moderationComment: status === "PUBLISHED" ? null : moderationComment,
+        submittedAt:
+          status === "PENDING_REVIEW" || status === "PUBLISHED"
+            ? collection.submittedAt ?? now
+            : collection.submittedAt,
+        publishedAt:
+          status === "PUBLISHED" ? collection.publishedAt ?? now : null,
+      },
+    });
+
+    await syncCollectionPartnerLink(tx, {
+      partnerId: partner.id,
+      partnerSlug: hub.slug,
+      collectionId: collection.id,
+      collectionSlug: collection.slug,
+      title: collection.title,
+      isActive: status === "PUBLISHED",
+    });
+
+    // Keep the hub visible only while the active partner has at least one
+    // published collection. This repairs historical "PUBLISHED but 404" data.
+    await syncCreatorHubVisibility(tx, {
+      hubId: hub.id,
+      partnerIsActive: partner.status === "ACTIVE",
+    });
   });
+
   refreshAdmin();
-  revalidatePath("/collections");
-  revalidatePath("/collections/[slug]", "page");
-  redirect("/admin/collaboration/collections?moderated=1");
+  revalidateCollectionPublication({
+    hubSlug: hub.slug,
+    collectionSlug: collection.slug,
+    collectionId: collection.id,
+  });
+  redirect(`/admin/collaboration/collections?moderated=1&id=${encodeURIComponent(collection.id)}&status=${status}`);
 }
 
 export async function adminSaveMonetizationRate(formData: FormData) {

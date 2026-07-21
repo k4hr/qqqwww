@@ -10,6 +10,8 @@ import { siteUrl, watchPath } from "@/lib/seo-links";
 export async function getCreatorHubMetadata(slug: string): Promise<Metadata | null> {
   const hub = await prisma.creatorHub.findUnique({ where: { slug } }).catch(() => null);
   if (!hub?.isPublished) return null;
+  const partner = await prisma.partner.findUnique({ where: { id: hub.partnerId } }).catch(() => null);
+  if (!partner || partner.status !== "ACTIVE") return null;
   return {
     title: `${hub.title} — REDFILM`,
     description: hub.description || "Авторские подборки фильмов и сериалов REDFILM.",
@@ -21,6 +23,8 @@ export async function getCreatorHubMetadata(slug: string): Promise<Metadata | nu
 export async function getCreatorCollectionMetadata(partnerSlug: string, collectionSlug: string): Promise<Metadata | null> {
   const hub = await prisma.creatorHub.findUnique({ where: { slug: partnerSlug } }).catch(() => null);
   if (!hub?.isPublished) return null;
+  const partner = await prisma.partner.findUnique({ where: { id: hub.partnerId } }).catch(() => null);
+  if (!partner || partner.status !== "ACTIVE") return null;
   const collection = await prisma.creatorCollection.findFirst({ where: { hubId: hub.id, slug: collectionSlug, status: "PUBLISHED" } });
   if (!collection) return null;
   const firstItem = await prisma.creatorCollectionMovie.findFirst({

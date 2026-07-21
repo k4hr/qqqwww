@@ -10,7 +10,22 @@ import { watchPath } from "@/lib/seo-links";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+const errorMessages: Record<string, string> = {
+  required: "Укажите название подборки.",
+  empty_collection: "Добавьте хотя бы один доступный фильм или сериал перед публикацией.",
+  movie_not_public: "Этот фильм сейчас недоступен для публичной подборки.",
+  hub: "Не найдена публичная страница партнёра. Обратитесь к администратору.",
+  item_not_found: "Элемент подборки уже был удалён. Обновите страницу.",
+};
 
 const statusLabel: Record<string, string> = {
   DRAFT: "Черновик",
@@ -20,17 +35,33 @@ const statusLabel: Record<string, string> = {
   ARCHIVED: "В архиве",
 };
 
-export default async function PartnerCollectionEditorPage({ params }: Props) {
+export default async function PartnerCollectionEditorPage({ params, searchParams }: Props) {
   const { partner } = await requirePartnerSession();
   const { id } = await params;
+  const query = await searchParams;
+  const error = firstParam(query.error);
   const collection = await prisma.creatorCollection.findUnique({ where: { id } });
   if (!collection || collection.partnerId !== partner.id) notFound();
-  const items = await prisma.creatorCollectionMovie.findMany({ where: { collectionId: collection.id }, orderBy: { position: "asc" } });
+  const [items, hub] = await Promise.all([
+    prisma.creatorCollectionMovie.findMany({ where: { collectionId: collection.id }, orderBy: { position: "asc" } }),
+    prisma.creatorHub.findUnique({ where: { id: collection.hubId } }),
+  ]);
   const movies = await prisma.movie.findMany({ where: { id: { in: items.map((item) => item.movieId) } }, select: { id: true, slug: true, titleRu: true, year: true, posterUrl: true, kpRating: true, imdbRating: true, type: true, quality: true } });
   const movieById = new Map(movies.map((movie) => [movie.id, movie]));
 
   return (
     <PartnerShell title={collection.title} description={`Статус подборки: ${statusLabel[collection.status] || collection.status}`}>
+      {error ? (
+        <div className="mb-5 rounded-2xl border border-[#e50914]/50 bg-[#e50914]/10 p-4 text-sm font-bold text-white">
+          {errorMessages[error] || "Не удалось выполнить действие. Обновите страницу и повторите попытку."}
+        </div>
+      ) : null}
+
+      {firstParam(query.created) === "1" ? <div className="mb-5 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm font-bold text-white">Подборка создана. Добавьте фильмы и опубликуйте её.</div> : null}
+      {firstParam(query.saved) === "1" ? <div className="mb-5 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm font-bold text-white">Изменения сохранены.</div> : null}
+      {firstParam(query.submitted) === "1" ? <div className="mb-5 rounded-2xl border border-amber-300/40 bg-amber-400/10 p-4 text-sm font-bold text-white">Подборка отправлена на модерацию.</div> : null}
+      {firstParam(query.published) === "1" ? <div className="mb-5 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm font-bold text-white">Подборка опубликована. Публичная страница уже обновлена.</div> : null}
+
       <section className="mf-panel p-5">
         <form action={partnerUpdateCollection} className="grid gap-4">
           <input type="hidden" name="id" value={collection.id} />
@@ -38,7 +69,7 @@ export default async function PartnerCollectionEditorPage({ params }: Props) {
           <PartnerField label="Описание подборки"><textarea name="description" defaultValue={collection.description || ""} className={`${partnerInput} min-h-32`} placeholder="Расскажите, что объединяет фильмы и сериалы в этой подборке" /></PartnerField>
           <p className="text-sm text-[#a1a1aa]">Обложка создаётся автоматически из постера первого фильма в подборке.</p>
           {collection.moderationComment ? <div className="rounded-2xl border border-[#e50914]/40 bg-[#e50914]/10 p-4 text-sm text-white"><b>Комментарий модератора:</b> {collection.moderationComment}</div> : null}
-          <div className="flex flex-wrap gap-2"><button className={partnerButton}>Сохранить изменения</button><Link className="mf-btn" href="/partner/collections">Назад к подборкам</Link></div>
+          <div className="flex flex-wrap gap-2"><button type="submit" className={partnerButton}>Сохранить изменения</button><Link className="mf-btn" href="/partner/collections">Назад к подборкам</Link></div>
         </form>
       </section>
 
@@ -67,17 +98,27 @@ export default async function PartnerCollectionEditorPage({ params }: Props) {
               </div>
             );
           })}
-          {items.length ? <button className={partnerButton}>Сохранить порядок и комментарии</button> : <div className="rounded-2xl border border-white/10 p-4 text-[#a1a1aa]">Пока ничего не добавлено. Найдите фильмы или сериалы ниже.</div>}
+          {items.length ? <button type="submit" className={partnerButton}>Сохранить порядок и комментарии</button> : <div className="rounded-2xl border border-white/10 p-4 text-[#a1a1aa]">Пока ничего не добавлено. Найдите фильмы или сериалы ниже.</div>}
         </form>
       </section>
 
       <div className="mt-6"><PartnerCatalogSearch collectionId={collection.id} /></div>
 
       <section className="mf-panel mt-6 p-5">
-        <form action={partnerSubmitCollection}>
-          <input type="hidden" name="id" value={collection.id} />
-          <button className={partnerButton}>{partner.requireCollectionModeration ? "Отправить подборку на модерацию" : "Опубликовать подборку"}</button>
-        </form>
+        {collection.status === "PUBLISHED" && hub?.isPublished ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Link className={partnerButton} href={`/collections/${hub.slug}/${collection.slug}`}>Открыть опубликованную подборку</Link>
+            <span className="text-sm text-[#a1a1aa]">Изменения сохраняются сразу{partner.requireCollectionModeration ? " и при необходимости повторно отправляются на модерацию" : ""}.</span>
+          </div>
+        ) : collection.status === "PENDING_REVIEW" ? (
+          <div className="rounded-2xl border border-amber-300/30 bg-amber-400/10 p-4 text-sm font-bold text-white">Подборка находится на модерации. После одобрения здесь появится публичная ссылка.</div>
+        ) : (
+          <form action={partnerSubmitCollection}>
+            <input type="hidden" name="id" value={collection.id} />
+            <button type="submit" className={partnerButton} disabled={!items.length}>{collection.status === "PUBLISHED" ? "Восстановить публикацию" : partner.requireCollectionModeration ? "Отправить подборку на модерацию" : "Опубликовать подборку"}</button>
+            {!items.length ? <p className="mt-3 text-sm text-[#a1a1aa]">Для публикации добавьте хотя бы один фильм или сериал.</p> : null}
+          </form>
+        )}
       </section>
     </PartnerShell>
   );
