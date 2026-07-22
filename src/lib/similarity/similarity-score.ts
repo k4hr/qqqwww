@@ -4,7 +4,7 @@ import { buildSimilarityProfile, type MovieWithSimilarityRelations, type Similar
 
 export const SIMILARITY_ALGORITHM_VERSION = 2;
 
-export type SimilarityBucket = "franchise" | "external" | "theme" | "people" | "metadata" | "cross_type_atmosphere" | "weak";
+export type SimilarityBucket = "franchise" | "external_recommendation" | "external_similar" | "external" | "theme" | "people" | "metadata" | "cross_type_atmosphere" | "weak";
 
 export type SimilarityScoreResult = {
   score: number;
@@ -264,6 +264,8 @@ export function isStrictSimilarityMatch(result: SimilarityScoreResult, minScore 
   if (result.score < minScore) return false;
   if (result.rejectionReason) return false;
   if (result.bucket === "franchise" || result.bucket === "theme") return result.strongSignals >= 1;
+  if (result.bucket === "external_recommendation") return result.score >= Math.max(minScore, 520) && result.strongSignals >= 1 && result.components.contradictionPenalty > -360;
+  if (result.bucket === "external_similar" || result.bucket === "external") return result.score >= Math.max(minScore, 560) && result.strongSignals >= 1 && result.components.contradictionPenalty > -300;
   if (result.bucket === "people") return result.score >= Math.max(minScore, 260) && result.strongSignals >= 1;
   if (result.bucket === "metadata") return result.score >= Math.max(minScore, 320) && result.strongSignals >= 1;
   if (result.bucket === "cross_type_atmosphere") return result.score >= 520 && result.strongSignals >= 2;

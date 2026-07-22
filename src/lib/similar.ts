@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { ContentType, Prisma } from "@prisma/client";
 import { buildSimilarityProfile, type MovieWithSimilarityRelations } from "@/lib/similarity/similarity-profile";
 import { calculateSimilarityScore, isStrictSimilarityMatch } from "@/lib/similarity/similarity-score";
 
@@ -6,6 +6,12 @@ export type SimilarMovieResult = MovieWithSimilarityRelations & {
   similarityScore: number;
   similarityReasons: string[];
   similarityBucket?: string;
+  similaritySources?: string[];
+};
+
+export type SimilarMovieGroups = {
+  primary: SimilarMovieResult[];
+  atmosphere: SimilarMovieResult[];
 };
 
 function intersectCount<T>(a: Set<T>, b: Set<T>) {
@@ -14,70 +20,11 @@ function intersectCount<T>(a: Set<T>, b: Set<T>) {
   return count;
 }
 
-const VERY_BROAD_GENRES = new Set([
-  "драма",
-  "комедия",
-  "мелодрама",
-  "боевик",
-  "триллер",
-  "приключения",
-  "фантастика",
-  "фэнтези",
-  "криминал",
-  "детектив",
-]);
-
-function normalizedCountrySet(value: string | null | undefined) {
-  return new Set((value || "")
-    .toLowerCase()
-    .replace(/ё/g, "е")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean));
-}
-
-function hasCountryOverlap(source: MovieWithSimilarityRelations, candidate: MovieWithSimilarityRelations) {
-  const a = normalizedCountrySet(source.country);
-  const b = normalizedCountrySet(candidate.country);
-  return intersectCount(a, b) > 0;
-}
-
 export function hasStrictSimilarityRelation(source: MovieWithSimilarityRelations, candidate: MovieWithSimilarityRelations) {
   const sourceProfile = buildSimilarityProfile(source);
   const candidateProfile = buildSimilarityProfile(candidate);
   const result = calculateSimilarityScore(source, candidate, sourceProfile, candidateProfile);
-  if (isStrictSimilarityMatch(result)) return true;
-
-  const sameFranchises = intersectCount(sourceProfile.franchiseIds, candidateProfile.franchiseIds);
-  if (sameFranchises > 0) return true;
-
-  const sameClusters = intersectCount(sourceProfile.clusterIds, candidateProfile.clusterIds);
-  if (sameClusters > 0) return true;
-
-  const sameSources = intersectCount(sourceProfile.sourceTypeIds, candidateProfile.sourceTypeIds);
-  if (sameSources > 0) return true;
-
-  if (sourceProfile.baseTitle && candidateProfile.baseTitle && sourceProfile.baseTitle === candidateProfile.baseTitle) return true;
-
-  const sameActors = intersectCount(sourceProfile.castNames, candidateProfile.castNames);
-  if (sameActors >= 2) return true;
-
-  if (source.director && candidate.director && source.director.toLowerCase() === candidate.director.toLowerCase()) return true;
-
-  const sameGenres = [...sourceProfile.genreNames].filter((item) => candidateProfile.genreNames.has(item));
-  if (!sameGenres.length) return false;
-
-  const yearDiff = Math.abs(source.year - candidate.year);
-  const sameType = source.type === candidate.type;
-  const countryOverlap = hasCountryOverlap(source, candidate);
-  const nonBroadGenreCount = sameGenres.filter((genre) => !VERY_BROAD_GENRES.has(genre)).length;
-
-  if (sameType && nonBroadGenreCount >= 1 && yearDiff <= 20) return true;
-  if (sameType && sameGenres.length >= 3 && yearDiff <= 18) return true;
-  if (sameType && sameGenres.length >= 2 && yearDiff <= 10) return true;
-  if (sameType && sameGenres.length >= 2 && countryOverlap && yearDiff <= 16) return true;
-
-  return false;
+  return isStrictSimilarityMatch(result);
 }
 
 export function calculateSimilarity(source: MovieWithSimilarityRelations, candidate: MovieWithSimilarityRelations): { score: number; reasons: string[] } {
@@ -109,6 +56,17 @@ export function sortSimilarMovies(source: MovieWithSimilarityRelations, candidat
       return b.year - a.year;
     })
     .slice(0, limit);
+}
+
+function contentTypeTitle(type: ContentType) {
+  if (type === "SERIES") return "Похожие сериалы";
+  if (type === "CARTOON") return "Похожие мультфильмы";
+  if (type === "ANIME") return "Похожие аниме";
+  return "Похожие фильмы";
+}
+
+export function getSimilarSectionTitle(type: ContentType) {
+  return contentTypeTitle(type);
 }
 
 export function sortAudienceMovies(source: MovieWithSimilarityRelations, candidates: MovieWithSimilarityRelations[], limit = 10) {

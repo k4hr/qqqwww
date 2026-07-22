@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, Menu, X } from "lucide-react";
 import { catalogHref, NAV_YEARS, type CatalogBase } from "@/lib/navigation-data";
@@ -39,6 +39,7 @@ function MobileAccordion({ label, base, kind, close }: { label: string; base: Ca
 export function MobileNavigationClient() {
   const [open, setOpen] = useState(false);
   const id = useId();
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -47,6 +48,16 @@ export function MobileNavigationClient() {
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      buttonRef.current?.focus();
+    };
+  }, [open]);
 
   const close = () => setOpen(false);
 
@@ -57,6 +68,7 @@ export function MobileNavigationClient() {
         aria-label={open ? "Закрыть меню" : "Открыть меню"}
         aria-expanded={open}
         aria-controls={id}
+        ref={buttonRef}
         onClick={() => setOpen((value) => !value)}
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[.05] text-white min-[980px]:hidden"
       >

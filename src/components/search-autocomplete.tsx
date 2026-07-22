@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { resolveSearchRedirectPath } from "@/lib/search-route-intents";
+import { navigateWithProgress } from "@/components/navigation-progress-client";
 
 type Suggestion = { id: string; title: string; year: number; type: string; posterUrl: string | null; href: string };
 
@@ -63,7 +64,7 @@ export function SearchAutocomplete({ mobile = false }: { mobile?: boolean }) {
     setOpen(false);
     inputRef.current?.blur();
     const routeIntent = resolveSearchRedirectPath(normalized);
-    router.push(routeIntent?.href ?? `/search?q=${encodeURIComponent(normalized)}`);
+    navigateWithProgress(router, routeIntent?.href ?? `/search?q=${encodeURIComponent(normalized)}`);
   }
 
   const shellClass = mobile

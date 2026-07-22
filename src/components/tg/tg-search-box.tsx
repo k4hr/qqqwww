@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { navigateWithProgress } from "@/components/navigation-progress-client";
 
 export function TgSearchBox({ defaultValue = "" }: { defaultValue?: string }) {
   const router = useRouter();
@@ -10,7 +11,7 @@ export function TgSearchBox({ defaultValue = "" }: { defaultValue?: string }) {
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = query.trim();
-    router.push(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
+    navigateWithProgress(router, trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
   }
 
   return (

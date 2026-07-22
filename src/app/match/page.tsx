@@ -21,7 +21,7 @@ export default async function MatchPage() {
       <section className="glass-panel section-glow mb-6 overflow-hidden rounded-[28px] p-5 sm:p-7">
         <div className="max-w-4xl">
           <div className="mb-3 text-xs font-black uppercase tracking-[.18em] text-[#e50914]">REDFILM Match</div>
-          <h1 className="text-[clamp(2rem,8vw,4.5rem)] font-black leading-none tracking-[-.055em] text-white">Выберите кино по настроению</h1>
+          <h2 className="text-[clamp(2rem,8vw,4.5rem)] font-black leading-none tracking-[-.055em] text-white">Выберите кино по настроению</h2>
           <p className="mt-4 max-w-3xl text-base leading-7 text-[#c9c9d1]">
             Листайте карточки, сохраняйте понравившееся и переходите к просмотру. Все варианты берутся из текущего каталога REDFILM и имеют доступный источник воспроизведения.
           </p>

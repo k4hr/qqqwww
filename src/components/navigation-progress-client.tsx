@@ -3,6 +3,22 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+type RouterLike = {
+  push: (href: string) => void;
+  replace: (href: string) => void;
+};
+
+const NAVIGATION_START_EVENT = "redfilm:navigation-start";
+
+export function startNavigationProgress() {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(NAVIGATION_START_EVENT));
+}
+
+export function navigateWithProgress(router: RouterLike, href: string, mode: "push" | "replace" = "push") {
+  startNavigationProgress();
+  router[mode](href);
+}
+
 function isModifiedClick(event: MouseEvent) {
   return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
 }
@@ -27,13 +43,16 @@ export function NavigationProgressClient() {
   const [progress, setProgress] = useState(0);
   const hideTimerRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const failSafeTimerRef = useRef<number | null>(null);
   const pendingRef = useRef(false);
 
   function clearTimers() {
     if (hideTimerRef.current !== null) window.clearTimeout(hideTimerRef.current);
     if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
+    if (failSafeTimerRef.current !== null) window.clearTimeout(failSafeTimerRef.current);
     hideTimerRef.current = null;
     intervalRef.current = null;
+    failSafeTimerRef.current = null;
   }
 
   function start() {
@@ -45,6 +64,7 @@ export function NavigationProgressClient() {
     intervalRef.current = window.setInterval(() => {
       setProgress((value) => value >= 90 ? value : Math.min(90, value + Math.max(1, (90 - value) * 0.08)));
     }, 180);
+    failSafeTimerRef.current = window.setTimeout(() => complete(), 14000);
   }
 
   function complete() {
@@ -67,9 +87,11 @@ export function NavigationProgressClient() {
     };
     const onPageShow = () => complete();
     document.addEventListener("click", onClick, true);
+    window.addEventListener(NAVIGATION_START_EVENT, start);
     window.addEventListener("pageshow", onPageShow);
     return () => {
       document.removeEventListener("click", onClick, true);
+      window.removeEventListener(NAVIGATION_START_EVENT, start);
       window.removeEventListener("pageshow", onPageShow);
       clearTimers();
     };

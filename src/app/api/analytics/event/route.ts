@@ -17,6 +17,7 @@ const ALLOWED_TYPES = new Set([
   "match_reset",
   "search_overlay_open",
   "search_suggestion_click",
+  "favorite_toggle",
 ]);
 
 function shortText(value: unknown, max: number) {

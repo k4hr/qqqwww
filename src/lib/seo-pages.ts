@@ -5,6 +5,8 @@ import { vibixPublicMovieWhere, vibixWatchMovieWhere } from "@/lib/movie-access"
 import { buildDefaultCatalogCountryWhere, buildCountryFilterWhere } from "@/lib/catalog-filters";
 import { baseSlugFromCollectionSlug, buildCollectionSlug, movieSlugFromFilmSeoSlug, normalizeMovieBaseTitle } from "@/lib/seo-slugs";
 import { buildSimilarityCandidateWhere, sortSimilarMovies, type SimilarMovieResult } from "@/lib/similar";
+import { parseSimilarityReasonsJson } from "@/lib/similarity/similarity-reasons";
+import { SIMILARITY_ALGORITHM_VERSION } from "@/lib/similarity/similarity-score";
 
 export const movieSeoInclude = {
   genres: { include: { genre: true } },
@@ -20,16 +22,6 @@ export const getSeoMovieBySlug = cache(async (slug: string) => {
 export async function getSeoMovieByFilmSlug(slug: string) {
   const movieSlug = movieSlugFromFilmSeoSlug(slug);
   return movieSlug ? getSeoMovieBySlug(movieSlug) : null;
-}
-
-function parseReasonsJson(value: string | null): string[] {
-  if (!value) return ["смысловая похожесть рассчитана REDFILM"];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string").slice(0, 6) : ["смысловая похожесть рассчитана REDFILM"];
-  } catch {
-    return ["смысловая похожесть рассчитана REDFILM"];
-  }
 }
 
 async function getCachedSimilarSeoMovies(movie: SeoMovie, limit: number): Promise<SimilarMovieResult[]> {
@@ -51,24 +43,26 @@ async function getCachedSimilarSeoMovies(movie: SeoMovie, limit: number): Promis
   for (const item of cached) {
     const target = byId.get(item.targetMovieId);
     if (!target) continue;
+    const parsedReasons = parseSimilarityReasonsJson(item.reasonsJson);
+    if (parsedReasons.algorithmVersion < SIMILARITY_ALGORITHM_VERSION) continue;
 
     results.push({
       ...target,
       similarityScore: item.score,
-      similarityReasons: parseReasonsJson(item.reasonsJson),
+      similarityReasons: parsedReasons.reasons,
       similarityBucket: item.bucket || undefined,
+      similaritySources: parsedReasons.sources,
     });
   }
 
-  // Старые cached similarity могли быть рассчитаны слишком мягко.
-  // Перед показом на странице пересчитываем их текущим строгим алгоритмом,
-  // чтобы рядом с боевиком не появлялась случайная комедия только из-за общего fallback.
-  return sortSimilarMovies(movie, results, limit, 180);
+  return results.slice(0, limit);
 }
 
-export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
-  const cached = await getCachedSimilarSeoMovies(movie, limit);
-  if (cached.length >= Math.min(limit, 6)) return cached;
+export async function getSimilarMovieGroups(movie: SeoMovie, primaryLimit = 10, atmosphereLimit = 4): Promise<{ primary: SimilarMovieResult[]; atmosphere: SimilarMovieResult[] }> {
+  const cached = await getCachedSimilarSeoMovies(movie, primaryLimit + atmosphereLimit);
+  const cachedPrimary = cached.filter((item) => item.type === movie.type && item.similarityBucket !== "cross_type_atmosphere").slice(0, primaryLimit);
+  const cachedAtmosphere = cached.filter((item) => item.type !== movie.type && item.similarityBucket === "cross_type_atmosphere" && item.similarityScore >= 560).slice(0, atmosphereLimit);
+  if (cachedPrimary.length >= Math.min(primaryLimit, 6)) return { primary: cachedPrimary, atmosphere: cachedAtmosphere };
 
   const candidates = await prisma.movie.findMany({
     where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), buildSimilarityCandidateWhere(movie)] },
@@ -76,10 +70,12 @@ export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
     orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
     take: 220,
   });
-  const ranked = sortSimilarMovies(movie, candidates, limit, 180);
-  if (ranked.length >= Math.min(limit, 6)) return ranked;
+  const ranked = sortSimilarMovies(movie, candidates, primaryLimit + atmosphereLimit, 180);
+  const primary = ranked.filter((item) => item.type === movie.type && item.similarityBucket !== "cross_type_atmosphere").slice(0, primaryLimit);
+  const atmosphere = ranked.filter((item) => item.type !== movie.type && item.similarityBucket === "cross_type_atmosphere" && item.similarityScore >= 560).slice(0, atmosphereLimit);
+  if (primary.length >= Math.min(primaryLimit, 6)) return { primary, atmosphere };
 
-  const usedIds = [movie.id, ...ranked.map((item) => item.id)];
+  const usedIds = [movie.id, ...primary.map((item) => item.id), ...atmosphere.map((item) => item.id)];
   const genreIds = movie.genres.map((item) => item.genreId);
   const fallbackCandidates = genreIds.length
     ? await prisma.movie.findMany({
@@ -101,8 +97,14 @@ export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
   // Важное правило: не добиваем блок случайными популярными тайтлами.
   // Если точной смысловой связи нет, лучше показать меньше карточек, чем под
   // «Пчеловодом» вывести «Операцию Ы» или другой нерелевантный фильм.
-  const fallbackRanked = sortSimilarMovies(movie, fallbackCandidates, limit - ranked.length, 140);
-  return [...ranked, ...fallbackRanked].slice(0, limit);
+  const fallbackRanked = sortSimilarMovies(movie, fallbackCandidates, primaryLimit - primary.length, 180)
+    .filter((item) => item.type === movie.type && item.similarityBucket !== "cross_type_atmosphere");
+  return { primary: [...primary, ...fallbackRanked].slice(0, primaryLimit), atmosphere };
+}
+
+export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
+  const groups = await getSimilarMovieGroups(movie, limit, 0);
+  return groups.primary;
 }
 
 export async function findFranchiseParts(movie: Pick<SeoMovie, "titleRu">) {

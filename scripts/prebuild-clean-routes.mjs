@@ -1,4 +1,4 @@
-import { rmSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 const staleRoutes = [
@@ -7,7 +7,8 @@ const staleRoutes = [
 
 for (const route of staleRoutes) {
   if (existsSync(route)) {
-    rmSync(route, { recursive: true, force: true });
-    console.log(`[prebuild-clean-routes] removed stale route: ${route}`);
+    console.error(`[prebuild-clean-routes] stale source route exists and must be resolved explicitly: ${route}`);
+    console.error("[prebuild-clean-routes] Build scripts must not mutate the git worktree.");
+    process.exitCode = 1;
   }
 }

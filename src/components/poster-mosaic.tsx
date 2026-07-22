@@ -7,16 +7,16 @@ type Props = {
 };
 
 export function PosterMosaic({ movies }: Props) {
-  const posters = movies.filter((movie) => movie.posterUrl).slice(0, 56);
+  const posters = movies.filter((movie) => movie.posterUrl).slice(0, 30);
   if (!posters.length) return null;
-  const rows = [posters.filter((_, index) => index % 4 === 0), posters.filter((_, index) => index % 4 === 1), posters.filter((_, index) => index % 4 === 2), posters.filter((_, index) => index % 4 === 3)];
+  const rows = [posters.filter((_, index) => index % 3 === 0), posters.filter((_, index) => index % 3 === 1), posters.filter((_, index) => index % 3 === 2)];
 
   return (
     <section className="poster-mosaic relative -mx-4 mb-7 min-h-[520px] overflow-hidden rounded-[32px] border border-white/10 bg-[#050505] sm:mx-0 lg:min-h-[680px]">
-      <div className="absolute inset-0 opacity-72">
+      <div className="absolute inset-0 opacity-72 max-sm:opacity-52">
         {rows.map((row, rowIndex) => (
           <div key={rowIndex} className={`poster-mosaic-row poster-mosaic-row-${rowIndex + 1}`}>
-            {[...row, ...row].map((movie, index) => (
+            {row.map((movie, index) => (
               <div key={`${rowIndex}-${movie.id}-${index}`} className="poster-mosaic-cell poster-fallback relative overflow-hidden rounded-[18px] border border-white/10">
                 {movie.posterUrl ? (
                   <Image

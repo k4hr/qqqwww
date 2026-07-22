@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { findSimilarSeoMovies, getSeoMovieBySlug, movieSeoInclude, type SeoMovie } from "@/lib/seo-pages";
 import { normalizeSearchQuery } from "@/lib/search";
+import { buildSimilarityProfile } from "@/lib/similarity/similarity-profile";
+import { calculateSimilarityScore, SIMILARITY_ALGORITHM_VERSION } from "@/lib/similarity/similarity-score";
 
 type GoldenCase = {
   title: string;
@@ -37,53 +39,98 @@ async function findMovieByTitle(title: string): Promise<SeoMovie | null> {
   return direct ? getSeoMovieBySlug(direct.slug) : null;
 }
 
-function hasTitle(results: SeoMovie[], expected: string) {
+function hasTitle(results: SeoMovie[], expected: string, limit = results.length) {
   const expectedKey = titleKey(expected);
-  return results.some((movie) => titleKey(`${movie.titleRu} ${movie.titleOriginal ?? ""}`).includes(expectedKey));
+  return results.slice(0, limit).some((movie) => titleKey(`${movie.titleRu} ${movie.titleOriginal ?? ""}`).includes(expectedKey));
+}
+
+function duplicateFranchiseCount(source: SeoMovie, results: SeoMovie[]) {
+  const counts = new Map<string, number>();
+  for (const movie of results) {
+    const key = buildSimilarityProfile(movie).baseTitle;
+    if (!key || key === buildSimilarityProfile(source).baseTitle) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.values()].filter((count) => count > 4).length;
 }
 
 async function main() {
+  const startedAt = Date.now();
   let evaluated = 0;
-  let includeHits = 0;
+  let skipped = 0;
+  let includeHitsAt6 = 0;
+  let includeHitsAt12 = 0;
   let includeTotal = 0;
   let excludeViolations = 0;
   let emptyResults = 0;
   let typeMismatches = 0;
+  let broadGenreOnly = 0;
+  let duplicateFranchise = 0;
+  let strongSignalTotal = 0;
+  let scoredResults = 0;
+
+  console.log(`[similarity:golden] algorithmVersion=${SIMILARITY_ALGORITHM_VERSION}`);
 
   for (const entry of CASES) {
     const source = await findMovieByTitle(entry.title);
     if (!source) {
-      console.log(`[skip] ${entry.title}: not found in DB`);
+      skipped += 1;
+      console.log(`SKIP: source title not found: ${entry.title}`);
       continue;
     }
 
+    const sourceProfile = buildSimilarityProfile(source);
     const results = await findSimilarSeoMovies(source, 12);
     evaluated += 1;
     if (!results.length) emptyResults += 1;
     typeMismatches += results.filter((item) => item.type !== source.type).length;
+    duplicateFranchise += duplicateFranchiseCount(source, results);
 
-    for (const expected of [...(entry.mustInclude ?? []), ...(entry.shouldInclude ?? [])]) {
+    const expectedTitles = [...(entry.mustInclude ?? []), ...(entry.shouldInclude ?? [])];
+    for (const expected of expectedTitles) {
       includeTotal += 1;
-      if (hasTitle(results, expected)) includeHits += 1;
+      if (hasTitle(results, expected, 6)) includeHitsAt6 += 1;
+      if (hasTitle(results, expected, 12)) includeHitsAt12 += 1;
     }
 
     for (const forbidden of entry.mustExclude ?? []) {
-      if (hasTitle(results, forbidden)) excludeViolations += 1;
+      if (hasTitle(results, forbidden, 12)) excludeViolations += 1;
     }
 
-    console.log(`[case] ${entry.title}: ${results.map((item) => item.titleRu).join(" | ") || "empty"}`);
+    console.log(`\nSource: ${source.titleRu}`);
+    console.log("Top 6:");
+    results.slice(0, 6).forEach((movie, index) => {
+      const score = calculateSimilarityScore(source, movie, sourceProfile, buildSimilarityProfile(movie));
+      strongSignalTotal += score.strongSignals;
+      scoredResults += 1;
+      if (score.penalties.includes("broad_genre_only") || score.penalties.includes("weak_metadata_only")) broadGenreOnly += 1;
+      console.log(`${index + 1}. ${movie.titleRu} (${movie.year}) [${movie.type}] score=${score.score} bucket=${score.bucket}`);
+      console.log(`   Reasons: ${score.reasons.join("; ")}`);
+      console.log(`   Sources: ${(movie.similaritySources ?? []).join(", ") || "runtime"}`);
+    });
+    const pass = expectedTitles.every((title) => hasTitle(results, title, 12)) && (entry.mustExclude ?? []).every((title) => !hasTitle(results, title, 12));
+    console.log(pass ? "PASS" : "FAIL");
   }
 
-  console.log(JSON.stringify({
+  const summary = {
     evaluated,
-    skipped: CASES.length - evaluated,
-    precisionAt12Approx: includeTotal ? Number((includeHits / includeTotal).toFixed(3)) : null,
-    includeHits,
-    includeTotal,
-    excludeViolations,
-    emptyResultRate: evaluated ? Number((emptyResults / evaluated).toFixed(3)) : null,
+    skipped,
+    precisionAt6: includeTotal ? Number((includeHitsAt6 / includeTotal).toFixed(3)) : null,
+    precisionAt12: includeTotal ? Number((includeHitsAt12 / includeTotal).toFixed(3)) : null,
     typeMismatchRate: evaluated ? Number((typeMismatches / Math.max(1, evaluated * 12)).toFixed(3)) : null,
-  }, null, 2));
+    broadGenreOnlyRate: scoredResults ? Number((broadGenreOnly / scoredResults).toFixed(3)) : null,
+    emptyResultRate: evaluated ? Number((emptyResults / evaluated).toFixed(3)) : null,
+    duplicateFranchiseRate: evaluated ? Number((duplicateFranchise / evaluated).toFixed(3)) : null,
+    averageStrongSignalCount: scoredResults ? Number((strongSignalTotal / scoredResults).toFixed(2)) : null,
+    mustIncludeHits: includeHitsAt12,
+    mustIncludeTotal: includeTotal,
+    mustExcludeViolations: excludeViolations,
+    durationMs: Date.now() - startedAt,
+  };
+
+  console.log("\n[similarity:golden] summary");
+  console.log(JSON.stringify(summary, null, 2));
+  if (excludeViolations > 0) process.exitCode = 1;
 }
 
 main().catch((error) => {

@@ -165,7 +165,7 @@ function buildSearchVariants(query: string) {
     addAliasVariants(variants, normalized);
   }
 
-  return variants.slice(0, 32);
+  return variants.slice(0, 18);
 }
 
 function isShortSingleToken(query: string) {
@@ -227,6 +227,34 @@ function metadataWhere(query: string): Prisma.MovieWhereInput[] {
     { genres: { some: { genre: { name: { startsWith: normalized, mode: "insensitive" } } } } },
     { country: { contains: normalized, mode: "insensitive" } },
   ];
+}
+
+function typoTokenVariants(token: string) {
+  if (token.length < 5 || /^\d+$/.test(token)) return [token];
+  const variants = new Set<string>([token, russianStemToken(token)]);
+  for (let index = 0; index < token.length; index += 1) {
+    const shortened = token.slice(0, index) + token.slice(index + 1);
+    if (shortened.length >= 4) variants.add(shortened);
+    if (variants.size >= 7) break;
+  }
+  return [...variants].slice(0, 7);
+}
+
+function fuzzyRetrievalWhere(query: string): Prisma.MovieWhereInput {
+  const tokens = tokenizeSearchQuery(query)
+    .filter((token) => token.length >= 4 && !/^\d+$/.test(token))
+    .slice(0, 3);
+  if (!tokens.length) return {};
+
+  return {
+    AND: tokens.map((token) => ({
+      OR: typoTokenVariants(token).flatMap((variant) => [
+        { titleRu: { contains: variant, mode: "insensitive" as const } },
+        { titleOriginal: { contains: variant, mode: "insensitive" as const } },
+        { slug: { contains: variant, mode: "insensitive" as const } },
+      ]),
+    })),
+  };
 }
 
 export function buildSearchWhere(query: string): Prisma.MovieWhereInput {
@@ -357,9 +385,10 @@ export function scoreSearchResult(movie: SearchMovie, query: string) {
   for (const variant of variants) {
     const variantTokens = tokenizeSearchQuery(variant);
     const aliasPenalty = variant === intent ? 0 : 18;
-    score += Math.max(0, scoreOneTextField(movie.titleRu, variant, variantTokens, 210, 165, 132) - aliasPenalty);
-    score += Math.max(0, scoreOneTextField(movie.titleOriginal ?? "", variant, variantTokens, 185, 145, 112) - aliasPenalty);
-    score += Math.max(0, scoreOneTextField(movie.slug, variant, variantTokens, 135, 105, 85) - aliasPenalty);
+    const titleRuScore = Math.max(0, scoreOneTextField(movie.titleRu, variant, variantTokens, 210, 165, 132) - aliasPenalty);
+    const titleOriginalScore = Math.max(0, scoreOneTextField(movie.titleOriginal ?? "", variant, variantTokens, 185, 145, 112) - aliasPenalty);
+    const slugScore = Math.max(0, scoreOneTextField(movie.slug, variant, variantTokens, 135, 105, 85) - aliasPenalty);
+    score = Math.max(score, titleRuScore, titleOriginalScore, slugScore);
   }
 
   if (tokens.some((token) => token === String(movie.year))) score += 40;
@@ -443,16 +472,6 @@ function filterWhere(filters: SearchFilters, hasQuery: boolean): Prisma.MovieWhe
   };
 }
 
-function hasActiveSearchFilter(filters: SearchFilters): boolean {
-  const country = normalizeCatalogCountry(filters.country ?? "all");
-  return Boolean(
-    (country !== "all" && country !== "main")
-    || Object.values(ContentType).includes(filters.type as ContentType)
-    || /^(19|20)\d{2}$/.test(filters.year ?? "")
-    || filters.genre,
-  );
-}
-
 function uniqueMovies(movies: SearchMovie[]) {
   return Array.from(new Map(movies.map((movie) => [movie.id, movie])).values());
 }
@@ -497,6 +516,19 @@ async function searchMoviesOnce(query: string, filters: SearchFilters, limit: nu
     }
   }
 
+  if (!isShortSingleToken(intent) && candidates.length < Math.min(12, limit)) {
+    const fuzzyWhere = fuzzyRetrievalWhere(intent);
+    if (Object.keys(fuzzyWhere).length) {
+      const fuzzy = await prisma.movie.findMany({
+        where: { AND: [baseWhere, fuzzyWhere] },
+        include: searchInclude,
+        orderBy: [{ isPublicVisible: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }],
+        take: Math.min(90, take),
+      });
+      candidates = uniqueMovies([...candidates, ...fuzzy]);
+    }
+  }
+
   return candidates
     .map((movie) => ({ movie, score: scoreSearchResult(movie, query) }))
     .filter((item) => item.score >= 70)
@@ -512,11 +544,6 @@ export async function searchMovies(query: string, filters: SearchFilters = {}, l
 
   const batches: SearchMovie[][] = [];
   batches.push(await searchMoviesOnce(normalized, filters, limit));
-
-  if (hasActiveSearchFilter(filters)) {
-    batches.push(await searchMoviesOnce(normalized, { ...filters, country: "all" }, limit));
-    batches.push(await searchMoviesOnce(normalized, { country: "all" }, limit));
-  }
 
   const merged = uniqueMovies(batches.flat());
   return merged

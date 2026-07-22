@@ -27,91 +27,91 @@ enum ProviderName {
 }
 
 model Movie {
-  id              String         @id @default(cuid())
-  slug            String         @unique
-  titleRu         String
-  titleOriginal   String?
-  description     String         @db.Text
-  year            Int
-  type            ContentType    @default(MOVIE)
-  posterUrl       String?
-  backdropUrl     String?
-  trailerUrl      String?
-  country         String?
-  director        String?
-  ageRating       String?
-  quality         String         @default("WEB-DL")
-  duration        Int?
-  kinopoiskId     String?
-  imdbId          String?
-  tmdbId          String?
-  allohaId        String?
-  vibixId         Int?
-  vibixIframeUrl  String?
-  vibixEmbedCode  String?
-  vibixAvailable  Boolean        @default(false)
-  vibixType       String?
-  vibixUploadedAt DateTime?
-  vibixUpdatedAt  DateTime?
-  vibixLastSyncAt DateTime?
-  vibixTags       String[]       @default([])
-  vibixVoiceovers String[]       @default([])
-  vibixLgbtContent Int?
-  vibixSeasonCount Int?
-  vibixEpisodeCount Int?
-  isCatalogAllowed Boolean        @default(true)
-  catalogBlockReason String?
-  normalizedCountries String[]    @default([])
-  catalogCheckedAt DateTime?
-  kpRating        Float?
-  imdbRating      Float?
-  tmdbRating      Float?
-  kpVotes         Int?
-  imdbVotes       Int?
-  tmdbVotes       Int?
-  tmdbPopularity  Float?
-  homeScore       Float          @default(0)
-  trendScore      Float          @default(0)
-  qualityScore    Float          @default(0)
-  catalogScore    Float          @default(0)
-  popularScore    Float          @default(0)
-  topScore        Float          @default(0)
-  freshScore      Float          @default(0)
-  evergreenScore  Float          @default(0)
-  articleMentionScore Float      @default(0)
-  franchiseScore  Float          @default(0)
-  actorPowerScore Float          @default(0)
-  isHomeEligible  Boolean        @default(false)
-  isHeroEligible  Boolean        @default(false)
-  isTrendingEligible Boolean     @default(false)
-  isEvergreenEligible Boolean    @default(false)
-  isPublicVisible Boolean        @default(false)
-  isPopularEligible Boolean      @default(false)
-  isTopEligible Boolean          @default(false)
-  isFreshEligible Boolean        @default(false)
-  isQualityDataComplete Boolean  @default(false)
-  lastTrendSyncAt DateTime?
-  lastQualitySyncAt DateTime?
-  lastCatalogScoreAt DateTime?
-  similarityCalculatedAt DateTime?
-  similarityDirty Boolean          @default(true)
-  similarityDirtyReason String?
-  lastVibixEnrichedAt DateTime?
-  lastVibixSeenAt DateTime?
+  id                       String                     @id @default(cuid())
+  slug                     String                     @unique
+  titleRu                  String
+  titleOriginal            String?
+  description              String                     @db.Text
+  year                     Int
+  type                     ContentType                @default(MOVIE)
+  posterUrl                String?
+  backdropUrl              String?
+  trailerUrl               String?
+  country                  String?
+  director                 String?
+  ageRating                String?
+  quality                  String                     @default("WEB-DL")
+  duration                 Int?
+  kinopoiskId              String?
+  imdbId                   String?
+  tmdbId                   String?
+  allohaId                 String?
+  vibixId                  Int?
+  vibixIframeUrl           String?
+  vibixEmbedCode           String?
+  vibixAvailable           Boolean                    @default(false)
+  vibixType                String?
+  vibixUploadedAt          DateTime?
+  vibixUpdatedAt           DateTime?
+  vibixLastSyncAt          DateTime?
+  vibixTags                String[]                   @default([])
+  vibixVoiceovers          String[]                   @default([])
+  vibixLgbtContent         Int?
+  vibixSeasonCount         Int?
+  vibixEpisodeCount        Int?
+  isCatalogAllowed         Boolean                    @default(true)
+  catalogBlockReason       String?
+  normalizedCountries      String[]                   @default([])
+  catalogCheckedAt         DateTime?
+  kpRating                 Float?
+  imdbRating               Float?
+  tmdbRating               Float?
+  kpVotes                  Int?
+  imdbVotes                Int?
+  tmdbVotes                Int?
+  tmdbPopularity           Float?
+  homeScore                Float                      @default(0)
+  trendScore               Float                      @default(0)
+  qualityScore             Float                      @default(0)
+  catalogScore             Float                      @default(0)
+  popularScore             Float                      @default(0)
+  topScore                 Float                      @default(0)
+  freshScore               Float                      @default(0)
+  evergreenScore           Float                      @default(0)
+  articleMentionScore      Float                      @default(0)
+  franchiseScore           Float                      @default(0)
+  actorPowerScore          Float                      @default(0)
+  isHomeEligible           Boolean                    @default(false)
+  isHeroEligible           Boolean                    @default(false)
+  isTrendingEligible       Boolean                    @default(false)
+  isEvergreenEligible      Boolean                    @default(false)
+  isPublicVisible          Boolean                    @default(false)
+  isPopularEligible        Boolean                    @default(false)
+  isTopEligible            Boolean                    @default(false)
+  isFreshEligible          Boolean                    @default(false)
+  isQualityDataComplete    Boolean                    @default(false)
+  lastTrendSyncAt          DateTime?
+  lastQualitySyncAt        DateTime?
+  lastCatalogScoreAt       DateTime?
+  similarityCalculatedAt   DateTime?
+  similarityDirty          Boolean                    @default(true)
+  similarityDirtyReason    String?
+  lastVibixEnrichedAt      DateTime?
+  lastVibixSeenAt          DateTime?
   lastExternalEnrichmentAt DateTime?
-  isPublished     Boolean        @default(true)
-  views           Int            @default(0)
-  likes           Int            @default(0)
-  dislikes        Int            @default(0)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  genres          MovieGenre[]
-  cast            MovieCast[]
-  providerLinks   ProviderLink[]
-  telegramFavorites TelegramFavorite[]
-  telegramHistory TelegramWatchHistory[]
-  homeSelectionItems RedfilmHomeSelectionItem[]
-  artworks        MovieArtwork[]
+  isPublished              Boolean                    @default(true)
+  views                    Int                        @default(0)
+  likes                    Int                        @default(0)
+  dislikes                 Int                        @default(0)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  genres                   MovieGenre[]
+  cast                     MovieCast[]
+  providerLinks            ProviderLink[]
+  telegramFavorites        TelegramFavorite[]
+  telegramHistory          TelegramWatchHistory[]
+  homeSelectionItems       RedfilmHomeSelectionItem[]
+  artworks                 MovieArtwork[]
 
   @@index([type, year])
   @@index([isPublished])
@@ -209,78 +209,78 @@ model MovieArtwork {
 }
 
 model VibixAdSettings {
-  id                 String   @id @default(cuid())
-  singletonKey       String   @unique @default("default")
-  enabled            Boolean  @default(true)
-  publisherId        String?
-  scriptUrl          String?  @default("https://v-js-menu.run/public/lib.en.min.js")
-  stickerEnabled     Boolean  @default(true)
-  pcStickerEnabled   Boolean  @default(true)
-  bannersEnabled     Boolean  @default(true)
-  brandEnabled       Boolean  @default(false)
-  flyrollEnabled     Boolean  @default(true)
-  flyrollPosition    Int      @default(2)
-  flyrollManualSlot  String   @default("auto")
-  bannerSlotsJson    Json?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default(cuid())
+  singletonKey      String   @unique @default("default")
+  enabled           Boolean  @default(true)
+  publisherId       String?
+  scriptUrl         String?  @default("https://v-js-menu.run/public/lib.en.min.js")
+  stickerEnabled    Boolean  @default(true)
+  pcStickerEnabled  Boolean  @default(true)
+  bannersEnabled    Boolean  @default(true)
+  brandEnabled      Boolean  @default(false)
+  flyrollEnabled    Boolean  @default(true)
+  flyrollPosition   Int      @default(2)
+  flyrollManualSlot String   @default("auto")
+  bannerSlotsJson   Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model VibixUpdateCursor {
-  id String @id @default(cuid())
-  type ContentType
-  source String @default("vibix")
-  mode String @default("updates")
-  lastPage Int @default(1)
+  id                 String      @id @default(cuid())
+  type               ContentType
+  source             String      @default("vibix")
+  mode               String      @default("updates")
+  lastPage           Int         @default(1)
   lastSeenUploadedAt DateTime?
-  lastSeenUpdatedAt DateTime?
-  lastRunAt DateTime?
-  lastSuccessAt DateTime?
-  lastError String? @db.Text
-  isRunning Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  lastSeenUpdatedAt  DateTime?
+  lastRunAt          DateTime?
+  lastSuccessAt      DateTime?
+  lastError          String?     @db.Text
+  isRunning          Boolean     @default(false)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   @@index([type, source, mode])
   @@index([lastRunAt])
 }
 
 model CatalogEngineRun {
-  id String @id @default(cuid())
-  status String
-  mode String
-  found Int @default(0)
-  imported Int @default(0)
-  updated Int @default(0)
-  enriched Int @default(0)
-  skipped Int @default(0)
-  failed Int @default(0)
-  message String? @db.Text
-  startedAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  status     String
+  mode       String
+  found      Int       @default(0)
+  imported   Int       @default(0)
+  updated    Int       @default(0)
+  enriched   Int       @default(0)
+  skipped    Int       @default(0)
+  failed     Int       @default(0)
+  message    String?   @db.Text
+  startedAt  DateTime  @default(now())
   finishedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([status, mode, createdAt])
 }
 
 model VibixSyncJob {
-  id             String    @id @default(cuid())
-  status         String    @default("QUEUED")
-  mode           String    @default("full")
-  contentType    String    @default("both")
-  currentType    String    @default("movie")
-  nextPage       Int       @default(1)
-  lastPage       Int?
-  total          Int?
-  limit          Int       @default(20)
-  pageDelayMs    Int       @default(10000)
-  detailDelayMs  Int       @default(2000)
-  imported       Int       @default(0)
-  updated        Int       @default(0)
-  skipped        Int       @default(0)
-  errors         Int       @default(0)
-  playerByIframe Int       @default(0)
-  playerByEmbed  Int       @default(0)
+  id               String    @id @default(cuid())
+  status           String    @default("QUEUED")
+  mode             String    @default("full")
+  contentType      String    @default("both")
+  currentType      String    @default("movie")
+  nextPage         Int       @default(1)
+  lastPage         Int?
+  total            Int?
+  limit            Int       @default(20)
+  pageDelayMs      Int       @default(10000)
+  detailDelayMs    Int       @default(2000)
+  imported         Int       @default(0)
+  updated          Int       @default(0)
+  skipped          Int       @default(0)
+  errors           Int       @default(0)
+  playerByIframe   Int       @default(0)
+  playerByEmbed    Int       @default(0)
   rateLimited      Boolean   @default(false)
   rateLimitUntil   DateTime?
   lastError        String?   @db.Text
@@ -293,8 +293,8 @@ model VibixSyncJob {
   safeResumeNote   String?   @db.Text
   startedAt        DateTime?
   finishedAt       DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([status, createdAt])
 }
@@ -317,19 +317,19 @@ model MovieSimilarity {
 }
 
 model TelegramUser {
-  id           String   @id @default(cuid())
-  telegramId   String   @unique
+  id           String    @id @default(cuid())
+  telegramId   String    @unique
   username     String?
   firstName    String?
   lastName     String?
   languageCode String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   lastSeenAt   DateTime?
 
-  favorites    TelegramFavorite[]
-  history      TelegramWatchHistory[]
-  searches     TelegramSearchLog[]
+  favorites TelegramFavorite[]
+  history   TelegramWatchHistory[]
+  searches  TelegramSearchLog[]
 }
 
 model TelegramFavorite {
@@ -377,60 +377,58 @@ model TelegramSearchLog {
 }
 
 model SimilarityJob {
-  id            String   @id @default(cuid())
-  status        String   @default("QUEUED")
-  mode          String   @default("DIRTY")
-  total         Int?
-  processed     Int      @default(0)
-  saved         Int      @default(0)
-  deleted       Int      @default(0)
-  errors        Int      @default(0)
-  batchSize     Int      @default(100)
-  targetLimit   Int      @default(24)
-  minScore      Float    @default(180)
-  cursorMovieId String?
+  id             String    @id @default(cuid())
+  status         String    @default("QUEUED")
+  mode           String    @default("DIRTY")
+  total          Int?
+  processed      Int       @default(0)
+  saved          Int       @default(0)
+  deleted        Int       @default(0)
+  errors         Int       @default(0)
+  batchSize      Int       @default(100)
+  targetLimit    Int       @default(24)
+  minScore       Float     @default(180)
+  cursorMovieId  String?
   lastMovieTitle String?
-  message       String?
-  lastError     String?  @db.Text
-  startedAt     DateTime?
-  finishedAt    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  message        String?
+  lastError      String?   @db.Text
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([status, createdAt])
   @@index([mode, status])
   @@index([updatedAt])
 }
 
-
-
 model VibixCatalogAutoJob {
-  id              String   @id @default(cuid())
-  status          String   @default("QUEUED")
-  mode            String   @default("FULL_CATALOG")
-  currentStage    String   @default("REFRESH")
-  currentType     String   @default("movie")
-  nextPage        Int      @default(1)
-  pagesPerRun     Int      @default(15)
-  importBatchSize Int      @default(100)
-  pageDelayMs     Int      @default(2500)
+  id              String    @id @default(cuid())
+  status          String    @default("QUEUED")
+  mode            String    @default("FULL_CATALOG")
+  currentStage    String    @default("REFRESH")
+  currentType     String    @default("movie")
+  nextPage        Int       @default(1)
+  pagesPerRun     Int       @default(15)
+  importBatchSize Int       @default(100)
+  pageDelayMs     Int       @default(2500)
   rateLimitUntil  DateTime?
-  indexed         Int      @default(0)
-  present         Int      @default(0)
-  missing         Int      @default(0)
-  imported        Int      @default(0)
-  updated         Int      @default(0)
-  skipped         Int      @default(0)
-  failed          Int      @default(0)
-  loops           Int      @default(0)
-  noNewPages      Int      @default(0)
+  indexed         Int       @default(0)
+  present         Int       @default(0)
+  missing         Int       @default(0)
+  imported        Int       @default(0)
+  updated         Int       @default(0)
+  skipped         Int       @default(0)
+  failed          Int       @default(0)
+  loops           Int       @default(0)
+  noNewPages      Int       @default(0)
   lastPageDone    Int?
-  lastError       String?  @db.Text
-  message         String?  @db.Text
+  lastError       String?   @db.Text
+  message         String?   @db.Text
   startedAt       DateTime?
   finishedAt      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([status, createdAt])
   @@index([currentStage, currentType])
@@ -455,8 +453,8 @@ model VibixReferenceItem {
 }
 
 model VibixCatalogSnapshot {
-  id            String   @id @default(cuid())
-  key           String   @unique
+  id            String    @id @default(cuid())
+  key           String    @unique
   label         String
   sourceType    String?
   filterKind    String?
@@ -465,9 +463,9 @@ model VibixCatalogSnapshot {
   lastPage      Int?
   perPage       Int?
   lastCheckedAt DateTime?
-  lastError     String?  @db.Text
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  lastError     String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([sourceType])
   @@index([filterKind, filterId])
@@ -475,29 +473,29 @@ model VibixCatalogSnapshot {
 }
 
 model VibixCatalogIndex {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   sourceType      String
   kpId            String
   categoryId      Int?
   categoryName    String?
   sourcePage      Int?
-  indexSource     String   @default("kpids")
+  indexSource     String    @default("kpids")
   vibixId         Int?
   imdbId          String?
   title           String?
   year            Int?
-  hasPlayableLink Boolean  @default(false)
+  hasPlayableLink Boolean   @default(false)
   detailAvailable Boolean?
   detailCheckedAt DateTime?
   rawJson         Json?
-  importStatus    String   @default("UNKNOWN")
+  importStatus    String    @default("UNKNOWN")
   importedMovieId String?
-  lastImportError String?  @db.Text
-  firstSeenAt     DateTime @default(now())
-  lastSeenAt      DateTime @default(now())
+  lastImportError String?   @db.Text
+  firstSeenAt     DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
   importedAt      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@unique([sourceType, kpId])
   @@index([sourceType])
@@ -567,39 +565,40 @@ model TrendCandidate {
 }
 
 model TrendSyncRun {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   status          String
-  startedAt       DateTime @default(now())
+  startedAt       DateTime  @default(now())
   finishedAt      DateTime?
-  candidatesFound Int      @default(0)
-  imported        Int      @default(0)
-  notInVibix      Int      @default(0)
-  failed          Int      @default(0)
+  candidatesFound Int       @default(0)
+  imported        Int       @default(0)
+  notInVibix      Int       @default(0)
+  failed          Int       @default(0)
   message         String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 }
 
 model ExternalArticleMention {
-  id             String       @id @default(cuid())
-  title          String
-  url            String?
-  sourceName     String?
-  publishedAt    DateTime?
-  detectedTitle  String?
-  detectedYear   Int?
-  detectedType   ContentType?
-  tmdbId         String?
-  imdbId         String?
-  kpId           String?
-  mentionScore   Float        @default(0)
-  rawSnippet     String?
-  createdAt      DateTime     @default(now())
+  id            String       @id @default(cuid())
+  title         String
+  url           String?
+  sourceName    String?
+  publishedAt   DateTime?
+  detectedTitle String?
+  detectedYear  Int?
+  detectedType  ContentType?
+  tmdbId        String?
+  imdbId        String?
+  kpId          String?
+  mentionScore  Float        @default(0)
+  rawSnippet    String?
+  createdAt     DateTime     @default(now())
 
   @@index([tmdbId])
   @@index([imdbId])
   @@index([detectedYear])
   @@index([mentionScore])
 }
+
 model SeoKeyword {
   id              String   @id @default(cuid())
   query           String
@@ -638,29 +637,30 @@ model SeoCluster {
   @@index([targetSlug])
   @@index([totalDemand])
 }
+
 model SeoLandingPage {
-  id              String   @id @default(cuid())
-  slug            String   @unique
-  type            String   @default("COLLECTION")
+  id              String    @id @default(cuid())
+  slug            String    @unique
+  type            String    @default("COLLECTION")
   title           String
   h1              String
-  description     String   @db.Text
-  introText       String   @db.Text
+  description     String    @db.Text
+  introText       String    @db.Text
   filterJson      Json?
   mainQuery       String?
-  keywordVariants String[] @default([])
-  totalDemand     Int      @default(0)
-  minItems        Int      @default(8)
-  isIndexable     Boolean  @default(true)
-  sitemapIncluded Boolean  @default(true)
-  status          String   @default("ACTIVE")
-  aiStatus        String   @default("NOT_GENERATED")
+  keywordVariants String[]  @default([])
+  totalDemand     Int       @default(0)
+  minItems        Int       @default(8)
+  isIndexable     Boolean   @default(true)
+  sitemapIncluded Boolean   @default(true)
+  status          String    @default("ACTIVE")
+  aiStatus        String    @default("NOT_GENERATED")
   aiModel         String?
   aiDraftJson     Json?
   aiGeneratedAt   DateTime?
-  aiError         String?  @db.Text
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  aiError         String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([type])
   @@index([status])
@@ -730,29 +730,29 @@ enum PartnerRevenuePeriodType {
 }
 
 model Partner {
-  id                          String                    @id @default(cuid())
+  id                          String                  @id @default(cuid())
   name                        String
   publicName                  String?
   cabinetTitle                String?
-  slug                        String                    @unique
-  login                       String                    @unique
+  slug                        String                  @unique
+  login                       String                  @unique
   passwordHash                String
   email                       String?
   avatarUrl                   String?
   coverUrl                    String?
-  description                 String?                   @db.Text
-  commissionPercent           Decimal                   @db.Decimal(5, 2)
-  attributionDays             Int                       @default(30)
-  attributionModel            PartnerAttributionModel   @default(FIRST_CLICK_LOCKED)
-  status                      PartnerStatus             @default(ACTIVE)
-  canManageCollections        Boolean                   @default(true)
-  requireCollectionModeration Boolean                   @default(true)
-  showFinancials              Boolean                   @default(true)
-  linksBlocked                Boolean                   @default(false)
-  adminComment                String?                   @db.Text
+  description                 String?                 @db.Text
+  commissionPercent           Decimal                 @db.Decimal(5, 2)
+  attributionDays             Int                     @default(30)
+  attributionModel            PartnerAttributionModel @default(FIRST_CLICK_LOCKED)
+  status                      PartnerStatus           @default(ACTIVE)
+  canManageCollections        Boolean                 @default(true)
+  requireCollectionModeration Boolean                 @default(true)
+  showFinancials              Boolean                 @default(true)
+  linksBlocked                Boolean                 @default(false)
+  adminComment                String?                 @db.Text
   lastLoginAt                 DateTime?
-  createdAt                   DateTime                  @default(now())
-  updatedAt                   DateTime                  @updatedAt
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
 
   @@index([status])
   @@index([createdAt])
@@ -832,18 +832,18 @@ model PartnerAttribution {
 }
 
 model PartnerEvent {
-  id             String           @id @default(cuid())
-  partnerId      String
-  attributionId  String?
-  visitorId      String
-  partnerLinkId  String?
-  collectionId   String?
-  movieId        String?
-  type           PartnerEventType
-  revenueAmount  Decimal?         @db.Decimal(18, 8)
-  source         String?
-  metadataJson   Json?
-  createdAt      DateTime         @default(now())
+  id            String           @id @default(cuid())
+  partnerId     String
+  attributionId String?
+  visitorId     String
+  partnerLinkId String?
+  collectionId  String?
+  movieId       String?
+  type          PartnerEventType
+  revenueAmount Decimal?         @db.Decimal(18, 8)
+  source        String?
+  metadataJson  Json?
+  createdAt     DateTime         @default(now())
 
   @@index([partnerId, createdAt])
   @@index([visitorId, createdAt])
@@ -869,20 +869,20 @@ model CreatorHub {
 }
 
 model CreatorCollection {
-  id                  String                  @id @default(cuid())
-  hubId               String
-  partnerId           String
-  title               String
-  slug                String
-  description         String?                 @db.Text
-  coverUrl            String?
-  position            Int                     @default(0)
-  status              CreatorCollectionStatus @default(DRAFT)
-  moderationComment   String?                 @db.Text
-  submittedAt         DateTime?
-  publishedAt         DateTime?
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  id                String                  @id @default(cuid())
+  hubId             String
+  partnerId         String
+  title             String
+  slug              String
+  description       String?                 @db.Text
+  coverUrl          String?
+  position          Int                     @default(0)
+  status            CreatorCollectionStatus @default(DRAFT)
+  moderationComment String?                 @db.Text
+  submittedAt       DateTime?
+  publishedAt       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
 
   @@unique([hubId, slug])
   @@index([partnerId, status])
@@ -904,26 +904,26 @@ model CreatorCollectionMovie {
 }
 
 model MonetizationRate {
-  id              String   @id @default(cuid())
-  playerStartRate Decimal  @db.Decimal(18, 8)
-  videoViewRate   Decimal  @db.Decimal(18, 8)
-  videoClickRate  Decimal  @db.Decimal(18, 8)
-  currency        String   @default("USD")
+  id              String    @id @default(cuid())
+  playerStartRate Decimal   @db.Decimal(18, 8)
+  videoViewRate   Decimal   @db.Decimal(18, 8)
+  videoClickRate  Decimal   @db.Decimal(18, 8)
+  currency        String    @default("USD")
   effectiveFrom   DateTime
   effectiveTo     DateTime?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([effectiveFrom, effectiveTo])
 }
 
 model PartnerCommissionRate {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   partnerId     String
-  percent       Decimal  @db.Decimal(5, 2)
+  percent       Decimal   @db.Decimal(5, 2)
   effectiveFrom DateTime
   effectiveTo   DateTime?
-  createdAt     DateTime @default(now())
-  createdBy      String?
+  createdAt     DateTime  @default(now())
+  createdBy     String?
 
   @@index([partnerId, effectiveFrom])
 }
@@ -957,18 +957,18 @@ model PartnerRevenuePeriod {
 }
 
 model PartnerPayout {
-  id          String              @id @default(cuid())
-  partnerId   String
+  id              String              @id @default(cuid())
+  partnerId       String
   revenuePeriodId String?
-  periodFrom  DateTime
-  periodTo    DateTime
-  amount      Decimal             @db.Decimal(18, 8)
-  currency    String              @default("USD")
-  status      PartnerPayoutStatus @default(PENDING)
-  paidAt      DateTime?
-  comment     String?             @db.Text
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  periodFrom      DateTime
+  periodTo        DateTime
+  amount          Decimal             @db.Decimal(18, 8)
+  currency        String              @default("USD")
+  status          PartnerPayoutStatus @default(PENDING)
+  paidAt          DateTime?
+  comment         String?             @db.Text
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@index([partnerId, status])
   @@index([revenuePeriodId])

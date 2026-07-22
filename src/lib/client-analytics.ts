@@ -13,7 +13,8 @@ export type AnalyticsEventType =
   | "match_favorite"
   | "match_reset"
   | "search_overlay_open"
-  | "search_suggestion_click";
+  | "search_suggestion_click"
+  | "favorite_toggle";
 
 type EventPayload = { movieId?: string; path?: string; query?: string; referrer?: string; results?: number };
 

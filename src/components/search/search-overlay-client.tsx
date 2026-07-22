@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { resolveSearchRedirectPath } from "@/lib/search-route-intents";
 import { trackEvent } from "@/lib/client-analytics";
+import { navigateWithProgress } from "@/components/navigation-progress-client";
 
 type Suggestion = {
   id: string;
@@ -122,7 +123,7 @@ export function SearchOverlayClient() {
     if (!normalized) return;
     const routeIntent = resolveSearchRedirectPath(normalized);
     setOpen(false);
-    router.push(routeIntent?.href ?? `/search?q=${encodeURIComponent(normalized)}`);
+    navigateWithProgress(router, routeIntent?.href ?? `/search?q=${encodeURIComponent(normalized)}`);
   }
 
   function trapFocus(event: KeyboardEvent<HTMLDivElement>) {

@@ -7,6 +7,26 @@ import { PartnerTrack } from "@/components/partner-track";
 import { prisma } from "@/lib/prisma";
 import { siteUrl, watchPath } from "@/lib/seo-links";
 
+type PosterCollageMovie = { id: string; posterUrl: string | null; titleRu: string };
+
+function PosterCollage({ movies, title, className = "" }: { movies: PosterCollageMovie[]; title: string; className?: string }) {
+  const posters = movies.filter((movie) => movie.posterUrl).slice(0, 5);
+  if (!posters.length) return null;
+
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_50%_20%,rgba(229,9,20,.20),transparent_42%),#08080c] ${className}`}>
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,5,8,.86),rgba(5,5,8,.26),rgba(5,5,8,.92))]" />
+      <div className="relative grid h-full grid-cols-5 items-center gap-2 p-3">
+        {posters.map((movie, index) => (
+          <div key={movie.id} className={`poster-fallback relative aspect-[2/3] overflow-hidden rounded-xl shadow-[0_16px_38px_rgba(0,0,0,.5)] ${index === 0 ? "col-span-2 scale-105" : "col-span-1 max-sm:hidden"}`}>
+            {movie.posterUrl ? <Image src={movie.posterUrl} alt={`${title}: ${movie.titleRu}`} fill className="object-cover" sizes="(max-width: 640px) 42vw, 180px" unoptimized /> : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export async function getCreatorHubMetadata(slug: string): Promise<Metadata | null> {
   const hub = await prisma.creatorHub.findUnique({ where: { slug } }).catch(() => null);
   if (!hub?.isPublished) return null;
@@ -56,13 +76,16 @@ export async function renderCreatorHubPage(slug: string) {
         select: { collectionId: true, movieId: true },
       })
     : [];
-  const firstMovieIdByCollection = new Map<string, string>();
+  const movieIdsByCollection = new Map<string, string[]>();
   for (const item of firstItems) {
-    if (!firstMovieIdByCollection.has(item.collectionId)) firstMovieIdByCollection.set(item.collectionId, item.movieId);
+    const ids = movieIdsByCollection.get(item.collectionId) ?? [];
+    if (ids.length < 5) ids.push(item.movieId);
+    movieIdsByCollection.set(item.collectionId, ids);
   }
-  const coverMovies = firstMovieIdByCollection.size
+  const coverMovieIds = Array.from(new Set([...movieIdsByCollection.values()].flat()));
+  const coverMovies = coverMovieIds.length
     ? await prisma.movie.findMany({
-        where: { id: { in: Array.from(firstMovieIdByCollection.values()) } },
+        where: { id: { in: coverMovieIds } },
         select: { id: true, posterUrl: true, titleRu: true },
       })
     : [];
@@ -82,15 +105,10 @@ export async function renderCreatorHubPage(slug: string) {
       </section>
       <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {collections.map((collection) => {
-          const firstMovieId = firstMovieIdByCollection.get(collection.id);
-          const coverMovie = firstMovieId ? coverMovieById.get(firstMovieId) : null;
+          const collageMovies = (movieIdsByCollection.get(collection.id) ?? []).map((id) => coverMovieById.get(id)).filter((movie): movie is PosterCollageMovie => Boolean(movie));
           return (
             <Link key={collection.id} href={`/collections/${hub.slug}/${collection.slug}`} className="mf-panel block overflow-hidden p-5 hover:border-[#e50914]/50">
-              {coverMovie?.posterUrl ? (
-                <div className="relative mb-4 aspect-[16/9] overflow-hidden rounded-2xl bg-white/5">
-                  <Image src={coverMovie.posterUrl} alt={coverMovie.titleRu || collection.title} fill className="object-cover object-[center_30%]" unoptimized />
-                </div>
-              ) : null}
+              <PosterCollage movies={collageMovies} title={collection.title} className="mb-4 aspect-[16/9]" />
               <h2 className="text-xl font-black text-white">{collection.title}</h2>
               <p className="mt-2 line-clamp-3 text-sm text-[#a1a1aa]">{collection.description || "Авторская подборка REDFILM."}</p>
             </Link>
@@ -113,14 +131,13 @@ export async function renderCreatorCollectionPage(partnerSlug: string, collectio
   const movies = await prisma.movie.findMany({ where: { id: { in: items.map((item) => item.movieId) }, isPublished: true, isCatalogAllowed: true }, include: { genres: { include: { genre: true } } } });
   const movieById = new Map(movies.map((movie) => [movie.id, movie]));
   const ordered = items.map((item) => ({ item, movie: movieById.get(item.movieId) })).filter((entry) => entry.movie);
-  const firstMovie = ordered[0]?.movie;
 
   return (
     <div className="creator-collection-page container py-4 sm:py-6">
       <PartnerTrack type="COLLECTION_OPEN" partnerSlug={partner.slug} collectionId={collection.id} />
       <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: collection.title, url: siteUrl(`/collections/${hub.slug}/${collection.slug}`), mainEntity: { "@type": "ItemList", itemListElement: ordered.map(({ movie }, index) => ({ "@type": "ListItem", position: index + 1, name: movie!.titleRu, url: siteUrl(watchPath(movie!)), image: movie!.posterUrl || undefined })) } }} />
       <section className="glass-panel section-glow overflow-hidden rounded-[26px] p-5 sm:p-7">
-        {firstMovie?.posterUrl ? <div className="relative mb-5 aspect-[16/9] overflow-hidden rounded-3xl bg-white/5"><Image src={firstMovie.posterUrl} alt={firstMovie.titleRu || collection.title} fill className="object-cover object-[center_30%]" unoptimized /></div> : null}
+        <PosterCollage movies={ordered.map(({ movie }) => movie!).filter(Boolean)} title={collection.title} className="mb-5 h-[220px] sm:h-[320px]" />
         <Link href={`/collections/${hub.slug}`} className="text-sm font-bold text-[#ff4d55]">← {hub.title}</Link>
         <h1 className="creator-collection-title mt-3 min-w-0 break-words text-[clamp(1.65rem,7vw,2.25rem)] font-black leading-tight text-white">{collection.title}</h1>
         <p className="creator-collection-description mt-3 max-w-4xl whitespace-pre-line break-words text-sm leading-6 text-[#a1a1aa] sm:text-base sm:leading-7">{collection.description || hub.description || "Авторская подборка REDFILM."}</p>

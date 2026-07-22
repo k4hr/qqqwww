@@ -5,8 +5,9 @@ import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
 import { movieSeoInclude, type SeoMovie } from "@/lib/seo-pages";
 import { buildSimilarityCandidateWhere } from "@/lib/similar";
 import { buildCollectionSlug, normalizeMovieBaseTitle } from "@/lib/seo-slugs";
-import { getTmdbKeywords, getTmdbRecommendations, getTmdbSimilar } from "@/lib/tmdb";
+import { getTmdbCollectionMembers, getTmdbDetails, getTmdbKeywords, getTmdbRecommendations, getTmdbSimilar } from "@/lib/tmdb";
 import { buildSimilarityProfile } from "@/lib/similarity/similarity-profile";
+import { buildSimilarityReasonsJson, parseSimilarityReasonsJson } from "@/lib/similarity/similarity-reasons";
 import {
   calculateSimilarityScore,
   isStrictSimilarityMatch,
@@ -36,12 +37,7 @@ type CandidateWithSources = {
   sources: string[];
 };
 
-const tmdbSignalCache = new Map<string, Promise<{ recommendations: string[]; similar: string[]; keywords: string[] }>>();
-
-function reasonsJson(result: SimilarityScoreResult, sources: string[]) {
-  void sources;
-  return JSON.stringify(result.reasons.slice(0, 6));
-}
+const tmdbSignalCache = new Map<string, Promise<{ recommendations: string[]; similar: string[]; keywords: string[]; collection: string[] }>>();
 
 function candidateWhere(source: SeoMovie, extra: Prisma.MovieWhereInput): Prisma.MovieWhereInput {
   return {
@@ -55,7 +51,7 @@ function candidateWhere(source: SeoMovie, extra: Prisma.MovieWhereInput): Prisma
 }
 
 async function getTmdbSignals(source: SeoMovie) {
-  if (!source.tmdbId) return { recommendations: [], similar: [], keywords: [] };
+  if (!source.tmdbId) return { recommendations: [], similar: [], keywords: [], collection: [] };
   const cacheKey = `${source.type}:${source.tmdbId}`;
   const cached = tmdbSignalCache.get(cacheKey);
   if (cached) return cached;
@@ -64,16 +60,30 @@ async function getTmdbSignals(source: SeoMovie) {
     const recommendations = await getTmdbRecommendations(source.tmdbId!, source.type);
     const similar = await getTmdbSimilar(source.tmdbId!, source.type);
     const keywords = await getTmdbKeywords(source.tmdbId!, source.type);
+    const collectionId = await getSourceTmdbCollectionId(source);
+    const collection = collectionId ? await getTmdbCollectionMembers(collectionId) : [];
 
     return {
       recommendations: recommendations.map((item) => String(item.id)).slice(0, 40),
       similar: similar.map((item) => String(item.id)).slice(0, 40),
       keywords: keywords.map((item) => item.name).filter(Boolean).slice(0, 24),
+      collection: collection.map((item) => String(item.id)).filter((id) => id !== source.tmdbId).slice(0, 80),
     };
   })();
 
   tmdbSignalCache.set(cacheKey, promise);
   return promise;
+}
+
+async function getSourceTmdbCollectionId(source: SeoMovie) {
+  if (!source.tmdbId || !process.env.TMDB_API_KEY) return null;
+  try {
+    const details = await getTmdbDetails(source.tmdbId, source.type);
+    return details.collectionId ?? null;
+  } catch (error) {
+    console.warn("[Similarity] Optional TMDB collection lookup failed", error);
+    return null;
+  }
 }
 
 function addCandidates(target: Map<string, CandidateWithSources>, movies: SeoMovie[], sourceLabel: string) {
@@ -119,6 +129,15 @@ async function collectSimilarityCandidates(source: SeoMovie): Promise<CandidateW
       take: 80,
     });
     addCandidates(target, recommendations, "TMDB_RECOMMENDATIONS");
+  }
+
+  if (tmdbSignals.collection.length) {
+    const collectionMovies = await prisma.movie.findMany({
+      where: candidateWhere(source, { type: source.type, tmdbId: { in: tmdbSignals.collection } }),
+      include: movieSeoInclude,
+      take: 80,
+    });
+    addCandidates(target, collectionMovies, "TMDB_COLLECTION");
   }
 
   if (tmdbSignals.similar.length) {
@@ -234,27 +253,38 @@ async function recalculateOneMovie(source: SeoMovie, targetLimit: number, minSco
       const candidateProfile = buildSimilarityProfile(movie);
       let result = calculateSimilarityScore(source, movie, sourceProfile, candidateProfile);
 
+      if (sources.includes("TMDB_COLLECTION")) {
+        result = {
+          ...result,
+          score: result.score + 980,
+          audienceScore: result.audienceScore + 520,
+          bucket: "franchise",
+          strongSignals: result.strongSignals + 2,
+          reasons: Array.from(new Set(["та же коллекция TMDB", ...result.reasons])).slice(0, 6),
+          components: { ...result.components, franchiseScore: result.components.franchiseScore + 980 },
+          rejectionReason: result.rejectionReason === "no_strong_signal" ? undefined : result.rejectionReason,
+        };
+      }
+
       if (sources.includes("TMDB_RECOMMENDATIONS")) {
         result = {
           ...result,
           score: result.score + 700,
           audienceScore: result.audienceScore + 400,
-          bucket: "external",
-          strongSignals: result.strongSignals + 2,
+          bucket: "external_recommendation",
           reasons: Array.from(new Set(["рекомендация TMDB", ...result.reasons])).slice(0, 6),
           components: { ...result.components, externalScore: result.components.externalScore + 700 },
-          rejectionReason: undefined,
+          rejectionReason: result.strongSignals > 0 && result.rejectionReason === "no_strong_signal" ? undefined : result.rejectionReason,
         };
       } else if (sources.includes("TMDB_SIMILAR")) {
         result = {
           ...result,
           score: result.score + 430,
           audienceScore: result.audienceScore + 240,
-          bucket: result.bucket === "weak" ? "external" : result.bucket,
-          strongSignals: result.strongSignals + 1,
+          bucket: result.bucket === "weak" ? "external_similar" : result.bucket,
           reasons: Array.from(new Set(["похожий фильм по TMDB", ...result.reasons])).slice(0, 6),
           components: { ...result.components, externalScore: result.components.externalScore + 430 },
-          rejectionReason: result.rejectionReason === "no_strong_signal" ? undefined : result.rejectionReason,
+          rejectionReason: result.strongSignals > 0 && result.rejectionReason === "no_strong_signal" ? undefined : result.rejectionReason,
         };
       }
 
@@ -276,7 +306,7 @@ async function recalculateOneMovie(source: SeoMovie, targetLimit: number, minSco
           score: item.result.score,
           audienceScore: item.result.audienceScore,
           bucket: item.result.bucket,
-          reasonsJson: reasonsJson(item.result, item.sources),
+          reasonsJson: buildSimilarityReasonsJson(item.result, item.sources),
         })),
         skipDuplicates: true,
       });
@@ -337,7 +367,16 @@ export async function markAllMovieSimilaritiesDirty(reason = "manual_all") {
 }
 
 export async function countDirtyMovieSimilarities() {
-  return prisma.movie.count({ where: { AND: [vibixPublicMovieWhere, { similarityDirty: true }] } });
+  const [dirty, staleCached] = await Promise.all([
+    prisma.movie.count({ where: { AND: [vibixPublicMovieWhere, { similarityDirty: true }] } }),
+    prisma.movieSimilarity.findMany({
+      select: { sourceMovieId: true, reasonsJson: true },
+      distinct: ["sourceMovieId"],
+      take: 2000,
+    }),
+  ]);
+  const stale = staleCached.filter((item) => parseSimilarityReasonsJson(item.reasonsJson).algorithmVersion < SIMILARITY_ALGORITHM_VERSION).length;
+  return dirty + stale;
 }
 
 export async function recalculateDirtyMovieSimilarities(options: SimilarityRecalculateOptions = {}): Promise<SimilarityRecalculateResult> {
@@ -345,8 +384,17 @@ export async function recalculateDirtyMovieSimilarities(options: SimilarityRecal
   const targetLimit = Math.max(6, Math.min(options.targetLimit ?? 24, 60));
   const minScore = Math.max(0, options.minScore ?? 180);
 
+  const staleCached = await prisma.movieSimilarity.findMany({
+    select: { sourceMovieId: true, reasonsJson: true },
+    distinct: ["sourceMovieId"],
+    take: limit * 4,
+  });
+  const staleSourceIds = staleCached
+    .filter((item) => parseSimilarityReasonsJson(item.reasonsJson).algorithmVersion < SIMILARITY_ALGORITHM_VERSION)
+    .map((item) => item.sourceMovieId);
+
   const sources = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, { similarityDirty: true }] },
+    where: { AND: [vibixPublicMovieWhere, { OR: [{ similarityDirty: true }, { id: { in: staleSourceIds } }] }] },
     include: movieSeoInclude,
     orderBy: [
       { popularScore: "desc" },

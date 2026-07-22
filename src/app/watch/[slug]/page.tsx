@@ -16,7 +16,7 @@ import { WatchMediaGallery } from "@/components/watch-media-gallery";
 import { extractCountries } from "@/lib/catalog-filters";
 import { getWatchArtwork } from "@/lib/movie-artwork";
 import { takeUniqueMovies } from "@/lib/recommendation-dedupe";
-import { findSimilarSeoMovies, getSeoMovieBySlug } from "@/lib/seo-pages";
+import { getSeoMovieBySlug, getSimilarMovieGroups } from "@/lib/seo-pages";
 import { countryPath, genrePath, similarPath, watchPath, yearPath } from "@/lib/seo-links";
 import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from "@/lib/seo/schema";
 import { watchSeoDescription, watchSeoH1, watchSeoTitle } from "@/lib/seo/meta";
@@ -70,11 +70,12 @@ export default async function WatchPage({ params }: Props) {
   const movie = await getSeoMovieBySlug((await params).slug);
   if (!movie) notFound();
   const countries = extractCountries(movie.country);
-  const [similarCandidates, watchArtwork] = await Promise.all([
-    findSimilarSeoMovies(movie, 6),
+  const [similarGroups, watchArtwork] = await Promise.all([
+    getSimilarMovieGroups(movie, 6, 4),
     getWatchArtwork(movie.id, movie.backdropUrl),
   ]);
-  const similar = takeUniqueMovies(similarCandidates, 6, new Set([movie.id])).map(toMovieCardData);
+  const similar = takeUniqueMovies(similarGroups.primary, 6, new Set([movie.id])).map(toMovieCardData);
+  const atmosphere = takeUniqueMovies(similarGroups.atmosphere, 4, new Set([movie.id, ...similar.map((item) => item.id)])).map(toMovieCardData);
   const description = movie.description.trim() || "Описание скоро появится";
   const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
   const contentTypePath = getContentTypePath(movie.type);
@@ -157,6 +158,12 @@ export default async function WatchPage({ params }: Props) {
         <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-2xl font-black text-white">{similarTitle}</h2><Link href={similarPath(movie)} className="text-sm font-bold text-[#ff4d55]">Все похожие</Link></div>
         {similar.length ? <div className="movie-grid">{similar.map((item) => <MovieCard key={item.id} movie={item} />)}</div> : <div className="mf-panel p-5 text-[#a1a1aa]">Похожие фильмы скоро появятся.</div>}
         </section>
+        {atmosphere.length ? (
+          <section className="mt-8">
+            <div className="mb-5"><h2 className="text-2xl font-black text-white">Похожее по атмосфере</h2><p className="mt-1 text-sm text-[#a1a1aa]">Отдельная подборка с сильной тематической связью, но другим форматом.</p></div>
+            <div className="movie-grid">{atmosphere.map((item) => <MovieCard key={item.id} movie={item} />)}</div>
+          </section>
+        ) : null}
       </div>
     </div>
   );
