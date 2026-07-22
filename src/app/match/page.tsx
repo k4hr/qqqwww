@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function MatchPage() {
-  const movies = await getMatchCandidates({ limit: 42 });
+  const movies = await getMatchCandidates({ limit: 24 });
 
   return (
     <div className="container py-5 sm:py-7">

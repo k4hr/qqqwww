@@ -38,14 +38,14 @@ export function MovieCardActionsClient({ movie, href, similarHref }: Props) {
           setFavorite(next);
           trackEvent("favorite_toggle", { movieId: movie.id });
         }}
-        className={`inline-flex min-h-11 w-11 items-center justify-center rounded-full border border-white/10 ${favorite ? "bg-[#e50914] text-white" : "bg-black/55 text-white"} transition hover:border-[#e50914]/70`}
+        className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-white/10 ${favorite ? "bg-[#e50914] text-white" : "bg-black/55 text-white"} transition hover:border-[#e50914]/70`}
       >
         <Heart size={16} fill={favorite ? "currentColor" : "none"} />
       </button>
       <Link
         href={similarHref}
         aria-label="Похожие"
-        className="inline-flex min-h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white transition hover:border-[#e50914]/70"
+        className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white transition hover:border-[#e50914]/70"
       >
         <Rows3 size={16} />
       </Link>

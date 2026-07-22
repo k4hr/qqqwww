@@ -26,11 +26,29 @@ const CASES: GoldenCase[] = [
   { title: "Джон Уик", shouldInclude: ["Джон Уик 2"], mustExclude: ["Шрэк"] },
 ];
 
+const MIN_PRECISION_AT_6 = 0.35;
+const MIN_PRECISION_AT_12 = 0.5;
+const MAX_TYPE_MISMATCH_RATE = 0;
+const MAX_BROAD_GENRE_ONLY_RATE = 0.2;
+const MAX_EMPTY_RESULT_RATE = 0.25;
+
 function titleKey(value: string) {
   return normalizeSearchQuery(value).replace(/\s+/g, " ");
 }
 
 async function findMovieByTitle(title: string): Promise<SeoMovie | null> {
+  const exact = await prisma.movie.findFirst({
+    where: {
+      AND: [
+        { OR: [{ titleRu: { equals: title, mode: "insensitive" } }, { titleOriginal: { equals: title, mode: "insensitive" } }] },
+        { isPublicVisible: true },
+      ],
+    },
+    include: movieSeoInclude,
+    orderBy: [{ kpRating: "desc" }, { year: "asc" }],
+  });
+  if (exact) return getSeoMovieBySlug(exact.slug);
+
   const direct = await prisma.movie.findFirst({
     where: { OR: [{ titleRu: { contains: title, mode: "insensitive" } }, { titleOriginal: { contains: title, mode: "insensitive" } }] },
     include: movieSeoInclude,
@@ -58,6 +76,8 @@ async function main() {
   const startedAt = Date.now();
   let evaluated = 0;
   let skipped = 0;
+  let passed = 0;
+  let failed = 0;
   let includeHitsAt6 = 0;
   let includeHitsAt12 = 0;
   let includeTotal = 0;
@@ -68,6 +88,7 @@ async function main() {
   let duplicateFranchise = 0;
   let strongSignalTotal = 0;
   let scoredResults = 0;
+  let returnedResults = 0;
 
   console.log(`[similarity:golden] algorithmVersion=${SIMILARITY_ALGORITHM_VERSION}`);
 
@@ -84,6 +105,7 @@ async function main() {
     evaluated += 1;
     if (!results.length) emptyResults += 1;
     typeMismatches += results.filter((item) => item.type !== source.type).length;
+    returnedResults += results.length;
     duplicateFranchise += duplicateFranchiseCount(source, results);
 
     const expectedTitles = [...(entry.mustInclude ?? []), ...(entry.shouldInclude ?? [])];
@@ -109,15 +131,19 @@ async function main() {
       console.log(`   Sources: ${(movie.similaritySources ?? []).join(", ") || "runtime"}`);
     });
     const pass = expectedTitles.every((title) => hasTitle(results, title, 12)) && (entry.mustExclude ?? []).every((title) => !hasTitle(results, title, 12));
+    if (pass) passed += 1;
+    else failed += 1;
     console.log(pass ? "PASS" : "FAIL");
   }
 
   const summary = {
     evaluated,
+    passed,
+    failed,
     skipped,
     precisionAt6: includeTotal ? Number((includeHitsAt6 / includeTotal).toFixed(3)) : null,
     precisionAt12: includeTotal ? Number((includeHitsAt12 / includeTotal).toFixed(3)) : null,
-    typeMismatchRate: evaluated ? Number((typeMismatches / Math.max(1, evaluated * 12)).toFixed(3)) : null,
+    typeMismatchRate: returnedResults ? Number((typeMismatches / returnedResults).toFixed(3)) : null,
     broadGenreOnlyRate: scoredResults ? Number((broadGenreOnly / scoredResults).toFixed(3)) : null,
     emptyResultRate: evaluated ? Number((emptyResults / evaluated).toFixed(3)) : null,
     duplicateFranchiseRate: evaluated ? Number((duplicateFranchise / evaluated).toFixed(3)) : null,
@@ -130,7 +156,19 @@ async function main() {
 
   console.log("\n[similarity:golden] summary");
   console.log(JSON.stringify(summary, null, 2));
-  if (excludeViolations > 0) process.exitCode = 1;
+  const violations: string[] = [];
+  if (evaluated === 0) violations.push("no golden cases were evaluated");
+  if (failed > 0) violations.push(`${failed} evaluated case(s) failed`);
+  if (summary.precisionAt6 !== null && summary.precisionAt6 < MIN_PRECISION_AT_6) violations.push(`Precision@6 ${summary.precisionAt6} < ${MIN_PRECISION_AT_6}`);
+  if (summary.precisionAt12 !== null && summary.precisionAt12 < MIN_PRECISION_AT_12) violations.push(`Precision@12 ${summary.precisionAt12} < ${MIN_PRECISION_AT_12}`);
+  if (summary.typeMismatchRate !== null && summary.typeMismatchRate > MAX_TYPE_MISMATCH_RATE) violations.push(`typeMismatchRate ${summary.typeMismatchRate} > ${MAX_TYPE_MISMATCH_RATE}`);
+  if (summary.broadGenreOnlyRate !== null && summary.broadGenreOnlyRate > MAX_BROAD_GENRE_ONLY_RATE) violations.push(`broadGenreOnlyRate ${summary.broadGenreOnlyRate} > ${MAX_BROAD_GENRE_ONLY_RATE}`);
+  if (summary.emptyResultRate !== null && summary.emptyResultRate > MAX_EMPTY_RESULT_RATE) violations.push(`emptyResultRate ${summary.emptyResultRate} > ${MAX_EMPTY_RESULT_RATE}`);
+  if (excludeViolations > 0) violations.push(`${excludeViolations} mustExclude violation(s)`);
+  if (violations.length) {
+    console.error("[similarity:golden] FAIL thresholds", violations);
+    process.exitCode = 1;
+  }
 }
 
 main().catch((error) => {

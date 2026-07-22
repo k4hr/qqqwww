@@ -1,6 +1,6 @@
-import { ContentType, type Prisma } from "@prisma/client";
+import { ContentType, Prisma } from "@prisma/client";
 import { buildCountryFilterWhere, normalizeCatalogCountry } from "@/lib/catalog-filters";
-import { vibixPublicMovieWhere, vibixWatchMovieWhere } from "@/lib/movie-access";
+import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { prisma } from "@/lib/prisma";
 import { getSearchTextForms, normalizeSearchText, parseSearchIntent, type SearchProvenance } from "@/lib/search-v2";
 
@@ -437,13 +437,19 @@ export function explainSearchResult(movie: SearchMovie, query: string): { score:
     const variantTokens = tokenizeSearchQuery(variant);
     if (titleRu === variant) provenance.add("EXACT_TITLE_RU");
     if (titleOriginal && titleOriginal === variant) provenance.add("EXACT_ORIGINAL_TITLE");
-    if (SEARCH_ALIASES[variant]?.length) provenance.add("EXACT_ALIAS");
+    const aliasTargets = SEARCH_ALIASES[variant] ?? [];
+    if (aliasTargets.some((alias) => [titleRu, titleOriginal, slug].includes(normalizeSearchQuery(alias)))) provenance.add("EXACT_ALIAS");
     if (variantCompact && compactTitle === variantCompact) provenance.add("EXACT_COMPACT_TITLE");
     if (phraseStartsAtBoundary(titleRu, variant) || (titleOriginal && phraseStartsAtBoundary(titleOriginal, variant))) provenance.add("PREFIX");
     if (variantTokens.length && variantTokens.every((token) => splitWords(titleRu).includes(token) || splitWords(titleOriginal).includes(token) || splitWords(slug).includes(token))) provenance.add("ALL_TITLE_TOKENS");
-    if (variant === transliterateSearchQuery(intent)) provenance.add("TRANSLITERATION");
-    if (variant === convertKeyboardLayout(intent, "en-to-ru") || variant === convertKeyboardLayout(intent, "ru-to-en")) provenance.add("KEYBOARD_LAYOUT");
-    if (variantTokens.some((token) => token.length >= 4 && [...splitWords(titleRu), ...splitWords(titleOriginal)].some((word) => editDistance(token, word) <= (token.length >= 7 ? 2 : 1)))) provenance.add("FUZZY");
+    const transliteratedTitle = normalizeSearchQuery(transliterateSearchQuery(movie.titleRu));
+    if (transliteratedTitle === variant || phraseStartsAtBoundary(transliteratedTitle, variant)) provenance.add("TRANSLITERATION");
+    const keyboardCorrected = [convertKeyboardLayout(intent, "en-to-ru"), convertKeyboardLayout(intent, "ru-to-en")];
+    if (keyboardCorrected.some((corrected) => corrected === titleRu || corrected === titleOriginal)) provenance.add("KEYBOARD_LAYOUT");
+    if (variantTokens.some((token) => token.length >= 4 && [...splitWords(titleRu), ...splitWords(titleOriginal)].some((word) => {
+      const distance = editDistance(token, word);
+      return distance > 0 && distance <= (token.length >= 7 ? 2 : 1);
+    }))) provenance.add("FUZZY");
   }
 
   const tokens = tokenizeSearchQuery(intent);
@@ -457,14 +463,15 @@ export function explainSearchResult(movie: SearchMovie, query: string): { score:
 }
 
 export type SearchFilters = { type?: string; year?: string; genre?: string; country?: string };
+export type SearchMode = "SUGGEST" | "FULL";
 
-function filterWhere(filters: SearchFilters, hasQuery: boolean): Prisma.MovieWhereInput {
+function filterWhere(filters: SearchFilters): Prisma.MovieWhereInput {
   const type = Object.values(ContentType).includes(filters.type as ContentType) ? filters.type as ContentType : undefined;
   const year = /^(19|20)\d{2}$/.test(filters.year ?? "") ? Number(filters.year) : undefined;
   return {
     AND: [
-      hasQuery ? vibixWatchMovieWhere : vibixPublicMovieWhere,
-      buildCountryFilterWhere(normalizeCatalogCountry(filters.country ?? (hasQuery ? "all" : "main"))),
+      vibixPublicMovieWhere,
+      buildCountryFilterWhere(normalizeCatalogCountry(filters.country ?? "main")),
       ...(type ? [{ type }] : []),
       ...(year ? [{ year }] : []),
       ...(filters.genre ? [{ genres: { some: { genre: { slug: filters.genre } } } }] : []),
@@ -476,57 +483,141 @@ function uniqueMovies(movies: SearchMovie[]) {
   return Array.from(new Map(movies.map((movie) => [movie.id, movie])).values());
 }
 
-async function searchMoviesOnce(query: string, filters: SearchFilters, limit: number): Promise<SearchMovie[]> {
-  const normalized = normalizeSearchQuery(query);
-  const intent = normalizeSearchIntentQuery(normalized);
-  const baseWhere = filterWhere(filters, Boolean(intent));
-  if (!intent) return [];
-
-  const take = Math.min(320, Math.max(100, limit * 10));
-  const strictWhere = buildSearchWhere(normalized);
-  let candidates = await prisma.movie.findMany({
-    where: { AND: [baseWhere, strictWhere] },
+async function fetchSearchStage(baseWhere: Prisma.MovieWhereInput, stageWhere: Prisma.MovieWhereInput, take: number) {
+  if (!Object.keys(stageWhere).length) return [];
+  return prisma.movie.findMany({
+    where: { AND: [baseWhere, stageWhere] },
     include: searchInclude,
     orderBy: [{ isPublicVisible: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
     take,
   });
+}
 
-  if (!isShortSingleToken(intent) && candidates.length < Math.min(16, limit)) {
-    const relaxedVariants = buildSearchVariants(normalized).filter((variant) => variant.length >= 4);
-    if (relaxedVariants.length) {
-      const relaxed = await prisma.movie.findMany({
-        where: {
-          AND: [
-            baseWhere,
-            {
-              OR: relaxedVariants.flatMap((variant) => [
-                { titleRu: { contains: variant, mode: "insensitive" } },
-                { titleOriginal: { contains: variant, mode: "insensitive" } },
-                { description: { contains: variant, mode: "insensitive" } },
-                { genres: { some: { genre: { name: { contains: variant, mode: "insensitive" } } } } },
-              ]),
-            },
-          ],
-        },
-        include: searchInclude,
-        orderBy: [{ isPublicVisible: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }],
-        take: Math.min(160, take),
-      });
-      candidates = uniqueMovies([...candidates, ...relaxed]);
-    }
+async function trigramCandidateIds(query: string, take: number) {
+  const normalized = normalizeSearchQuery(query);
+  const compact = normalizeSearchText(normalized).compact;
+  if (normalized.length < 4) return [];
+  const threshold = normalized.includes(" ") ? 0.16 : normalized.length >= 12 ? 0.22 : normalized.length >= 8 ? 0.26 : 0.31;
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string; similarity: number }>>(Prisma.sql`
+      SELECT "id",
+        GREATEST(
+          similarity(lower("titleRu"), ${normalized}),
+          similarity(lower(COALESCE("titleOriginal", '')), ${normalized}),
+          similarity(lower("slug"), ${normalized}),
+          similarity(regexp_replace(lower("titleRu"), '[^a-zа-я0-9]+', '', 'g'), ${compact}),
+          word_similarity(${normalized}, lower("titleRu")),
+          word_similarity(${normalized}, lower(COALESCE("titleOriginal", '')))
+        ) AS "similarity"
+      FROM "Movie"
+      WHERE "isPublished" = true
+        AND "isCatalogAllowed" = true
+        AND "vibixAvailable" = true
+        AND "posterUrl" IS NOT NULL
+        AND "posterUrl" <> ''
+        AND (
+          ("vibixIframeUrl" IS NOT NULL AND "vibixIframeUrl" <> '')
+          OR ("vibixEmbedCode" IS NOT NULL AND "vibixEmbedCode" <> '')
+        )
+        AND GREATEST(
+          similarity(lower("titleRu"), ${normalized}),
+          similarity(lower(COALESCE("titleOriginal", '')), ${normalized}),
+          similarity(lower("slug"), ${normalized}),
+          similarity(regexp_replace(lower("titleRu"), '[^a-zа-я0-9]+', '', 'g'), ${compact}),
+          word_similarity(${normalized}, lower("titleRu")),
+          word_similarity(${normalized}, lower(COALESCE("titleOriginal", '')))
+        ) >= ${threshold}
+      ORDER BY "similarity" DESC, "kpRating" DESC NULLS LAST
+      LIMIT ${Math.min(160, Math.max(20, take))}
+    `);
+    return rows.map((row) => row.id);
+  } catch (error) {
+    console.warn("[Search] pg_trgm retrieval unavailable, using bounded fallback", error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+
+function strongVariants(query: string) {
+  const normalized = normalizeSearchQuery(query);
+  const intent = normalizeSearchIntentQuery(normalized);
+  const variants: string[] = [];
+  addUnique(variants, intent);
+  addUnique(variants, convertKeyboardLayout(intent, "en-to-ru"));
+  addUnique(variants, convertKeyboardLayout(intent, "ru-to-en"));
+  addUnique(variants, transliterateSearchQuery(intent));
+  const aliases = SEARCH_ALIASES[intent] ?? [];
+  if (aliases[0]) addUnique(variants, aliases[0]);
+  addUnique(variants, normalizeSearchText(intent).compact);
+  return variants.filter(Boolean).slice(0, 6);
+}
+
+async function searchMoviesOnce(query: string, filters: SearchFilters, limit: number, mode: SearchMode): Promise<SearchMovie[]> {
+  const normalized = normalizeSearchQuery(query);
+  const intent = normalizeSearchIntentQuery(normalized);
+  const baseWhere = filterWhere(filters);
+  if (!intent) return [];
+
+  const variants = strongVariants(normalized);
+  const stageTake = Math.min(100, Math.max(24, limit * 3));
+  let candidates: SearchMovie[] = [];
+
+  candidates.push(...await fetchSearchStage(baseWhere, { OR: [...idWhere(intent), ...(intent !== normalized ? idWhere(normalized) : [])].slice(0, 10) }, 10));
+  candidates.push(...await fetchSearchStage(baseWhere, {
+    OR: variants.flatMap((variant) => [
+      { titleRu: { equals: variant, mode: "insensitive" as const } },
+      { titleOriginal: { equals: variant, mode: "insensitive" as const } },
+      { slug: { equals: variant, mode: "insensitive" as const } },
+    ]).slice(0, 18),
+  }, stageTake));
+  candidates = uniqueMovies(candidates);
+
+  if (candidates.length < Math.min(12, limit)) {
+    candidates.push(...await fetchSearchStage(baseWhere, {
+      OR: variants.flatMap((variant) => [
+        { titleRu: { startsWith: variant, mode: "insensitive" as const } },
+        { titleOriginal: { startsWith: variant, mode: "insensitive" as const } },
+        { slug: { startsWith: variant, mode: "insensitive" as const } },
+      ]).slice(0, 18),
+    }, stageTake));
+    candidates = uniqueMovies(candidates);
   }
 
-  if (!isShortSingleToken(intent) && candidates.length < Math.min(12, limit)) {
-    const fuzzyWhere = fuzzyRetrievalWhere(intent);
-    if (Object.keys(fuzzyWhere).length) {
-      const fuzzy = await prisma.movie.findMany({
-        where: { AND: [baseWhere, fuzzyWhere] },
-        include: searchInclude,
-        orderBy: [{ isPublicVisible: "desc" }, { kpRating: "desc" }, { createdAt: "desc" }],
-        take: Math.min(90, take),
-      });
-      candidates = uniqueMovies([...candidates, ...fuzzy]);
+  if (!isShortSingleToken(intent) && candidates.length < Math.min(20, limit * 2)) {
+    const tokens = tokenizeSearchQuery(intent).filter((token) => token.length >= 2).slice(0, 4);
+    if (tokens.length) candidates.push(...await fetchSearchStage(baseWhere, {
+      AND: tokens.map((token) => ({
+        OR: [
+          { titleRu: { contains: token, mode: "insensitive" as const } },
+          { titleOriginal: { contains: token, mode: "insensitive" as const } },
+          { slug: { contains: token, mode: "insensitive" as const } },
+        ],
+      })),
+    }, stageTake));
+    candidates = uniqueMovies(candidates);
+  }
+
+  if (!isShortSingleToken(intent) && candidates.length < Math.min(24, limit * 2)) {
+    const fuzzyQueries = Array.from(new Set([
+      intent,
+      transliterateSearchQuery(intent),
+      convertKeyboardLayout(intent, "en-to-ru"),
+      convertKeyboardLayout(intent, "ru-to-en"),
+    ].filter((value) => value.length >= 4))).slice(0, 4);
+    const trigramIds: string[] = [];
+    for (const fuzzyQuery of fuzzyQueries) {
+      trigramIds.push(...await trigramCandidateIds(fuzzyQuery, stageTake));
+      if (trigramIds.length >= stageTake) break;
     }
+    if (trigramIds.length) candidates.push(...await fetchSearchStage(baseWhere, { id: { in: trigramIds } }, stageTake));
+    if (!trigramIds.length) candidates.push(...await fetchSearchStage(baseWhere, fuzzyRetrievalWhere(intent), Math.min(100, stageTake)));
+    candidates = uniqueMovies(candidates);
+  }
+
+  if (mode === "FULL" && intent.length >= 5 && candidates.length < Math.min(8, limit)) {
+    candidates.push(...await fetchSearchStage(baseWhere, {
+      OR: variants.slice(0, 3).map((variant) => ({ description: { contains: variant, mode: "insensitive" as const } })),
+    }, Math.min(40, stageTake)));
+    candidates = uniqueMovies(candidates);
   }
 
   return candidates
@@ -537,13 +628,13 @@ async function searchMoviesOnce(query: string, filters: SearchFilters, limit: nu
     .map((item) => item.movie);
 }
 
-export async function searchMovies(query: string, filters: SearchFilters = {}, limit = 48) {
+export async function searchMovies(query: string, filters: SearchFilters = {}, limit = 48, mode: SearchMode = "FULL") {
   const normalized = normalizeSearchQuery(query);
   const intent = normalizeSearchIntentQuery(normalized);
   if (!intent) return [];
 
   const batches: SearchMovie[][] = [];
-  batches.push(await searchMoviesOnce(normalized, filters, limit));
+  batches.push(await searchMoviesOnce(normalized, filters, limit, mode));
 
   const merged = uniqueMovies(batches.flat());
   return merged

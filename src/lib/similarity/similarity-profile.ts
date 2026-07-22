@@ -76,6 +76,9 @@ function keywordMatches(text: string, tokens: Set<string>, keyword: string) {
   if (normalized.includes(" ") || normalized.includes("-")) {
     return text.includes(normalized);
   }
+  // A complete verb such as "мстит" must not match an unrelated title such
+  // as "Мстители". Deliberate stems remain substring matches below.
+  if (normalized === "мстит") return tokens.has(normalized);
   if (normalized.length <= 3) return tokens.has(normalized);
   return text.includes(normalized);
 }

@@ -12,6 +12,8 @@ const ALLOWED_TYPES = new Set([
   "discovery_result_click",
   "match_like",
   "match_dislike",
+  "match_skip",
+  "match_undo",
   "match_watch",
   "match_favorite",
   "match_reset",

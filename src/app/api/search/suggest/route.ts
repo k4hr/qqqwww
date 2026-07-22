@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   if (query.length < 2) return NextResponse.json({ results: [], groups: [] });
   try {
     const parsed = parseSearchIntent(query);
-    const movies = await searchMovies(query, {}, 24);
+    const movies = await searchMovies(query, {}, 24, "SUGGEST");
     const movieResults = movies.map((movie) => ({
       id: movie.id,
       title: movie.titleRu,
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
       { key: "anime", title: "Аниме", href: `/search?q=${encodeURIComponent(query)}&type=ANIME`, results: movieResults.filter((movie) => movie.type === "ANIME").slice(0, 4) },
     ];
     const collectionResults = publicCollections
-      .filter((collection) => normalizeSearchQuery(`${collection.h1} ${collection.description}`).includes(query))
+      .filter((collection) => normalizeSearchQuery(collection.h1).includes(query))
       .slice(0, 4)
       .map((collection) => ({
         id: `collection-${collection.slug}`,

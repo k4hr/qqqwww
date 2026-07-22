@@ -126,7 +126,7 @@ export default async function WatchPage({ params }: Props) {
           </nav>
           <div className="grid items-end gap-4 sm:grid-cols-[125px_minmax(0,1fr)] md:grid-cols-[170px_minmax(0,1fr)] lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
             <div className="poster-fallback relative aspect-[2/3] w-[112px] overflow-hidden rounded-2xl border border-white/15 shadow-[0_24px_70px_rgba(0,0,0,.62)] sm:w-full">
-              {movie.posterUrl ? <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="(max-width: 640px) 120px, (max-width: 1024px) 170px, 220px" priority /> : <div className="absolute inset-0 flex items-center justify-center text-[#666670]"><Film size={42} /></div>}
+              {movie.posterUrl ? <Image src={movie.posterUrl} alt={movie.titleRu} fill className="object-cover" sizes="(max-width: 640px) 120px, (max-width: 1024px) 170px, 220px" /> : <div className="absolute inset-0 flex items-center justify-center text-[#666670]"><Film size={42} /></div>}
             </div>
             <div className="min-w-0 pb-1">
               <span className="mf-badge">{movie.quality || "HD"}</span>

@@ -362,7 +362,7 @@ export default async function HomePage() {
     getHomeMovies(currentYear),
     getHomeSelectionForHero(),
     getPublishedCreatorHubs(),
-    getDiscoveryRecommendations({ mood: "evening", limit: 10 }),
+    getDiscoveryRecommendations({ filters: { mood: "evening" }, limit: 10 }),
   ]);
   const {
     heroMovies,

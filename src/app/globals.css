@@ -358,7 +358,6 @@ button, input, select, textarea { font: inherit; font-size: max(16px, 1em); }
   width: max-content;
   gap: 14px;
   padding: 10px 0;
-  will-change: transform;
 }
 .poster-mosaic-cell {
   width: clamp(92px, 10vw, 152px);
@@ -366,12 +365,8 @@ button, input, select, textarea { font: inherit; font-size: max(16px, 1em); }
   flex: 0 0 auto;
 }
 .poster-mosaic-row-1,
-.poster-mosaic-row-3 { animation: poster-row-left 90s linear infinite; }
-.poster-mosaic-row-2,
-.poster-mosaic-row-4 { animation: poster-row-right 105s linear infinite; transform: translateX(-18%); }
-
-@keyframes poster-row-left { to { transform: translateX(-50%); } }
-@keyframes poster-row-right { to { transform: translateX(0); } }
+.poster-mosaic-row-3 { transform: translateX(-4%); }
+.poster-mosaic-row-2 { transform: translateX(-12%); }
 
 @media (min-width: 900px) {
   .media-scroll-grid {

@@ -7,7 +7,7 @@ type Props = {
 };
 
 export function PosterMosaic({ movies }: Props) {
-  const posters = movies.filter((movie) => movie.posterUrl).slice(0, 30);
+  const posters = movies.filter((movie) => movie.posterUrl).slice(0, 24);
   if (!posters.length) return null;
   const rows = [posters.filter((_, index) => index % 3 === 0), posters.filter((_, index) => index % 3 === 1), posters.filter((_, index) => index % 3 === 2)];
 

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { MovieArtworkType, type Movie } from "@prisma/client";
+import { MovieArtworkType, type Movie, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTmdbImages, tmdbImage, type TmdbImageItem } from "@/lib/tmdb";
 
@@ -8,6 +8,9 @@ const REDFILM_BACKDROP_FALLBACK = "/redfilm-cinematic-bg.webp";
 const TMDB_BACKDROP_SIZE = "w1280";
 const TMDB_POSTER_SIZE = "w500";
 const TMDB_LOGO_SIZE = "w500";
+const MIN_BACKDROP_RATIO = 1.5;
+const MAX_BACKDROP_RATIO = 2.55;
+const ARTWORK_STALE_DAYS = 45;
 
 type ArtworkInput = {
   type: MovieArtworkType;
@@ -20,6 +23,8 @@ type ArtworkInput = {
   language?: string | null;
   voteAverage?: number | null;
   voteCount?: number | null;
+  sortOrder?: number;
+  isPrimary?: boolean;
 };
 
 export type ArtworkSyncResult = {
@@ -28,6 +33,7 @@ export type ArtworkSyncResult = {
   movieId?: string;
   imported: number;
   updated: number;
+  deleted: number;
   skipped: number;
   primaryBackdropUrl?: string | null;
   error?: string;
@@ -46,14 +52,14 @@ function isUsefulUrl(value: string | null | undefined) {
 }
 
 function aspect(width?: number | null, height?: number | null, fallback?: number | null) {
-  if (width && height && height > 0) return width / height;
+  if (width != null && height != null && height > 0) return width / height;
   return toNumber(fallback);
 }
 
 export function isWideBackdropArtwork(input: Pick<ArtworkInput, "url" | "width" | "height" | "aspectRatio">) {
   if (!isUsefulUrl(input.url)) return false;
   const ratio = aspect(input.width, input.height, input.aspectRatio);
-  if (ratio !== null && (ratio < 1.45 || ratio > 2.55)) return false;
+  if (ratio === null || ratio < MIN_BACKDROP_RATIO || ratio > MAX_BACKDROP_RATIO) return false;
   if ((input.width ?? 0) > 0 && input.width! < 780) return false;
   if ((input.height ?? 0) > 0 && input.height! < 360) return false;
   return true;
@@ -62,7 +68,7 @@ export function isWideBackdropArtwork(input: Pick<ArtworkInput, "url" | "width" 
 function isValidPosterArtwork(input: Pick<ArtworkInput, "url" | "width" | "height" | "aspectRatio">) {
   if (!isUsefulUrl(input.url)) return false;
   const ratio = aspect(input.width, input.height, input.aspectRatio);
-  if (ratio !== null && (ratio < 0.58 || ratio > 0.78)) return false;
+  if (ratio === null || ratio < 0.58 || ratio > 0.78) return false;
   if ((input.width ?? 0) > 0 && input.width! < 300) return false;
   if ((input.height ?? 0) > 0 && input.height! < 450) return false;
   return true;
@@ -70,15 +76,24 @@ function isValidPosterArtwork(input: Pick<ArtworkInput, "url" | "width" | "heigh
 
 function isValidLogoArtwork(input: Pick<ArtworkInput, "url" | "width" | "height" | "aspectRatio">) {
   if (!isUsefulUrl(input.url)) return false;
-  if ((input.width ?? 0) > 0 && input.width! < 220) return false;
-  if ((input.height ?? 0) > 0 && input.height! < 70) return false;
+  if (input.width == null || input.height == null || input.height <= 0) return false;
+  if (input.width < 220 || input.height < 70) return false;
   return true;
+}
+
+function sourcePriority(source: string) {
+  const normalized = source.toLocaleUpperCase("en-US");
+  if (normalized === "MANUAL") return 500;
+  if (normalized === "TMDB") return 400;
+  if (normalized === "VIBIX") return 300;
+  if (normalized === "LEGACY_VALIDATED") return 200;
+  return 100;
 }
 
 function scoreArtwork(input: ArtworkInput) {
   const pixels = (input.width ?? 0) * (input.height ?? 0);
   const language = input.language === "ru" ? 220 : input.language === "en" ? 120 : input.language ? 20 : 90;
-  return pixels / 60_000 + (input.voteCount ?? 0) * 4 + (input.voteAverage ?? 0) * 8 + language;
+  return sourcePriority(input.source) + pixels / 60_000 + (input.voteCount ?? 0) * 4 + (input.voteAverage ?? 0) * 8 + language - (input.sortOrder ?? 0);
 }
 
 function uniqueAndSort(items: ArtworkInput[], limit: number) {
@@ -100,7 +115,7 @@ function tmdbArtwork(type: MovieArtworkType, item: TmdbImageItem, size: string):
   if (!filePath || !url) return null;
   return {
     type,
-    source: "tmdb",
+    source: "TMDB",
     filePath,
     url,
     width: item.width ?? null,
@@ -137,12 +152,6 @@ function collectTmdbArtwork(images: Awaited<ReturnType<typeof getTmdbImages>>) {
   return [...backdrops, ...posters, ...logos];
 }
 
-function existingBackdropArtwork(movie: Pick<Movie, "backdropUrl">): ArtworkInput[] {
-  return isUsefulUrl(movie.backdropUrl)
-    ? [{ type: MovieArtworkType.BACKDROP, source: "movie", url: movie.backdropUrl!, sortOrder: 0, isPrimary: true } as ArtworkInput]
-    : [];
-}
-
 async function fetchTmdbImagesWithRetry(movie: Pick<Movie, "tmdbId" | "type">, attempts = 3) {
   let delayMs = 900;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -156,68 +165,85 @@ async function fetchTmdbImagesWithRetry(movie: Pick<Movie, "tmdbId" | "type">, a
       delayMs *= 2;
     }
   }
-  return { backdrops: [], posters: [], logos: [] };
+  throw new Error("TMDB images retry exhausted");
 }
 
-async function upsertArtwork(movieId: string, artworks: ArtworkInput[]) {
+async function reconcileTmdbArtwork(movieId: string, artworks: ArtworkInput[]) {
+  const freshUrls = artworks.map((artwork) => artwork.url);
+  const existing = await prisma.movieArtwork.findMany({
+    where: { movieId, source: { equals: "TMDB", mode: "insensitive" } },
+    select: { id: true, url: true },
+  });
+  const existingUrls = new Set(existing.map((item) => item.url));
   let imported = 0;
   let updated = 0;
+  let deleted = 0;
 
-  for (const [index, artwork] of artworks.entries()) {
-    const saved = await prisma.movieArtwork.upsert({
-      where: { movieId_type_url: { movieId, type: artwork.type, url: artwork.url } },
-      create: {
-        movieId,
-        type: artwork.type,
-        source: artwork.source,
-        filePath: artwork.filePath ?? null,
-        url: artwork.url,
-        width: artwork.width ?? null,
-        height: artwork.height ?? null,
-        aspectRatio: artwork.aspectRatio ?? null,
-        language: artwork.language ?? null,
-        voteAverage: artwork.voteAverage ?? null,
-        voteCount: artwork.voteCount ?? null,
-        sortOrder: index,
-        isPrimary: artwork.type === MovieArtworkType.BACKDROP && index === 0,
-      },
-      update: {
-        source: artwork.source,
-        filePath: artwork.filePath ?? null,
-        width: artwork.width ?? null,
-        height: artwork.height ?? null,
-        aspectRatio: artwork.aspectRatio ?? null,
-        language: artwork.language ?? null,
-        voteAverage: artwork.voteAverage ?? null,
-        voteCount: artwork.voteCount ?? null,
-        sortOrder: index,
-      },
-      select: { createdAt: true, updatedAt: true },
-    });
-    if (saved.createdAt.getTime() === saved.updatedAt.getTime()) imported += 1;
-    else updated += 1;
-  }
+  await prisma.$transaction(async (tx) => {
+    for (const [index, artwork] of artworks.entries()) {
+      if (existingUrls.has(artwork.url)) updated += 1;
+      else imported += 1;
+      await tx.movieArtwork.upsert({
+        where: { movieId_type_url: { movieId, type: artwork.type, url: artwork.url } },
+        create: {
+          movieId,
+          type: artwork.type,
+          source: "TMDB",
+          filePath: artwork.filePath ?? null,
+          url: artwork.url,
+          width: artwork.width ?? null,
+          height: artwork.height ?? null,
+          aspectRatio: artwork.aspectRatio ?? null,
+          language: artwork.language ?? null,
+          voteAverage: artwork.voteAverage ?? null,
+          voteCount: artwork.voteCount ?? null,
+          sortOrder: index,
+          isPrimary: false,
+        },
+        update: {
+          source: "TMDB",
+          filePath: artwork.filePath ?? null,
+          width: artwork.width ?? null,
+          height: artwork.height ?? null,
+          aspectRatio: artwork.aspectRatio ?? null,
+          language: artwork.language ?? null,
+          voteAverage: artwork.voteAverage ?? null,
+          voteCount: artwork.voteCount ?? null,
+          sortOrder: index,
+        },
+      });
+    }
 
-  return { imported, updated };
+    const staleIds = existing.filter((item) => !freshUrls.includes(item.url)).map((item) => item.id);
+    if (staleIds.length) {
+      const removed = await tx.movieArtwork.deleteMany({ where: { id: { in: staleIds } } });
+      deleted = removed.count;
+    }
+    await tx.movie.update({ where: { id: movieId }, data: { lastExternalEnrichmentAt: new Date() } });
+  });
+
+  return { imported, updated, deleted };
 }
 
 async function setPrimaryBackdrop(movie: Pick<Movie, "id" | "backdropUrl">) {
-  const primary = await prisma.movieArtwork.findFirst({
+  const allBackdrops = await prisma.movieArtwork.findMany({
     where: { movieId: movie.id, type: MovieArtworkType.BACKDROP },
-    orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { voteCount: "desc" }],
   });
-  if (!primary || !isWideBackdropArtwork(primary)) return movie.backdropUrl ?? null;
+  const winner = allBackdrops
+    .filter(isWideBackdropArtwork)
+    .sort((a, b) => scoreArtwork(b) - scoreArtwork(a))[0];
 
-  await prisma.movieArtwork.updateMany({
-    where: { movieId: movie.id, type: MovieArtworkType.BACKDROP, id: { not: primary.id } },
-    data: { isPrimary: false },
+  await prisma.$transaction(async (tx) => {
+    await tx.movieArtwork.updateMany({
+      where: { movieId: movie.id, type: MovieArtworkType.BACKDROP },
+      data: { isPrimary: false },
+    });
+    if (winner) {
+      await tx.movieArtwork.update({ where: { id: winner.id }, data: { isPrimary: true } });
+      if (movie.backdropUrl !== winner.url) await tx.movie.update({ where: { id: movie.id }, data: { backdropUrl: winner.url } });
+    }
   });
-  await prisma.movieArtwork.update({ where: { id: primary.id }, data: { isPrimary: true } });
-
-  if (movie.backdropUrl !== primary.url) {
-    await prisma.movie.update({ where: { id: movie.id }, data: { backdropUrl: primary.url } });
-  }
-  return primary.url;
+  return winner?.url ?? null;
 }
 
 export async function syncMovieArtwork(movieId: string): Promise<ArtworkSyncResult> {
@@ -225,39 +251,81 @@ export async function syncMovieArtwork(movieId: string): Promise<ArtworkSyncResu
     where: { id: movieId },
     select: { id: true, tmdbId: true, type: true, backdropUrl: true },
   });
-  if (!movie) return { ok: false, imported: 0, updated: 0, skipped: 1, error: "Movie not found" };
-  if (!process.env.TMDB_API_KEY?.trim()) return { ok: true, disabled: true, movieId, imported: 0, updated: 0, skipped: 1, primaryBackdropUrl: movie.backdropUrl };
-  if (!movie.tmdbId?.trim()) return { ok: true, movieId, imported: 0, updated: 0, skipped: 1, primaryBackdropUrl: movie.backdropUrl };
+  if (!movie) return { ok: false, imported: 0, updated: 0, deleted: 0, skipped: 1, error: "Movie not found" };
+  if (!process.env.TMDB_API_KEY?.trim()) return { ok: true, disabled: true, movieId, imported: 0, updated: 0, deleted: 0, skipped: 1, primaryBackdropUrl: null };
+  if (!movie.tmdbId?.trim()) return { ok: true, movieId, imported: 0, updated: 0, deleted: 0, skipped: 1, primaryBackdropUrl: null };
 
   try {
     const images = await fetchTmdbImagesWithRetry(movie);
-    const artworks = uniqueAndSort([...existingBackdropArtwork(movie), ...collectTmdbArtwork(images)], 28);
-    const { imported, updated } = await upsertArtwork(movie.id, artworks);
+    const artworks = collectTmdbArtwork(images);
+    const { imported, updated, deleted } = await reconcileTmdbArtwork(movie.id, artworks);
     const primaryBackdropUrl = await setPrimaryBackdrop(movie);
-    return { ok: true, movieId, imported, updated, skipped: Math.max(0, 28 - artworks.length), primaryBackdropUrl };
+    return { ok: true, movieId, imported, updated, deleted, skipped: artworks.length ? 0 : 1, primaryBackdropUrl };
   } catch (error) {
-    return { ok: false, movieId, imported: 0, updated: 0, skipped: 1, error: error instanceof Error ? error.message : "Unknown artwork sync error" };
+    return { ok: false, movieId, imported: 0, updated: 0, deleted: 0, skipped: 1, error: error instanceof Error ? error.message : "Unknown artwork sync error" };
   }
 }
 
-export async function syncMovieArtworkBatch({ limit = 25, concurrency = 2 }: { limit?: number; concurrency?: number } = {}) {
-  if (!process.env.TMDB_API_KEY?.trim()) {
-    return { ok: true, disabled: true, processed: 0, imported: 0, updated: 0, skipped: 0, failed: 0, message: "TMDB_API_KEY не указан. Artwork enrichment отключён." };
-  }
-  const movies = await prisma.movie.findMany({
-    where: { isPublished: true, tmdbId: { not: null } },
-    select: { id: true },
-    orderBy: [
-      { isHeroEligible: "desc" },
-      { isHomeEligible: "desc" },
-      { isTrendingEligible: "desc" },
-      { views: "desc" },
-      { updatedAt: "desc" },
-    ],
-    take: Math.max(1, Math.min(limit, 100)),
-  });
+type ArtworkBatchOptions = { limit?: number; concurrency?: number; cursor?: string };
 
-  const result = { ok: true, disabled: false, processed: 0, imported: 0, updated: 0, skipped: 0, failed: 0, errors: [] as string[] };
+type ArtworkBatchPhase = 1 | 2 | 3 | 4;
+
+function parseArtworkCursor(cursor?: string): { phase: ArtworkBatchPhase; id: string } {
+  const match = cursor?.match(/^([1-4]):(.*)$/);
+  if (match) return { phase: Number(match[1]) as ArtworkBatchPhase, id: match[2] };
+  // Backward compatibility with the previous raw Movie.id cursor.
+  return { phase: 1, id: cursor?.trim() ?? "" };
+}
+
+function artworkPhaseWhere(phase: ArtworkBatchPhase, staleBefore: Date): Prisma.MovieWhereInput {
+  if (phase === 1) return { artworks: { none: {} } };
+  if (phase === 2) return { AND: [{ artworks: { some: {} } }, { artworks: { none: { type: MovieArtworkType.BACKDROP } } }] };
+  if (phase === 3) return { artworks: { some: { source: { equals: "TMDB", mode: "insensitive" }, updatedAt: { lt: staleBefore } } } };
+  return { OR: [{ isHeroEligible: true }, { isHomeEligible: true }, { isTrendingEligible: true }] };
+}
+
+async function selectArtworkBatch(limit: number, cursor?: string) {
+  const selected: Array<{ id: string }> = [];
+  const staleBefore = new Date(Date.now() - ARTWORK_STALE_DAYS * 86_400_000);
+  let { phase, id } = parseArtworkCursor(cursor);
+  let nextCursor: string | undefined;
+
+  while (selected.length < limit && phase <= 4) {
+    const remaining = limit - selected.length;
+    const rows = await prisma.movie.findMany({
+      where: {
+        AND: [
+          { isPublished: true, tmdbId: { not: null }, id: id ? { gt: id } : undefined },
+          artworkPhaseWhere(phase, staleBefore),
+        ],
+      },
+      select: { id: true },
+      orderBy: { id: "asc" },
+      take: remaining,
+    });
+
+    selected.push(...rows);
+    if (rows.length) {
+      id = rows.at(-1)!.id;
+      nextCursor = `${phase}:${id}`;
+    }
+    if (rows.length === remaining) break;
+    phase = (phase + 1) as ArtworkBatchPhase;
+    id = "";
+    nextCursor = phase <= 4 ? `${phase}:` : undefined;
+  }
+
+  return { movies: selected, nextCursor };
+}
+
+export async function syncMovieArtworkBatch({ limit = 25, concurrency = 2, cursor }: ArtworkBatchOptions = {}) {
+  if (!process.env.TMDB_API_KEY?.trim()) {
+    return { ok: true, disabled: true, processed: 0, imported: 0, updated: 0, deleted: 0, skipped: 0, failed: 0, nextCursor: cursor, movieIds: [] as string[], message: "TMDB_API_KEY не указан. Artwork enrichment отключён." };
+  }
+  const safeLimit = Math.max(1, Math.min(limit, 100));
+  const selection = await selectArtworkBatch(safeLimit, cursor);
+  const movies = selection.movies;
+  const result = { ok: true, disabled: false, processed: 0, imported: 0, updated: 0, deleted: 0, skipped: 0, failed: 0, nextCursor: selection.nextCursor, movieIds: movies.map((movie) => movie.id), errors: [] as string[] };
   let index = 0;
   const workerCount = Math.max(1, Math.min(concurrency, 4));
   await Promise.all(Array.from({ length: workerCount }, async () => {
@@ -267,29 +335,41 @@ export async function syncMovieArtworkBatch({ limit = 25, concurrency = 2 }: { l
       result.processed += 1;
       result.imported += item.imported;
       result.updated += item.updated;
+      result.deleted += item.deleted;
       result.skipped += item.skipped;
       if (!item.ok) {
         result.failed += 1;
-        if (item.error && result.errors.length < 10) result.errors.push(item.error);
+        if (item.error && result.errors.length < 10) result.errors.push(`${movie.id}: ${item.error}`);
       }
       await sleep(350);
     }
   }));
-
   return result;
 }
 
 export async function getWatchArtwork(movieId: string, fallbackBackdropUrl?: string | null) {
-  const artworks = await prisma.movieArtwork.findMany({
-    where: { movieId },
-    orderBy: [{ type: "asc" }, { isPrimary: "desc" }, { sortOrder: "asc" }],
-    take: 36,
+  const [artworks, movie] = await Promise.all([
+    prisma.movieArtwork.findMany({
+      where: { movieId },
+      orderBy: [{ type: "asc" }, { isPrimary: "desc" }, { sortOrder: "asc" }],
+      take: 36,
+    }),
+    prisma.movie.findUnique({ where: { id: movieId }, select: { posterUrl: true } }),
+  ]);
+  const validBackdrops = artworks.filter((item) => item.type === MovieArtworkType.BACKDROP && isWideBackdropArtwork(item));
+  const validArtwork = artworks.filter((item) => {
+    if (item.type === MovieArtworkType.BACKDROP) return isWideBackdropArtwork(item);
+    if (item.type === MovieArtworkType.POSTER) return isValidPosterArtwork(item);
+    return isValidLogoArtwork(item);
   });
-  const backdrop = artworks.find((item) => item.type === MovieArtworkType.BACKDROP && item.isPrimary && isWideBackdropArtwork(item))
-    ?? artworks.find((item) => item.type === MovieArtworkType.BACKDROP && isWideBackdropArtwork(item));
+  const primary = validBackdrops.find((item) => item.isPrimary) ?? validBackdrops.sort((a, b) => scoreArtwork(b) - scoreArtwork(a))[0];
+  const validatedLegacy = validBackdrops.find((item) => item.url === fallbackBackdropUrl && /legacy|movie/i.test(item.source));
+  const backdrop = primary ?? validatedLegacy;
   return {
-    backdropUrl: backdrop?.url || fallbackBackdropUrl || REDFILM_BACKDROP_FALLBACK,
-    artworks,
+    backdropUrl: backdrop?.url ?? REDFILM_BACKDROP_FALLBACK,
+    posterUrl: movie?.posterUrl ?? null,
+    backdropSource: backdrop ? (/legacy|movie/i.test(backdrop.source) ? "LEGACY_VALIDATED" as const : "MOVIE_ARTWORK" as const) : "REDFILM_FALLBACK" as const,
+    artworks: validArtwork,
   };
 }
 

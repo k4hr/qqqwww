@@ -18,8 +18,8 @@ function PosterCollage({ movies, title, className = "" }: { movies: PosterCollag
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,5,8,.86),rgba(5,5,8,.26),rgba(5,5,8,.92))]" />
       <div className="relative grid h-full grid-cols-5 items-center gap-2 p-3">
         {posters.map((movie, index) => (
-          <div key={movie.id} className={`poster-fallback relative aspect-[2/3] overflow-hidden rounded-xl shadow-[0_16px_38px_rgba(0,0,0,.5)] ${index === 0 ? "col-span-2 scale-105" : "col-span-1 max-sm:hidden"}`}>
-            {movie.posterUrl ? <Image src={movie.posterUrl} alt={`${title}: ${movie.titleRu}`} fill className="object-cover" sizes="(max-width: 640px) 42vw, 180px" unoptimized /> : null}
+          <div key={movie.id} className={`poster-fallback relative aspect-[2/3] overflow-hidden rounded-xl shadow-[0_16px_38px_rgba(0,0,0,.5)] ${index === 0 ? "col-span-5 mx-auto h-[92%] w-[44%] sm:col-span-2 sm:h-auto sm:w-auto sm:scale-105" : "col-span-1 max-sm:hidden"}`}>
+            {movie.posterUrl ? <Image src={movie.posterUrl} alt={`${title}: ${movie.titleRu}`} fill className="object-cover" sizes="(max-width: 640px) 44vw, 180px" /> : null}
           </div>
         ))}
       </div>

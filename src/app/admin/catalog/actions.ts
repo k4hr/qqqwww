@@ -116,13 +116,14 @@ export async function activateTrendsCatalogAction() {
 export async function syncMovieArtworkBatchAction(formData: FormData) {
   const limit = numberField(formData, "limit", 25, 1, 100);
   const concurrency = numberField(formData, "concurrency", 2, 1, 4);
-  const result = await syncMovieArtworkBatch({ limit, concurrency });
+  const cursor = optionalStringField(formData, "cursor") ?? undefined;
+  const result = await syncMovieArtworkBatch({ limit, concurrency, cursor });
   revalidatePath("/admin/catalog");
   redirectWithResult({
     ok: result.ok,
     message: result.disabled
       ? "TMDB_API_KEY не указан. Artwork enrichment отключён, публичный сайт продолжает использовать существующие backdrop."
-      : `Artwork sync: обработано ${result.processed}, импортировано ${result.imported}, обновлено ${result.updated}, ошибок ${result.failed}.`,
+      : `Artwork sync: обработано ${result.processed}, импортировано ${result.imported}, обновлено ${result.updated}, удалено устаревших ${result.deleted}, ошибок ${result.failed}. Следующий cursor: ${result.nextCursor ?? "конец"}.`,
     details: result,
   });
 }

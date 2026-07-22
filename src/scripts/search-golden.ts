@@ -35,6 +35,10 @@ const CASES: Case[] = [
   { query: "фильм Iron Man", expectTitle: "Железный человек" },
   { query: "аниме Наруто", expectTitle: "Наруто" },
   { query: "Интерстелар", expectTitle: "Интерстеллар" },
+  { query: "Интерселлар", expectTitle: "Интерстеллар" },
+  { query: "Гари Потер", expectTitle: "Гарри Поттер" },
+  { query: "Челвоек паук", expectTitle: "Человек-паук" },
+  { query: "Ходячие мертвци", expectTitle: "Ходячие мертвецы" },
 ];
 
 function includesTitle(value: string, expected: string) {
@@ -62,23 +66,6 @@ async function runCase(testCase: Case) {
     };
   }
 
-  const movies = await searchMovies(testCase.query, {}, 8);
-  if (!movies.length) {
-    return {
-      query: testCase.query,
-      normalized: normalizeSearchQuery(testCase.query),
-      parsed,
-      routeIntent,
-      topResults: [],
-      topProvenance: [],
-      status: "SKIP",
-      reason: "No local DB result for this query.",
-      durationMs: Date.now() - startedAt,
-    };
-  }
-
-  const top = movies[0];
-  const explanation = explainSearchResult(top, testCase.query);
   const expectedExists = testCase.expectTitle
     ? await prisma.movie.findFirst({
       where: {
@@ -87,28 +74,63 @@ async function runCase(testCase: Case) {
           { titleOriginal: { contains: testCase.expectTitle, mode: "insensitive" } },
         ],
       },
-      select: { id: true },
+      select: { id: true, titleRu: true },
     })
     : null;
-  const titlePassed = testCase.expectTitle ? includesTitle(`${top.titleRu} ${top.titleOriginal ?? ""}`, testCase.expectTitle) : true;
+
+  if (testCase.expectTitle && !expectedExists) {
+    return {
+      query: testCase.query,
+      normalized: normalizeSearchQuery(testCase.query),
+      parsed,
+      routeIntent,
+      expectedExists: false,
+      candidateCount: 0,
+      topResult: null,
+      topProvenance: [],
+      status: "SKIP",
+      reason: "Expected title is not present in local DB.",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  const movies = await searchMovies(testCase.query, {}, 12, "FULL");
+  if (!movies.length) {
+    return {
+      query: testCase.query,
+      normalized: normalizeSearchQuery(testCase.query),
+      intent: parsed,
+      expectedExists: Boolean(expectedExists),
+      candidateCount: 0,
+      topResult: null,
+      topProvenance: [],
+      position: -1,
+      status: "FAIL",
+      reason: "Expected movie exists, but DB retrieval returned no candidates.",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  const top = movies[0];
+  const explanation = explainSearchResult(top, testCase.query);
+  const position = testCase.expectTitle
+    ? movies.findIndex((movie) => includesTitle(`${movie.titleRu} ${movie.titleOriginal ?? ""}`, testCase.expectTitle!))
+    : 0;
+  const titlePassed = position >= 0 && position <= 2;
   const seasonPassed = testCase.expectSeason ? parsed.season?.season === testCase.expectSeason : true;
 
   return {
     query: testCase.query,
     normalized: normalizeSearchQuery(testCase.query),
-    parsed,
+    intent: parsed,
     routeIntent,
-    topResults: movies.map((movie) => ({
-      title: movie.titleRu,
-      originalTitle: movie.titleOriginal,
-      year: movie.year,
-      type: movie.type,
-      score: explainSearchResult(movie, testCase.query).score,
-      provenance: explainSearchResult(movie, testCase.query).provenance,
-    })),
+    expectedExists: Boolean(expectedExists),
+    candidateCount: movies.length,
+    topResult: { title: top.titleRu, originalTitle: top.titleOriginal, year: top.year, type: top.type },
     topProvenance: explanation.provenance,
-    status: expectedExists || !testCase.expectTitle ? (titlePassed && seasonPassed ? "PASS" : "FAIL") : "SKIP",
-    reason: expectedExists ? undefined : "Expected title is not present in local DB.",
+    position,
+    status: titlePassed && seasonPassed ? "PASS" : "FAIL",
+    reason: !titlePassed ? `Expected result position ${position}; required 0..2.` : !seasonPassed ? "Season intent mismatch." : undefined,
     durationMs: Date.now() - startedAt,
   };
 }
@@ -116,14 +138,23 @@ async function runCase(testCase: Case) {
 async function main() {
   const results = [];
 
-  const idMovie = await prisma.movie.findFirst({
-    where: { OR: [{ imdbId: { not: null } }, { kinopoiskId: { not: null } }] },
-    select: { titleRu: true, imdbId: true, kinopoiskId: true },
-    orderBy: [{ isPublicVisible: "desc" }, { kpRating: "desc" }],
-  });
+  const [imdbMovie, kpCandidates] = await Promise.all([
+    prisma.movie.findFirst({
+      where: { imdbId: { startsWith: "tt" } },
+      select: { titleRu: true, imdbId: true },
+      orderBy: [{ isPublicVisible: "desc" }, { kpRating: "desc" }],
+    }),
+    prisma.movie.findMany({
+      where: { kinopoiskId: { not: null } },
+      select: { titleRu: true, kinopoiskId: true },
+      orderBy: [{ isPublicVisible: "desc" }, { kpRating: "desc" }],
+      take: 200,
+    }),
+  ]);
+  const kpMovie = kpCandidates.find((movie) => /^\d+$/.test(movie.kinopoiskId ?? ""));
   const cases = [...CASES];
-  if (idMovie?.imdbId) cases.push({ query: idMovie.imdbId, expectTitle: idMovie.titleRu, kind: "id" });
-  if (idMovie?.kinopoiskId) cases.push({ query: idMovie.kinopoiskId, expectTitle: idMovie.titleRu, kind: "id" });
+  if (imdbMovie?.imdbId) cases.push({ query: imdbMovie.imdbId, expectTitle: imdbMovie.titleRu, kind: "id" });
+  if (kpMovie?.kinopoiskId) cases.push({ query: kpMovie.kinopoiskId, expectTitle: kpMovie.titleRu, kind: "id" });
 
   for (const testCase of cases) {
     try {

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { buildDefaultCatalogCountryWhere } from "@/lib/catalog-filters";
@@ -37,7 +37,26 @@ type CandidateWithSources = {
   sources: string[];
 };
 
-const tmdbSignalCache = new Map<string, Promise<{ recommendations: string[]; similar: string[]; keywords: string[]; collection: string[] }>>();
+type TmdbSignals = { recommendations: string[]; similar: string[]; keywords: string[]; collection: string[] };
+type TmdbSignalCacheEntry = { promise: Promise<TmdbSignals>; expiresAt: number };
+const TMDB_SIGNAL_CACHE_TTL_MS = 15 * 60_000;
+const TMDB_SIGNAL_CACHE_MAX_ENTRIES = 300;
+const tmdbSignalCache = new Map<string, TmdbSignalCacheEntry>();
+
+function cleanupTmdbSignalCache(now = Date.now()) {
+  for (const [key, entry] of tmdbSignalCache) {
+    if (entry.expiresAt <= now) tmdbSignalCache.delete(key);
+  }
+  while (tmdbSignalCache.size >= TMDB_SIGNAL_CACHE_MAX_ENTRIES) {
+    const oldest = tmdbSignalCache.keys().next().value as string | undefined;
+    if (!oldest) break;
+    tmdbSignalCache.delete(oldest);
+  }
+}
+
+export function clearTmdbSimilaritySignalCache() {
+  tmdbSignalCache.clear();
+}
 
 function candidateWhere(source: SeoMovie, extra: Prisma.MovieWhereInput): Prisma.MovieWhereInput {
   return {
@@ -53,8 +72,9 @@ function candidateWhere(source: SeoMovie, extra: Prisma.MovieWhereInput): Prisma
 async function getTmdbSignals(source: SeoMovie) {
   if (!source.tmdbId) return { recommendations: [], similar: [], keywords: [], collection: [] };
   const cacheKey = `${source.type}:${source.tmdbId}`;
+  cleanupTmdbSignalCache();
   const cached = tmdbSignalCache.get(cacheKey);
-  if (cached) return cached;
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
 
   const promise = (async () => {
     const recommendations = await getTmdbRecommendations(source.tmdbId!, source.type);
@@ -71,7 +91,11 @@ async function getTmdbSignals(source: SeoMovie) {
     };
   })();
 
-  tmdbSignalCache.set(cacheKey, promise);
+  const entry = { promise, expiresAt: Date.now() + TMDB_SIGNAL_CACHE_TTL_MS };
+  tmdbSignalCache.set(cacheKey, entry);
+  promise.catch(() => {
+    if (tmdbSignalCache.get(cacheKey) === entry) tmdbSignalCache.delete(cacheKey);
+  });
   return promise;
 }
 
@@ -355,7 +379,7 @@ export async function recalculateMovieSimilarities(options: SimilarityRecalculat
       console.error(`[Similarity] Failed for ${source.titleRu}:`, error);
     }
   }
-
+  clearTmdbSimilaritySignalCache();
   return result;
 }
 
@@ -366,17 +390,47 @@ export async function markAllMovieSimilaritiesDirty(reason = "manual_all") {
   });
 }
 
+async function scanStaleSimilaritySourceIds() {
+  const stale = new Set<string>();
+  let cursor = "";
+  while (true) {
+    const rows = await prisma.$queryRaw<Array<{ sourceMovieId: string; reasonsJson: string | null }>>(Prisma.sql`
+      SELECT DISTINCT ON ("sourceMovieId") "sourceMovieId", "reasonsJson"
+      FROM "MovieSimilarity"
+      WHERE "sourceMovieId" > ${cursor}
+      ORDER BY "sourceMovieId" ASC, "updatedAt" DESC
+      LIMIT 500
+    `);
+    if (!rows.length) break;
+    for (const row of rows) {
+      if (parseSimilarityReasonsJson(row.reasonsJson).algorithmVersion < SIMILARITY_ALGORITHM_VERSION) stale.add(row.sourceMovieId);
+    }
+    cursor = rows.at(-1)!.sourceMovieId;
+    if (rows.length < 500) break;
+  }
+  return [...stale];
+}
+
+async function markStaleSimilaritySourcesDirty() {
+  const staleSourceIds = await scanStaleSimilaritySourceIds();
+  let marked = 0;
+  for (let index = 0; index < staleSourceIds.length; index += 500) {
+    const ids = staleSourceIds.slice(index, index + 500);
+    const result = await prisma.movie.updateMany({
+      where: { AND: [vibixPublicMovieWhere, { id: { in: ids } }, { similarityDirty: false }] },
+      data: { similarityDirty: true, similarityDirtyReason: `stale_algorithm:v${SIMILARITY_ALGORITHM_VERSION}` },
+    });
+    marked += result.count;
+  }
+  return { staleSourceIds, marked };
+}
+
 export async function countDirtyMovieSimilarities() {
-  const [dirty, staleCached] = await Promise.all([
-    prisma.movie.count({ where: { AND: [vibixPublicMovieWhere, { similarityDirty: true }] } }),
-    prisma.movieSimilarity.findMany({
-      select: { sourceMovieId: true, reasonsJson: true },
-      distinct: ["sourceMovieId"],
-      take: 2000,
-    }),
+  const [dirtyIds, staleSourceIds] = await Promise.all([
+    prisma.movie.findMany({ where: { AND: [vibixPublicMovieWhere, { similarityDirty: true }] }, select: { id: true } }),
+    scanStaleSimilaritySourceIds(),
   ]);
-  const stale = staleCached.filter((item) => parseSimilarityReasonsJson(item.reasonsJson).algorithmVersion < SIMILARITY_ALGORITHM_VERSION).length;
-  return dirty + stale;
+  return new Set([...dirtyIds.map((movie) => movie.id), ...staleSourceIds]).size;
 }
 
 export async function recalculateDirtyMovieSimilarities(options: SimilarityRecalculateOptions = {}): Promise<SimilarityRecalculateResult> {
@@ -384,23 +438,15 @@ export async function recalculateDirtyMovieSimilarities(options: SimilarityRecal
   const targetLimit = Math.max(6, Math.min(options.targetLimit ?? 24, 60));
   const minScore = Math.max(0, options.minScore ?? 180);
 
-  const staleCached = await prisma.movieSimilarity.findMany({
-    select: { sourceMovieId: true, reasonsJson: true },
-    distinct: ["sourceMovieId"],
-    take: limit * 4,
-  });
-  const staleSourceIds = staleCached
-    .filter((item) => parseSimilarityReasonsJson(item.reasonsJson).algorithmVersion < SIMILARITY_ALGORITHM_VERSION)
-    .map((item) => item.sourceMovieId);
+  await markStaleSimilaritySourcesDirty();
 
   const sources = await prisma.movie.findMany({
-    where: { AND: [vibixPublicMovieWhere, { OR: [{ similarityDirty: true }, { id: { in: staleSourceIds } }] }] },
+    where: { AND: [vibixPublicMovieWhere, { similarityDirty: true }] },
     include: movieSeoInclude,
     orderBy: [
-      { popularScore: "desc" },
-      { kpRating: "desc" },
-      { updatedAt: "desc" },
-      { createdAt: "desc" },
+      { similarityCalculatedAt: { sort: "asc", nulls: "first" } },
+      { updatedAt: "asc" },
+      { id: "asc" },
     ],
     take: limit,
   });
@@ -418,12 +464,12 @@ export async function recalculateDirtyMovieSimilarities(options: SimilarityRecal
       result.errors += 1;
       await prisma.movie.update({
         where: { id: source.id },
-        data: { similarityDirty: true, similarityDirtyReason: error instanceof Error ? error.message.slice(0, 180) : "similarity_error" },
+        data: { similarityDirty: true, similarityCalculatedAt: new Date(), similarityDirtyReason: error instanceof Error ? error.message.slice(0, 180) : "similarity_error" },
       }).catch(() => null);
       console.error(`[Similarity] Failed for ${source.titleRu}:`, error);
     }
   }
-
+  clearTmdbSimilaritySignalCache();
   return result;
 }
 

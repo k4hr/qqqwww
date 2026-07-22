@@ -219,7 +219,7 @@ export function calculateSimilarityScore(
     penalties.push(...contradictions);
   }
 
-  if (sourceProfile.hasStrongIdentity && !sameFranchises.length && !sameClusters.length && !sameTags.length) {
+  if (sourceProfile.hasStrongIdentity && !sameFranchises.length && !sameBaseTitle(sourceProfile, candidateProfile) && !sameClusters.length && !sameTags.length) {
     score -= 520;
     components.contradictionPenalty -= 520;
     penalties.push("missing_source_identity");
