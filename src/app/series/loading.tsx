@@ -1,1 +1,5 @@
-export { default } from "@/app/movies/loading";
+import { RouteLoading } from "@/components/route-loading";
+
+export default function Loading() {
+  return <RouteLoading variant="catalog" />;
+}

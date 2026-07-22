@@ -12,14 +12,26 @@ export type SimilarityProfile = {
   title: string;
   baseTitle: string;
   text: string;
+  titleText: string;
+  descriptionText: string;
   tokens: Set<string>;
+  titleTokens: Set<string>;
+  descriptionTokens: Set<string>;
   genreNames: Set<string>;
+  specificGenreNames: Set<string>;
+  countryNames: Set<string>;
   castNames: Set<string>;
+  directorName: string;
+  tagNames: Set<string>;
   franchiseIds: Set<string>;
   clusterIds: Set<string>;
   sourceTypeIds: Set<string>;
   hintKeywords: string[];
   hasStrongIdentity: boolean;
+  isAnimated: boolean;
+  isDocumentary: boolean;
+  isFamilyOrKids: boolean;
+  isHorror: boolean;
 };
 
 const TOKEN_STOP_WORDS = new Set([
@@ -45,6 +57,17 @@ export function tokenizeSimilarity(value: string | null | undefined) {
       .map((word) => word.trim())
       .filter((word) => word.length >= 3 && !TOKEN_STOP_WORDS.has(word)),
   ));
+}
+
+const BROAD_GENRES = new Set([
+  "драма", "комедия", "мелодрама", "боевик", "триллер", "приключения", "фантастика", "фэнтези", "криминал", "детектив",
+]);
+
+function normalizedSet(value: string | null | undefined) {
+  return new Set((value || "")
+    .split(",")
+    .map((item) => normalizeSimilarityText(item))
+    .filter(Boolean));
 }
 
 function keywordMatches(text: string, tokens: Set<string>, keyword: string) {
@@ -73,11 +96,7 @@ function collectText(movie: MovieWithSimilarityRelations) {
   ].join(" ");
 }
 
-export function buildSimilarityProfile(movie: MovieWithSimilarityRelations): SimilarityProfile {
-  const text = normalizeSimilarityText(collectText(movie));
-  const tokens = new Set(tokenizeSimilarity(text));
-  const genreNames = new Set(movie.genres.map((item) => normalizeSimilarityText(item.genre.name)));
-  const castNames = new Set(movie.cast.slice(0, 10).map((item) => normalizeSimilarityText(item.person.nameRu)).filter(Boolean));
+function clusterMatches(text: string, tokens: Set<string>) {
   const franchiseIds = new Set<string>();
   const clusterIds = new Set<string>();
   const sourceTypeIds = new Set<string>();
@@ -92,23 +111,59 @@ export function buildSimilarityProfile(movie: MovieWithSimilarityRelations): Sim
     if (cluster.kind === "source") sourceTypeIds.add(cluster.id);
   }
 
+  return { franchiseIds, clusterIds, sourceTypeIds, hintKeywords };
+}
+
+export function buildSimilarityProfile(movie: MovieWithSimilarityRelations): SimilarityProfile {
+  const text = normalizeSimilarityText(collectText(movie));
+  const tokens = new Set(tokenizeSimilarity(text));
+  const genreNames = new Set(movie.genres.map((item) => normalizeSimilarityText(item.genre.name)));
+  const specificGenreNames = new Set([...genreNames].filter((genre) => !BROAD_GENRES.has(genre)));
+  const castNames = new Set(movie.cast.slice(0, 10).map((item) => normalizeSimilarityText(item.person.nameRu)).filter(Boolean));
+  const titleText = normalizeSimilarityText(`${movie.titleRu} ${movie.titleOriginal || ""}`);
+  const descriptionText = normalizeSimilarityText(movie.description);
+  const titleTokens = new Set(tokenizeSimilarity(titleText));
+  const descriptionTokens = new Set(tokenizeSimilarity(descriptionText));
+  const tagNames = new Set(movie.vibixTags.map((tag) => normalizeSimilarityText(tag)).filter(Boolean));
+  const countryNames = normalizedSet(movie.country);
+  const directorName = normalizeSimilarityText(movie.director);
+  const { franchiseIds, clusterIds, sourceTypeIds, hintKeywords } = clusterMatches(text, tokens);
+
   const baseTitle = normalizeSimilarityText(normalizeMovieBaseTitle(movie.titleRu));
-  const titleTokens = tokenizeSimilarity(`${movie.titleRu} ${movie.titleOriginal || ""}`).filter((word) => word.length >= 4);
-  hintKeywords.push(...titleTokens.slice(0, 5));
+  const titleHints = tokenizeSimilarity(`${movie.titleRu} ${movie.titleOriginal || ""}`).filter((word) => word.length >= 4);
+  hintKeywords.push(...titleHints.slice(0, 5));
+
+  const lowerText = `${text} ${[...genreNames].join(" ")} ${[...tagNames].join(" ")}`;
+  const isAnimated = movie.type === "CARTOON" || movie.type === "ANIME" || /animation|animated|анимац|мульт/i.test(lowerText);
+  const isDocumentary = /documentary|документал|реалити|концерт|stand.?up|спецвыпуск/i.test(lowerText);
+  const isFamilyOrKids = /family|kids|детск|семейн/i.test(lowerText);
+  const isHorror = /horror|ужас|слэшер|демон|проклят/i.test(lowerText);
 
   return {
     movieId: movie.id,
     title: movie.titleRu,
     baseTitle,
     text,
+    titleText,
+    descriptionText,
     tokens,
+    titleTokens,
+    descriptionTokens,
     genreNames,
+    specificGenreNames,
+    countryNames,
     castNames,
+    directorName,
+    tagNames,
     franchiseIds,
     clusterIds,
     sourceTypeIds,
     hintKeywords: Array.from(new Set(hintKeywords.map(normalizeSimilarityText).filter(Boolean))).slice(0, 30),
     hasStrongIdentity: franchiseIds.size > 0 || [...clusterIds].some((id) => (CLUSTER_BY_ID.get(id)?.weight || 0) >= 650),
+    isAnimated,
+    isDocumentary,
+    isFamilyOrKids,
+    isHorror,
   };
 }
 

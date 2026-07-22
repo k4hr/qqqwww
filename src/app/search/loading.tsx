@@ -1,5 +1,5 @@
-import { MovieGridSkeleton } from "@/components/movie-grid-skeleton";
+import { RouteLoading } from "@/components/route-loading";
 
-export default function SearchLoading() {
-  return <div className="container py-6"><div className="skeleton mb-6 h-44 rounded-[24px]" /><MovieGridSkeleton count={12} /></div>;
+export default function Loading() {
+  return <RouteLoading variant="catalog" />;
 }

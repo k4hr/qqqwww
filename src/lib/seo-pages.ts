@@ -74,7 +74,7 @@ export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
     where: { AND: [vibixPublicMovieWhere, buildDefaultCatalogCountryWhere(), buildSimilarityCandidateWhere(movie)] },
     include: movieSeoInclude,
     orderBy: [{ popularScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
-    take: 650,
+    take: 220,
   });
   const ranked = sortSimilarMovies(movie, candidates, limit, 180);
   if (ranked.length >= Math.min(limit, 6)) return ranked;
@@ -94,7 +94,7 @@ export async function findSimilarSeoMovies(movie: SeoMovie, limit = 10) {
         },
         include: movieSeoInclude,
         orderBy: [{ popularScore: "desc" }, { topScore: "desc" }, { kpRating: "desc" }, { imdbRating: "desc" }, { createdAt: "desc" }],
-        take: 420,
+        take: 120,
       })
     : [];
 

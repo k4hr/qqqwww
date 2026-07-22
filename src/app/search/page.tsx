@@ -1,4 +1,5 @@
 import { ContentType } from "@prisma/client";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AnalyticsEvent } from "@/components/analytics-event";
 import { CountryFilter } from "@/components/country-filter";
@@ -9,6 +10,8 @@ import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { prisma } from "@/lib/prisma";
 import { normalizeSearchQuery, searchMovies } from "@/lib/search";
 import { resolveSearchRedirectPath } from "@/lib/search-route-intents";
+import { parseSearchIntent } from "@/lib/search-v2";
+import { seasonPath, watchPath } from "@/lib/seo-links";
 
 export const revalidate = 600;
 
@@ -19,6 +22,7 @@ type Props = { searchParams: Promise<{ q?: string; country?: string; type?: stri
 export default async function SearchPage({ searchParams }: Props) {
   const params = await searchParams;
   const query = normalizeSearchQuery(params.q ?? "").slice(0, 160);
+  const parsedQuery = parseSearchIntent(query);
   const routeIntent = resolveSearchRedirectPath(query);
   if (routeIntent) redirect(routeIntent.href);
   const selectedCountry = normalizeCatalogCountry(params.country ?? (query ? "all" : "main"));
@@ -61,6 +65,21 @@ export default async function SearchPage({ searchParams }: Props) {
         </form>
         <CountryFilter country={selectedCountry} preserve={{ q: query || undefined, type: params.type, year: params.year, genre: params.genre }} />
       </section>
+
+      {parsedQuery.season && movies[0]?.type === ContentType.SERIES ? (
+        <section className="glass-panel mb-6 rounded-[22px] border border-[#e50914]/25 p-4 text-white">
+          <div className="text-sm font-black uppercase tracking-[.14em] text-[#ff4d55]">Сезонный запрос</div>
+          <h2 className="mt-2 text-xl font-black">{movies[0].titleRu}: {parsedQuery.season.season} сезон{parsedQuery.season.episode ? `, ${parsedQuery.season.episode} серия` : ""}</h2>
+          <p className="mt-2 text-sm text-[#a1a1aa]">
+            {(movies[0].vibixSeasonCount ?? 0) >= parsedQuery.season.season
+              ? "Сезон подтверждён в каталоге, ссылка ведёт сразу на страницу сезона."
+              : "Сезон пока не подтверждён в каталоге, основная ссылка ведёт на страницу сериала."}
+          </p>
+          <Link className="mf-btn mf-btn-primary mt-4" href={(movies[0].vibixSeasonCount ?? 0) >= parsedQuery.season.season ? seasonPath(movies[0], parsedQuery.season.season) : watchPath(movies[0])}>
+            Открыть
+          </Link>
+        </section>
+      ) : null}
 
       {movies.length ? <div className="movie-grid">{movies.map((movie) => <MovieCard key={movie.id} movie={movie} />)}</div> : null}
       {query && !movies.length ? <>

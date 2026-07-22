@@ -2,122 +2,61 @@ import { ContentType, type Prisma } from "@prisma/client";
 import { buildCountryFilterWhere, normalizeCatalogCountry } from "@/lib/catalog-filters";
 import { vibixPublicMovieWhere, vibixWatchMovieWhere } from "@/lib/movie-access";
 import { prisma } from "@/lib/prisma";
+import { getSearchTextForms, normalizeSearchText, parseSearchIntent, type SearchProvenance } from "@/lib/search-v2";
 
 const searchInclude = { genres: { include: { genre: true } } } as const;
 export type SearchMovie = Prisma.MovieGetPayload<{ include: typeof searchInclude }>;
 
-const transliteration: Record<string, string> = {
+const RU_TO_LATIN: Record<string, string> = {
   а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y",
   к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f",
   х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
 };
 
-const WORD_BOUNDARY_PATTERN = /[\s:;,.!?()\[\]{}<>«»"'`~|\\/\-_+–—]/;
-const SHORT_TOKEN_MAX_PREFIX_EXTRA = 2;
-
-
-const SEARCH_INTENT_STOP_WORDS = new Set([
-  "смотреть", "посмотреть", "смотри", "смотрим", "смотрет", "smotret", "watch",
-  "онлайн", "online", "бесплатно", "бесплатный", "free", "без", "регистрации",
-  "фильм", "фильмы", "фильма", "кино", "кинo", "movie", "movies",
-  "сериал", "сериалы", "сериала", "series", "serial", "tv",
-  "мультфильм", "мультфильмы", "мультик", "мультики", "cartoon",
-  "аниме", "anime", "дорама", "дорамы",
-  "хорошем", "хорошее", "хорошего", "качестве", "качество", "качеством", "quality",
-  "озвучке", "озвучка", "дубляже", "дубляж", "русской", "русский", "русском",
-  "полностью", "целиком", "подряд", "все", "весь", "вся", "всe",
-  "hd", "fullhd", "fhd", "uhd", "webdl", "webrip", "bdrip", "hdrip", "1080", "1080p", "720", "720p", "4k",
-]);
-
-const SEARCH_INTENT_PHRASE_PATTERNS: RegExp[] = [
-  /\b(?:s\s?\d{1,2}|season\s*\d{1,2}|sezon\s*\d{1,2})\b/gi,
-  /\b(?:e\s?\d{1,3}|episode\s*\d{1,3}|epizod\s*\d{1,3})\b/gi,
-  /\b\d{1,2}\s*x\s*\d{1,3}\b/gi,
-  /\b\d{1,3}\s*(?:й|ый|ой|ий|ая|я)?\s*(?:сезон|сезона|сезоне|сезоны|серия|серии|серий|эпизод|эпизода|эпизоды)\b/gi,
-  /\b(?:сезон|сезона|сезоне|сезоны|серия|серии|серий|эпизод|эпизода|эпизоды)\s*\d{1,3}\b/gi,
-  /\b(?:все|вся|весь|all)\s+(?:сезоны|сезона|серии|серий|episodes|seasons)\b/gi,
-  /\b(?:смотреть|посмотреть|watch)\s+(?:онлайн|online)\b/gi,
-  /\b(?:в|во)\s+(?:хорошем|hd|fullhd|fhd|4k)\s+качестве\b/gi,
-];
-
-// Небольшой словарь нужен не для “Тора”, а для всей логики рус/англ франшиз.
-// Поиск всё равно сначала ранжирует точные title matches, а алиасы только помогают найти оригинальные названия.
-const SEARCH_ALIASES: Record<string, string[]> = {
-  "тор": ["thor"],
-  "халк": ["hulk"],
-  "мстители": ["avengers"],
-  "человек паук": ["spider man", "spider-man", "spiderman"],
-  "паук": ["spider man", "spider-man"],
-  "железный человек": ["iron man"],
-  "железный": ["iron man"],
-  "капитан америка": ["captain america"],
-  "черная вдова": ["black widow"],
-  "чёрная вдова": ["black widow"],
-  "черная пантера": ["black panther"],
-  "чёрная пантера": ["black panther"],
-  "доктор стрэндж": ["doctor strange", "dr strange"],
-  "доктор стрендж": ["doctor strange", "dr strange"],
-  "стражи галактики": ["guardians of the galaxy"],
-  "дэдпул": ["deadpool"],
-  "дедпул": ["deadpool"],
-  "росомаха": ["wolverine"],
-  "люди икс": ["x men", "x-men"],
-  "икс мен": ["x men", "x-men"],
-  "бэтмен": ["batman"],
-  "бетмен": ["batman"],
-  "супермен": ["superman"],
-  "джокер": ["joker"],
-  "флэш": ["flash"],
-  "флеш": ["flash"],
-  "аквамен": ["aquaman"],
-  "чудо женщина": ["wonder woman"],
-  "гарри поттер": ["harry potter"],
-  "поттер": ["harry potter", "potter"],
-  "властелин колец": ["lord of the rings"],
-  "хоббит": ["hobbit"],
-  "звездные войны": ["star wars"],
-  "звёздные войны": ["star wars"],
-  "пираты карибского моря": ["pirates of the caribbean"],
-  "форсаж": ["fast and furious", "fast furious"],
-  "миссия невыполнима": ["mission impossible"],
-  "терминатор": ["terminator"],
-  "матрица": ["matrix"],
-  "аватар": ["avatar"],
-  "интерстеллар": ["interstellar"],
-  "начало": ["inception"],
-  "игра престолов": ["game of thrones"],
-  "престолов": ["game of thrones"],
-  "ходячие мертвецы": ["walking dead", "the walking dead"],
-  "извне": ["from"],
-  "во все тяжкие": ["breaking bad"],
-  "лучше звоните солу": ["better call saul"],
-  "очень странные дела": ["stranger things"],
-  "пацаны": ["the boys"],
+const EN_TO_RU_LAYOUT: Record<string, string> = {
+  q: "й", w: "ц", e: "у", r: "к", t: "е", y: "н", u: "г", i: "ш", o: "щ", p: "з", "[": "х", "]": "ъ",
+  a: "ф", s: "ы", d: "в", f: "а", g: "п", h: "р", j: "о", k: "л", l: "д", ";": "ж", "'": "э",
+  z: "я", x: "ч", c: "с", v: "м", b: "и", n: "т", m: "ь", ",": "б", ".": "ю", "`": "ё",
 };
 
-for (const [russian, aliases] of Object.entries({ ...SEARCH_ALIASES })) {
+const RU_TO_EN_LAYOUT = Object.fromEntries(Object.entries(EN_TO_RU_LAYOUT).map(([en, ru]) => [ru, en])) as Record<string, string>;
+const WORD_BOUNDARY_PATTERN = /[\s:;,.!?()[\]{}<>«»"'`~|\\/_+–—-]/;
+const SHORT_TOKEN_MAX_PREFIX_EXTRA = 2;
+
+const INTENT_STOP_WORDS = new Set([
+  "смотреть", "посмотреть", "смотри", "смотрим", "watch", "smotret",
+  "онлайн", "online", "бесплатно", "бесплатный", "free", "без", "регистрации",
+  "фильм", "фильмы", "фильма", "кино", "movie", "movies", "film", "films",
+  "сериал", "сериалы", "сериала", "series", "serial", "tv", "show",
+  "мультфильм", "мультфильмы", "мульт", "мультик", "мультики", "cartoon", "cartoons",
+  "аниме", "анимэ", "anime",
+  "в", "во", "на", "с", "со", "для", "hd", "fullhd", "fhd", "uhd", "4k", "1080", "1080p", "720", "720p",
+]);
+
+const SEARCH_ALIASES: Record<string, string[]> = {
+  "железный человек": ["iron man", "iron-man", "ironman", "zhelezny chelovek", "zheleznyi chelovek"],
+  "человек паук": ["spider man", "spider-man", "spiderman", "chelovek pauk"],
+  "извне": ["from"],
+  "ходячие мертвецы": ["walking dead", "the walking dead", "hodjachie mertvecy", "hodyachie mertvecy"],
+  "игра престолов": ["game of thrones"],
+  "гарри поттер": ["harry potter", "garri potter"],
+  "елки": ["ёлки", "yolki", "elki"],
+  "интерстеллар": ["interstellar", "интерстелар"],
+  "наруто": ["naruto"],
+  "тор": ["thor"],
+  "мстители": ["avengers"],
+  "бэтмен": ["batman"],
+  "джокер": ["joker"],
+  "форсаж": ["fast and furious", "fast furious"],
+};
+
+for (const [key, aliases] of Object.entries({ ...SEARCH_ALIASES })) {
+  const normalizedKey = normalizeSearchQuery(key);
+  SEARCH_ALIASES[normalizedKey] = Array.from(new Set([...(SEARCH_ALIASES[normalizedKey] ?? []), ...aliases]));
   for (const alias of aliases) {
-    const normalizedAlias = normalizeRawSearchText(alias);
-    SEARCH_ALIASES[normalizedAlias] = Array.from(new Set([...(SEARCH_ALIASES[normalizedAlias] ?? []), russian]));
+    const normalizedAlias = normalizeSearchQuery(alias);
+    SEARCH_ALIASES[normalizedAlias] = Array.from(new Set([...(SEARCH_ALIASES[normalizedAlias] ?? []), normalizedKey]));
   }
-}
-
-function normalizeRawSearchText(value: string) {
-  return value
-    .toLocaleLowerCase("ru-RU")
-    .replaceAll("ё", "е")
-    .replace(/&/g, " and ")
-    .replace(/[^a-zа-я0-9]+/gi, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function normalizeOrdinalSearchText(value: string) {
-  return ` ${normalizeRawSearchText(value)} `
-    .replace(/\b(\d{1,3})(?:й|ый|ой|ий|ая|я|го|ого|ому|ему)\b/g, "$1")
-    .replace(/\b(\d{1,3})\s+(?:й|ый|ой|ий|ая|я|го|ого|ому|ему)\b/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 const RUSSIAN_STEM_ENDINGS = [
@@ -135,40 +74,23 @@ function russianStemToken(token: string) {
 }
 
 function stemSearchPhrase(value: string) {
-  const tokens = normalizeOrdinalSearchText(value).split(" ").filter(Boolean);
-  const stemmed = tokens.map((token) => (/^\d+$/.test(token) ? token : russianStemToken(token)));
-  return stemmed.join(" ").trim();
+  const tokens = normalizeSearchQuery(value).split(" ").filter(Boolean);
+  return tokens.map((token) => (/^\d+$/.test(token) ? token : russianStemToken(token))).join(" ").trim();
 }
 
 export function normalizeSearchQuery(query: string) {
-  return normalizeOrdinalSearchText(query);
-}
-
-
-export function normalizeSearchIntentQuery(query: string) {
-  const normalized = normalizeSearchQuery(query);
-  if (!normalized) return "";
-
-  let cleaned = ` ${normalized} `;
-  for (const pattern of SEARCH_INTENT_PHRASE_PATTERNS) cleaned = cleaned.replace(pattern, " ");
-
-  cleaned = cleaned
-    .replace(/\b(?:hd|fullhd|fhd|uhd|4k)\s*(?:резка|rip|quality)?\b/gi, " ")
+  return normalizeSearchText(query).spaced
+    .replace(/\b(\d{1,3})(?:й|ый|ой|ий|ая|я|го|ого|ому|ему)\b/g, "$1")
+    .replace(/\b(\d{1,3})\s+(?:й|ый|ой|ий|ая|я|го|ого|ому|ему)\b/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
+}
 
-  cleaned = normalizeOrdinalSearchText(cleaned);
-
-  const tokens = cleaned.split(" ").filter((token) => {
-    if (!token) return false;
-    if (/^(?:й|ый|ой|ий|ая|я)$/.test(token)) return false;
-    if (SEARCH_INTENT_STOP_WORDS.has(token)) return false;
-    if (/^(?:19|20)\d{2}$/.test(token)) return true;
-    return true;
-  });
-
-  const intent = tokens.join(" ").trim();
-  return intent || normalized;
+export function normalizeSearchIntentQuery(query: string) {
+  const parsed = parseSearchIntent(query);
+  const normalized = normalizeSearchQuery(parsed.titleQuery || parsed.normalizedQuery);
+  const tokens = normalized.split(" ").filter((token) => token && !INTENT_STOP_WORDS.has(token));
+  return tokens.join(" ").trim() || normalized;
 }
 
 export function tokenizeSearchQuery(query: string) {
@@ -181,7 +103,12 @@ export function tokenizeSearchQuery(query: string) {
 }
 
 export function transliterateSearchQuery(query: string) {
-  return normalizeSearchQuery(query).split("").map((letter) => transliteration[letter] ?? letter).join("");
+  return normalizeSearchQuery(query).split("").map((letter) => RU_TO_LATIN[letter] ?? letter).join("");
+}
+
+function convertKeyboardLayout(query: string, direction: "en-to-ru" | "ru-to-en") {
+  const dictionary = direction === "en-to-ru" ? EN_TO_RU_LAYOUT : RU_TO_EN_LAYOUT;
+  return normalizeSearchQuery(query.toLocaleLowerCase("ru-RU").split("").map((letter) => dictionary[letter] ?? letter).join(""));
 }
 
 function addUnique(target: string[], value: string | null | undefined) {
@@ -195,33 +122,24 @@ function addQueryShapeVariants(target: string[], value: string) {
 
   addUnique(target, normalized);
   addUnique(target, transliterateSearchQuery(normalized));
+  addUnique(target, convertKeyboardLayout(normalized, "en-to-ru"));
+  addUnique(target, convertKeyboardLayout(normalized, "ru-to-en"));
+  for (const form of getSearchTextForms(normalized)) addUnique(target, form);
 
-  // Реальные названия часто хранятся как “Человек-паук” / “Spider-Man”,
-  // а пользователь пишет “человек паук” / “spider man”. Для Prisma contains/startsWith
-  // это разные строки, поэтому добавляем формы с пробелом, дефисом и compact-вариант.
   if (normalized.includes(" ")) {
     addUnique(target, normalized.replace(/\s+/g, "-"));
     addUnique(target, normalized.replace(/\s+/g, ""));
-  }
-  if (normalized.includes("-")) {
-    addUnique(target, normalized.replace(/-+/g, " "));
-    addUnique(target, normalized.replace(/-+/g, ""));
   }
 }
 
 function addAliasVariants(target: string[], normalized: string) {
   for (const alias of SEARCH_ALIASES[normalized] ?? []) addQueryShapeVariants(target, alias);
-
   for (const token of tokenizeSearchQuery(normalized)) {
     for (const alias of SEARCH_ALIASES[token] ?? []) addQueryShapeVariants(target, alias);
   }
-
-  // Важный autocomplete-case: пользователь ввёл “человек п”, “игра пр”,
-  // “ходячие м”, но ещё не дописал точный алиас. Подтягиваем полный алиас
-  // и его англ. варианты, иначе выдача забивается “Человек против...” и т.п.
   if (normalized.length >= 4) {
     for (const [aliasKey, aliases] of Object.entries(SEARCH_ALIASES)) {
-      if (aliasKey.length >= 4 && aliasKey.startsWith(normalized)) {
+      if (aliasKey.startsWith(normalized)) {
         addQueryShapeVariants(target, aliasKey);
         for (const alias of aliases) addQueryShapeVariants(target, alias);
       }
@@ -233,18 +151,15 @@ function buildSearchVariants(query: string) {
   const variants: string[] = [];
   const normalized = normalizeSearchQuery(query);
   const intent = normalizeSearchIntentQuery(normalized);
-
   addQueryShapeVariants(variants, intent);
   addAliasVariants(variants, intent);
 
-  const stemmedIntent = stemSearchPhrase(intent);
-  if (stemmedIntent && stemmedIntent !== intent) {
-    addQueryShapeVariants(variants, stemmedIntent);
-    addAliasVariants(variants, stemmedIntent);
+  const stemmed = stemSearchPhrase(intent);
+  if (stemmed && stemmed !== intent) {
+    addQueryShapeVariants(variants, stemmed);
+    addAliasVariants(variants, stemmed);
   }
 
-  // Сохраняем исходную форму как слабую запасную ветку: это помогает редким названиям,
-  // где слова вроде "сезон" или "серия" действительно являются частью тайтла.
   if (normalized !== intent) {
     addQueryShapeVariants(variants, normalized);
     addAliasVariants(variants, normalized);
@@ -269,17 +184,7 @@ function textFieldWhere(field: SearchTextField, condition: Prisma.StringFilter<"
 function titleFieldWhere(value: string, relaxedContains: boolean): Prisma.MovieWhereInput[] {
   const normalized = normalizeSearchQuery(value);
   if (!normalized) return [];
-  const boundaryQueries = [
-    ` ${normalized}`,
-    `-${normalized}`,
-    `: ${normalized}`,
-    `. ${normalized}`,
-    `, ${normalized}`,
-    `«${normalized}`,
-    `"${normalized}`,
-    `(${normalized}`,
-  ];
-
+  const boundaryQueries = [` ${normalized}`, `-${normalized}`, `: ${normalized}`, `. ${normalized}`, `, ${normalized}`, `«${normalized}`, `"${normalized}`, `(${normalized}`];
   const fields: SearchTextField[] = ["titleRu", "titleOriginal", "slug"];
   const where: Prisma.MovieWhereInput[] = [];
 
@@ -294,20 +199,15 @@ function titleFieldWhere(value: string, relaxedContains: boolean): Prisma.MovieW
 }
 
 function titleTokenAndWhere(value: string): Prisma.MovieWhereInput[] {
-  const normalized = normalizeSearchQuery(value);
-  const tokens = tokenizeSearchQuery(normalized).filter((token) => token.length >= 3 || /^\d+$/.test(token));
+  const tokens = tokenizeSearchQuery(value).filter((token) => token.length >= 3 || /^\d+$/.test(token));
   const wordTokens = tokens.filter((token) => !/^\d+$/.test(token));
   if (tokens.length < 2 && wordTokens.length < 1) return [];
-
   const fields: SearchTextField[] = ["titleRu", "titleOriginal", "slug"];
-  return fields.map((field) => ({
-    AND: tokens.map((token) => textFieldWhere(field, { contains: token, mode: "insensitive" })),
-  }));
+  return fields.map((field) => ({ AND: tokens.map((token) => textFieldWhere(field, { contains: token, mode: "insensitive" })) }));
 }
 
 function idWhere(query: string): Prisma.MovieWhereInput[] {
-  const normalized = normalizeSearchQuery(query);
-  const compact = normalized.replace(/\s+/g, "");
+  const compact = normalizeSearchQuery(query).replace(/\s+/g, "");
   const where: Prisma.MovieWhereInput[] = [];
   if (/^tt\d{4,}$/i.test(compact)) where.push({ imdbId: { equals: compact, mode: "insensitive" } });
   if (/^\d{3,}$/.test(compact)) {
@@ -316,7 +216,6 @@ function idWhere(query: string): Prisma.MovieWhereInput[] {
     const maybeVibixId = Number(compact);
     if (Number.isSafeInteger(maybeVibixId)) where.push({ vibixId: maybeVibixId });
   }
-  if (/^(19|20)\d{2}$/.test(compact)) where.push({ year: Number(compact) });
   return where;
 }
 
@@ -339,10 +238,7 @@ export function buildSearchWhere(query: string): Prisma.MovieWhereInput {
   const OR = [
     ...idWhere(intent),
     ...(intent !== normalized ? idWhere(normalized) : []),
-    ...variants.flatMap((variant) => [
-      ...titleFieldWhere(variant, relaxedContains),
-      ...titleTokenAndWhere(variant),
-    ]),
+    ...variants.flatMap((variant) => [...titleFieldWhere(variant, relaxedContains), ...titleTokenAndWhere(variant)]),
     ...metadataWhere(intent),
     ...(intent !== normalized ? metadataWhere(normalized) : []),
   ];
@@ -394,14 +290,12 @@ function phraseAtWordBoundary(text: string, phrase: string) {
 }
 
 function phraseStartsAtBoundary(text: string, phrase: string) {
-  if (!text || !phrase) return false;
-  return text === phrase || (text.startsWith(phrase) && hasBoundaryAfter(text, 0, phrase));
+  return Boolean(text && phrase && (text === phrase || (text.startsWith(phrase) && hasBoundaryAfter(text, 0, phrase))));
 }
 
 function isAllowedShortPrefix(token: string, word: string) {
   if (!word.startsWith(token)) return false;
-  if (token.length >= 4) return true;
-  return word.length <= token.length + SHORT_TOKEN_MAX_PREFIX_EXTRA;
+  return token.length >= 4 || word.length <= token.length + SHORT_TOKEN_MAX_PREFIX_EXTRA;
 }
 
 function firstNumber(value: number | null | undefined) {
@@ -421,35 +315,32 @@ function scoreOneTextField(text: string, variant: string, tokens: string[], exac
   if (!normalizedText || !variant) return 0;
   const words = splitWords(normalizedText);
   let score = 0;
-
   if (normalizedText === variant) score += exactWeight;
   else if (phraseStartsAtBoundary(normalizedText, variant)) score += prefixWeight;
   else if (phraseAtWordBoundary(normalizedText, variant)) score += wordWeight;
 
-  if (tokens.length) {
-    let matchedTokens = 0;
-    for (const token of tokens) {
-      const exactWord = words.includes(token);
-      const prefixWord = words.some((word) => isAllowedShortPrefix(token, word));
-      const fuzzyWord = token.length >= 4 && words.some((word) => editDistance(token, word) <= (token.length >= 7 ? 2 : 1));
-      if (exactWord) {
-        matchedTokens += 1;
-        score += 22;
-      } else if (prefixWord) {
-        matchedTokens += 1;
-        score += token.length <= 3 ? 10 : 15;
-      } else if (fuzzyWord) {
-        matchedTokens += 1;
-        score += 8;
-      }
+  let matchedTokens = 0;
+  for (const token of tokens) {
+    const exactWord = words.includes(token);
+    const prefixWord = words.some((word) => isAllowedShortPrefix(token, word));
+    const fuzzyWord = token.length >= 4 && words.some((word) => editDistance(token, word) <= (token.length >= 7 ? 2 : 1));
+    if (exactWord) {
+      matchedTokens += 1;
+      score += 22;
+    } else if (prefixWord) {
+      matchedTokens += 1;
+      score += token.length <= 3 ? 10 : 15;
+    } else if (fuzzyWord) {
+      matchedTokens += 1;
+      score += 8;
     }
-    if (matchedTokens === tokens.length) score += tokens.length >= 2 ? 28 : 12;
   }
-
+  if (tokens.length && matchedTokens === tokens.length) score += tokens.length >= 2 ? 28 : 12;
   return score;
 }
 
 export function scoreSearchResult(movie: SearchMovie, query: string) {
+  const parsed = parseSearchIntent(query);
   const normalized = normalizeSearchQuery(query);
   const intent = normalizeSearchIntentQuery(normalized);
   const variants = buildSearchVariants(normalized);
@@ -472,17 +363,19 @@ export function scoreSearchResult(movie: SearchMovie, query: string) {
   }
 
   if (tokens.some((token) => token === String(movie.year))) score += 40;
+  if (parsed.type && movie.type === parsed.type) score += 50;
+  if (parsed.season && movie.type === ContentType.SERIES) {
+    score += 85;
+    if ((movie.vibixSeasonCount ?? 0) >= parsed.season.season) score += 45;
+  }
 
-  // Жанры/страны — только вторичный поиск. Они не должны обгонять совпадения по названию.
   if (intent.length >= 4) {
     const genreWords = movie.genres.flatMap((item) => splitWords(item.genre.name));
     if (tokens.some((token) => genreWords.includes(token))) score += 18;
     if (movie.country && phraseAtWordBoundary(normalizeSearchQuery(movie.country), intent)) score += 12;
   }
 
-  // Защита от мусора типа “тор” внутри “доктор/торонто/история/шторм”.
   if (isShortSingleToken(intent) && score < 70) return 0;
-
   if (score <= 0) return 0;
   if (movie.vibixAvailable) score += 8;
   if (movie.posterUrl) score += 5;
@@ -490,6 +383,48 @@ export function scoreSearchResult(movie: SearchMovie, query: string) {
   if (movie.isHomeEligible || movie.isPopularEligible || movie.isTopEligible) score += 5;
   score += popularityBoost(movie);
   return score;
+}
+
+export function explainSearchResult(movie: SearchMovie, query: string): { score: number; provenance: SearchProvenance[]; parsed: ReturnType<typeof parseSearchIntent> } {
+  const parsed = parseSearchIntent(query);
+  const intent = normalizeSearchIntentQuery(query);
+  const variants = buildSearchVariants(query);
+  const provenance = new Set<SearchProvenance>();
+  const idQuery = normalizeSearchQuery(intent).replace(/\s+/g, "");
+  const titleRu = normalizeSearchQuery(movie.titleRu);
+  const titleOriginal = normalizeSearchQuery(movie.titleOriginal ?? "");
+  const slug = normalizeSearchQuery(movie.slug);
+  const compactTitle = normalizeSearchText(`${movie.titleRu} ${movie.titleOriginal ?? ""}`).compact;
+
+  if (idQuery && (
+    idQuery === normalizeSearchQuery(movie.kinopoiskId ?? "")
+    || idQuery === normalizeSearchQuery(movie.imdbId ?? "")
+    || idQuery === normalizeSearchQuery(movie.tmdbId ?? "")
+    || (/^\d+$/.test(idQuery) && movie.vibixId === Number(idQuery))
+  )) provenance.add("ID");
+
+  for (const variant of variants) {
+    const variantCompact = normalizeSearchText(variant).compact;
+    const variantTokens = tokenizeSearchQuery(variant);
+    if (titleRu === variant) provenance.add("EXACT_TITLE_RU");
+    if (titleOriginal && titleOriginal === variant) provenance.add("EXACT_ORIGINAL_TITLE");
+    if (SEARCH_ALIASES[variant]?.length) provenance.add("EXACT_ALIAS");
+    if (variantCompact && compactTitle === variantCompact) provenance.add("EXACT_COMPACT_TITLE");
+    if (phraseStartsAtBoundary(titleRu, variant) || (titleOriginal && phraseStartsAtBoundary(titleOriginal, variant))) provenance.add("PREFIX");
+    if (variantTokens.length && variantTokens.every((token) => splitWords(titleRu).includes(token) || splitWords(titleOriginal).includes(token) || splitWords(slug).includes(token))) provenance.add("ALL_TITLE_TOKENS");
+    if (variant === transliterateSearchQuery(intent)) provenance.add("TRANSLITERATION");
+    if (variant === convertKeyboardLayout(intent, "en-to-ru") || variant === convertKeyboardLayout(intent, "ru-to-en")) provenance.add("KEYBOARD_LAYOUT");
+    if (variantTokens.some((token) => token.length >= 4 && [...splitWords(titleRu), ...splitWords(titleOriginal)].some((word) => editDistance(token, word) <= (token.length >= 7 ? 2 : 1)))) provenance.add("FUZZY");
+  }
+
+  const tokens = tokenizeSearchQuery(intent);
+  if (intent.length >= 4) {
+    const genreWords = movie.genres.flatMap((item) => splitWords(item.genre.name));
+    if (tokens.some((token) => genreWords.includes(token)) || (movie.country && phraseAtWordBoundary(normalizeSearchQuery(movie.country), intent))) provenance.add("GENRE_COUNTRY");
+    if (movie.description && tokens.some((token) => token.length >= 4 && phraseAtWordBoundary(normalizeSearchQuery(movie.description), token))) provenance.add("DESCRIPTION");
+  }
+
+  return { score: scoreSearchResult(movie, query), provenance: provenance.size ? [...provenance] : ["NONE"], parsed };
 }
 
 export type SearchFilters = { type?: string; year?: string; genre?: string; country?: string };
@@ -537,7 +472,6 @@ async function searchMoviesOnce(query: string, filters: SearchFilters, limit: nu
     take,
   });
 
-  // Для длинных запросов можно добрать metadata-результаты, но они всё равно будут ниже title matches по score.
   if (!isShortSingleToken(intent) && candidates.length < Math.min(16, limit)) {
     const relaxedVariants = buildSearchVariants(normalized).filter((variant) => variant.length >= 4);
     if (relaxedVariants.length) {
@@ -564,7 +498,7 @@ async function searchMoviesOnce(query: string, filters: SearchFilters, limit: nu
   }
 
   return candidates
-    .map((movie) => ({ movie, score: scoreSearchResult(movie, intent) }))
+    .map((movie) => ({ movie, score: scoreSearchResult(movie, query) }))
     .filter((item) => item.score >= 70)
     .sort((a, b) => b.score - a.score || popularityBoost(b.movie) - popularityBoost(a.movie) || (b.movie.year ?? 0) - (a.movie.year ?? 0))
     .slice(0, limit)
@@ -579,11 +513,6 @@ export async function searchMovies(query: string, filters: SearchFilters = {}, l
   const batches: SearchMovie[][] = [];
   batches.push(await searchMoviesOnce(normalized, filters, limit));
 
-  // Важно: если пользователь раньше кликнул страну/тип/жанр, поисковая форма
-  // сохраняет эти параметры. Для поиска по конкретному названию это не должно
-  // убивать выдачу: “13 воин” обязан найти “13-й воин”, даже если выбран другой
-  // фильтр страны или типа. Поэтому всегда добираем relaxed-проходы и потом
-  // пересортировываем общий список по релевантности названия.
   if (hasActiveSearchFilter(filters)) {
     batches.push(await searchMoviesOnce(normalized, { ...filters, country: "all" }, limit));
     batches.push(await searchMoviesOnce(normalized, { country: "all" }, limit));
@@ -591,7 +520,7 @@ export async function searchMovies(query: string, filters: SearchFilters = {}, l
 
   const merged = uniqueMovies(batches.flat());
   return merged
-    .map((movie) => ({ movie, score: scoreSearchResult(movie, intent) }))
+    .map((movie) => ({ movie, score: scoreSearchResult(movie, normalized) }))
     .filter((item) => item.score >= 70)
     .sort((a, b) => b.score - a.score || popularityBoost(b.movie) - popularityBoost(a.movie) || (b.movie.year ?? 0) - (a.movie.year ?? 0))
     .slice(0, limit)

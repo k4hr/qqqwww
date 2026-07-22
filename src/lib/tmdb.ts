@@ -33,6 +33,28 @@ type TmdbDetails = TmdbSummary & {
   belongs_to_collection?: { id: number; name: string } | null;
   credits?: { cast?: TmdbPerson[]; crew?: TmdbPerson[] };
   videos?: { results?: { key: string; site: string; type: string; official?: boolean }[] };
+  images?: TmdbImagesResponse;
+};
+
+type TmdbKeywordResponse = {
+  keywords?: Array<{ id: number; name: string }>;
+  results?: Array<{ id: number; name: string }>;
+};
+
+export type TmdbImageItem = {
+  aspect_ratio?: number | null;
+  height?: number | null;
+  iso_639_1?: string | null;
+  file_path?: string | null;
+  vote_average?: number | null;
+  vote_count?: number | null;
+  width?: number | null;
+};
+
+export type TmdbImagesResponse = {
+  backdrops?: TmdbImageItem[];
+  posters?: TmdbImageItem[];
+  logos?: TmdbImageItem[];
 };
 
 export type NormalizedTmdbMovie = {
@@ -71,7 +93,13 @@ async function tmdbFetch<T>(path: string, revalidate = 3600): Promise<T> {
   if (!key) throw new Error("TMDB_API_KEY не указан в переменных окружения.");
   const separator = path.includes("?") ? "&" : "?";
   const response = await fetch(`${TMDB_BASE_URL}${path}${separator}api_key=${key}`, { next: { revalidate } });
-  if (!response.ok) throw new Error(`TMDB API вернул ошибку ${response.status}.`);
+  if (!response.ok) {
+    const retryAfter = response.headers.get("retry-after");
+    const error = new Error(`TMDB API вернул ошибку ${response.status}.`);
+    (error as Error & { status?: number; retryAfter?: string | null }).status = response.status;
+    (error as Error & { status?: number; retryAfter?: string | null }).retryAfter = retryAfter;
+    throw error;
+  }
   return response.json() as Promise<T>;
 }
 
@@ -79,8 +107,63 @@ async function list(path: string) {
   return (await tmdbFetch<{ results: TmdbSummary[] }>(path)).results ?? [];
 }
 
+function tmdbEndpoint(type: ContentType) {
+  return type === ContentType.SERIES ? "tv" : "movie";
+}
+
+async function safeTmdbList(path: string) {
+  if (!getTmdbKey()) return [];
+  try {
+    return await list(path);
+  } catch (error) {
+    console.warn("[TMDB] Optional similarity request failed", error);
+    return [];
+  }
+}
+
 export function tmdbImage(path?: string | null, size = "w500") {
   return path ? `${IMAGE_BASE_URL}/${size}${path}` : undefined;
+}
+
+export function tmdbOriginalImage(path?: string | null) {
+  return tmdbImage(path, "original");
+}
+
+export async function getTmdbImages(tmdbId: string, type: ContentType) {
+  const endpoint = tmdbEndpoint(type);
+  return tmdbFetch<TmdbImagesResponse>(`/${endpoint}/${tmdbId}/images?include_image_language=ru,en,null`, 86400);
+}
+
+export async function getTmdbRecommendations(tmdbId: string, type: ContentType) {
+  const endpoint = tmdbEndpoint(type);
+  return safeTmdbList(`/${endpoint}/${tmdbId}/recommendations?language=ru-RU`);
+}
+
+export async function getTmdbSimilar(tmdbId: string, type: ContentType) {
+  const endpoint = tmdbEndpoint(type);
+  return safeTmdbList(`/${endpoint}/${tmdbId}/similar?language=ru-RU`);
+}
+
+export async function getTmdbKeywords(tmdbId: string, type: ContentType) {
+  if (!getTmdbKey()) return [];
+  const endpoint = tmdbEndpoint(type);
+  try {
+    const data = await tmdbFetch<TmdbKeywordResponse>(`/${endpoint}/${tmdbId}/keywords`, 86400);
+    return data.keywords ?? data.results ?? [];
+  } catch (error) {
+    console.warn("[TMDB] Optional keyword request failed", error);
+    return [];
+  }
+}
+
+export async function getTmdbCollectionMembers(collectionId: string | number) {
+  if (!getTmdbKey()) return [];
+  try {
+    return await getTmdbCollection(Number(collectionId));
+  } catch (error) {
+    console.warn("[TMDB] Optional collection request failed", error);
+    return [];
+  }
 }
 
 export async function getTrendingMovies(period: "day" | "week" = "week") {
@@ -94,7 +177,7 @@ export async function getTrendingSeries(period: "day" | "week" = "week") {
 export const getTrendingTv = getTrendingSeries;
 
 export async function discoverTmdb(type: ContentType, params: Record<string, string | number | boolean>) {
-  const endpoint = type === ContentType.SERIES ? "tv" : "movie";
+  const endpoint = tmdbEndpoint(type);
   const query = new URLSearchParams({ language: "ru-RU", include_adult: "false" });
   for (const [key, value] of Object.entries(params)) query.set(key, String(value));
   return list(`/discover/${endpoint}?${query}`);
@@ -125,7 +208,7 @@ export async function discoverByPerson(personId: string | number, type: "movie" 
 }
 
 export async function searchTmdb(query: string, type: ContentType) {
-  const endpoint = type === ContentType.SERIES ? "tv" : "movie";
+  const endpoint = tmdbEndpoint(type);
   const data = await list(`/search/${endpoint}?language=ru-RU&include_adult=false&query=${encodeURIComponent(query)}`);
   return data.slice(0, 10).map((item) => ({
     tmdbId: String(item.id),
@@ -160,8 +243,8 @@ export async function searchTvByTitle(title: string, year?: number) {
 }
 
 export async function getTmdbDetails(tmdbId: string, type: ContentType): Promise<NormalizedTmdbMovie> {
-  const endpoint = type === ContentType.SERIES ? "tv" : "movie";
-  const details = await tmdbFetch<TmdbDetails>(`/${endpoint}/${tmdbId}?language=ru-RU&append_to_response=credits,videos,external_ids,images`);
+  const endpoint = tmdbEndpoint(type);
+  const details = await tmdbFetch<TmdbDetails>(`/${endpoint}/${tmdbId}?language=ru-RU&append_to_response=credits,videos,external_ids,images&include_image_language=ru,en,null`);
   const titleRu = details.title ?? details.name ?? "Без названия";
   const titleOriginal = details.original_title ?? details.original_name ?? titleRu;
   const year = Number((details.release_date ?? details.first_air_date ?? "").slice(0, 4)) || new Date().getFullYear();

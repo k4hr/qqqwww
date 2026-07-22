@@ -29,6 +29,7 @@ import {
   refreshVibixReferencesAction,
   refreshVibixTotalsAction,
   startDailyCatalogPipelineAction,
+  syncMovieArtworkBatchAction,
   startVibixCatalogMagicAction,
   startVibixCoverageRepairAction,
 } from "./actions";
@@ -441,6 +442,16 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
           </div>
         </div>
         {!trendData.tmdbConfigured ? <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-900">TMDB_API_KEY не указан. Это нормально: базовая витрина работает в Vibix-first режиме.</div> : null}
+        <form action={syncMovieArtworkBatchAction} className="mt-4 rounded-2xl border border-[#ddd] bg-white p-4">
+          <h3 className="text-lg font-black text-[#222]">Movie Artwork: задники, постеры, логотипы</h3>
+          <p className="mt-1 text-sm text-neutral-600">Идемпотентно докачивает TMDB images для приоритетных фильмов: hero, home, trending, просмотры. Не запускается на публичных страницах.</p>
+          {!trendData.tmdbConfigured ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">TMDB_API_KEY не указан. Кнопка вернёт disabled state, сайт продолжит использовать сохранённые backdropUrl.</div> : null}
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <Input label="Фильмов за запуск" name="limit" defaultValue="25" min="1" max="100" />
+            <Input label="Concurrency" name="concurrency" defaultValue="2" min="1" max="4" />
+            <button className="h-12 self-end rounded-xl bg-[#e50914] px-5 font-bold text-white">Докачать artwork</button>
+          </div>
+        </form>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <Stat label="Всего Movie" value={trendData.totalMovies} />
           <Stat label="Public visible" value={trendData.publicVisibleCount} good={trendData.publicVisibleCount > 0} />

@@ -9,6 +9,7 @@ import { checkTrendCandidatesInVibix, recalculateAllHomeScores, runTrendSync } f
 import { classifyCatalogKind } from "@/lib/catalog-kind";
 import { forceMoviesToAnimeByIds } from "@/lib/admin-anime-tools";
 import { prisma } from "@/lib/prisma";
+import { syncMovieArtworkBatch } from "@/lib/movie-artwork";
 import {
   buildVibixCatalogIndexBatch,
   buildVibixPlayableLinksIndexBatch,
@@ -110,6 +111,20 @@ export async function activateTrendsCatalogAction() {
   const catalog = await recalculateAllCatalogScores();
   const home = await recalculateAllHomeScores();
   redirectWithResult({ ok: catalog.errors + home.errors === 0, message: `Витрина обновлена: каталог ${catalog.processed}, home ${home.processed}, hero ${home.heroEligible}, homeEligible ${home.homeEligible}.`, details: { catalog, home } });
+}
+
+export async function syncMovieArtworkBatchAction(formData: FormData) {
+  const limit = numberField(formData, "limit", 25, 1, 100);
+  const concurrency = numberField(formData, "concurrency", 2, 1, 4);
+  const result = await syncMovieArtworkBatch({ limit, concurrency });
+  revalidatePath("/admin/catalog");
+  redirectWithResult({
+    ok: result.ok,
+    message: result.disabled
+      ? "TMDB_API_KEY не указан. Artwork enrichment отключён, публичный сайт продолжает использовать существующие backdrop."
+      : `Artwork sync: обработано ${result.processed}, импортировано ${result.imported}, обновлено ${result.updated}, ошибок ${result.failed}.`,
+    details: result,
+  });
 }
 
 export async function moveMoviesToAnimeAction() {

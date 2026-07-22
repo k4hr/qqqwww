@@ -1,7 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const ALLOWED_TYPES = new Set(["page_view", "card_click", "watch_click", "player_view", "similar_click", "search"]);
+const ALLOWED_TYPES = new Set([
+  "page_view",
+  "card_click",
+  "watch_click",
+  "player_view",
+  "similar_click",
+  "search",
+  "discovery_submit",
+  "discovery_result_click",
+  "match_like",
+  "match_dislike",
+  "match_watch",
+  "match_favorite",
+  "match_reset",
+  "search_overlay_open",
+  "search_suggestion_click",
+]);
 
 function shortText(value: unknown, max: number) {
   return typeof value === "string" ? value.trim().slice(0, max) || null : null;

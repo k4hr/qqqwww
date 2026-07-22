@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { VibixUnion } from "@/components/vibix-union";
-import { MobileZoomLock } from "@/components/mobile-zoom-lock";
 import { TelegramWebAppBridge } from "@/components/telegram-webapp-bridge";
 import { YandexMetrika } from "@/components/yandex-metrika";
 import { AnalyticsClickBridge } from "@/components/analytics-click-bridge";
+import { NavigationProgressClient } from "@/components/navigation-progress-client";
 import { getVibixAdSettings, getVibixAddTypesAttribute } from "@/lib/vibix-ads";
 import { siteUrl } from "@/lib/seo-links";
 
@@ -14,8 +15,6 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export const metadata: Metadata = {
@@ -43,10 +42,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ru">
       <body className="site-shell">
-        <MobileZoomLock />
         <TelegramWebAppBridge />
         <YandexMetrika />
         <AnalyticsClickBridge />
+        <Suspense fallback={null}>
+          <NavigationProgressClient />
+        </Suspense>
         <Header />
         <main className="cinematic-page">{children}</main>
         <Footer />

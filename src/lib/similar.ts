@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { buildSimilarityProfile, type MovieWithSimilarityRelations } from "@/lib/similarity/similarity-profile";
-import { calculateSimilarityScore } from "@/lib/similarity/similarity-score";
+import { calculateSimilarityScore, isStrictSimilarityMatch } from "@/lib/similarity/similarity-score";
 
 export type SimilarMovieResult = MovieWithSimilarityRelations & {
   similarityScore: number;
@@ -42,9 +42,11 @@ function hasCountryOverlap(source: MovieWithSimilarityRelations, candidate: Movi
   return intersectCount(a, b) > 0;
 }
 
-function hasStrictSimilarityRelation(source: MovieWithSimilarityRelations, candidate: MovieWithSimilarityRelations) {
+export function hasStrictSimilarityRelation(source: MovieWithSimilarityRelations, candidate: MovieWithSimilarityRelations) {
   const sourceProfile = buildSimilarityProfile(source);
   const candidateProfile = buildSimilarityProfile(candidate);
+  const result = calculateSimilarityScore(source, candidate, sourceProfile, candidateProfile);
+  if (isStrictSimilarityMatch(result)) return true;
 
   const sameFranchises = intersectCount(sourceProfile.franchiseIds, candidateProfile.franchiseIds);
   if (sameFranchises > 0) return true;
@@ -132,17 +134,14 @@ export function buildSimilarityCandidateWhere(source: MovieWithSimilarityRelatio
   const hintKeywords = profile.hintKeywords.slice(0, 18);
   const genreIds = source.genres.map((item) => item.genreId);
   const country = source.country?.split(",")[0]?.trim();
-  const or: Prisma.MovieWhereInput[] = [
-    { type: source.type },
-    { year: { gte: source.year - 10, lte: source.year + 10 } },
-  ];
+  const or: Prisma.MovieWhereInput[] = [];
 
   if (genreIds.length) {
-    or.push({ genres: { some: { genreId: { in: genreIds } } } });
+    or.push({ AND: [{ type: source.type }, { genres: { some: { genreId: { in: genreIds } } } }, { year: { gte: source.year - 18, lte: source.year + 18 } }] });
   }
 
   if (country) {
-    or.push({ country: { contains: country, mode: "insensitive" } });
+    or.push({ AND: [{ type: source.type }, { country: { contains: country, mode: "insensitive" } }, { year: { gte: source.year - 12, lte: source.year + 12 } }] });
   }
 
   for (const keyword of hintKeywords) {
@@ -152,7 +151,7 @@ export function buildSimilarityCandidateWhere(source: MovieWithSimilarityRelatio
     or.push({ description: { contains: keyword, mode: "insensitive" } });
   }
 
-  return { id: { not: source.id }, OR: or };
+  return { id: { not: source.id }, ...(or.length ? { OR: or } : { type: source.type, year: { gte: source.year - 5, lte: source.year + 5 } }) };
 }
 
 export function buildAudienceCandidateWhere(source: MovieWithSimilarityRelations): Prisma.MovieWhereInput {

@@ -282,7 +282,7 @@ export function VibixPlayer({ title, kinopoiskId, imdbId, vibixId, vibixType, em
   }
 
   return (
-    <div className="vibix-player-shell poster-fallback relative flex flex-col items-center justify-center" style={posterUrl ? { backgroundImage: `linear-gradient(rgba(0,0,0,.78), rgba(0,0,0,.9)), url(${posterUrl})`, backgroundPosition: "center", backgroundSize: "cover" } : undefined}>
+    <div className="vibix-player-shell poster-fallback relative flex flex-col items-center justify-center" style={{ backgroundImage: "linear-gradient(rgba(0,0,0,.78), rgba(0,0,0,.9)), url(/redfilm-hero.webp)", backgroundPosition: "center", backgroundSize: "cover" }}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(229,9,20,.24),transparent_45%)]" />
       <div className="relative z-10 flex h-[72px] w-[72px] items-center justify-center rounded-full border border-white/10 bg-[#e50914] shadow-[0_0_52px_rgba(229,9,20,.42)]">
         <Play fill="white" color="white" size={28} />

@@ -81,7 +81,7 @@ export function MovieHeroSlider({ movies }: { movies: HeroMovie[] }) {
   }
 
   const movie = movies[activeIndex];
-  const backgroundUrl = movie.backdropUrl || movie.posterUrl || "/redfilm-hero.webp";
+  const backgroundUrl = movie.backdropUrl || "/redfilm-hero.webp";
 
   return (
     <section

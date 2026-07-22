@@ -1,4 +1,19 @@
-export type AnalyticsEventType = "page_view" | "card_click" | "watch_click" | "player_view" | "similar_click" | "search";
+export type AnalyticsEventType =
+  | "page_view"
+  | "card_click"
+  | "watch_click"
+  | "player_view"
+  | "similar_click"
+  | "search"
+  | "discovery_submit"
+  | "discovery_result_click"
+  | "match_like"
+  | "match_dislike"
+  | "match_watch"
+  | "match_favorite"
+  | "match_reset"
+  | "search_overlay_open"
+  | "search_suggestion_click";
 
 type EventPayload = { movieId?: string; path?: string; query?: string; referrer?: string; results?: number };
 

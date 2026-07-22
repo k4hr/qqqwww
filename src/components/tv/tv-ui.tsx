@@ -29,7 +29,7 @@ export function TvTopBar() {
 }
 
 export function TvHero({ movie }: { movie: TvMovie }) {
-  const backdrop = movie.backdropUrl || movie.posterUrl;
+  const backdrop = movie.backdropUrl || "/redfilm-hero.webp";
   const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
   return (
     <section className="relative min-h-[520px] overflow-hidden px-10 py-14">
