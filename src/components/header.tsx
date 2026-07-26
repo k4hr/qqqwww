@@ -7,17 +7,14 @@ const primaryLinks = [
   { href: "/latest", label: "Последнее" },
   { href: "/top-100", label: "ТОП" },
   { href: "/collections", label: "Подборки" },
-  { href: "/match", label: "REDFILM Match" },
+  { href: "/match", label: "Match" },
 ];
 
 function HeaderLogo() {
   return (
-    <Link href="/" className="brand min-w-0" aria-label="REDFILM">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#e50914]/45 bg-[#e50914]/15 shadow-[0_0_28px_rgba(229,9,20,.24)]">
-        <span className="text-lg font-black text-[#e50914]">R</span>
-      </span>
-      <span className="brand-text text-[clamp(19px,4vw,24px)]">
-        <span className="text-[#e50914]">RED</span>FILM
+    <Link href="/" className="brand min-h-11 min-w-0" aria-label="REDFILM">
+      <span className="brand-text text-[19px]">
+        <span className="text-[#f02b42]">RED</span>FILM
       </span>
     </Link>
   );
@@ -25,7 +22,7 @@ function HeaderLogo() {
 
 function DesktopNavigation() {
   return (
-    <nav className="hidden min-w-0 items-center gap-1 min-[980px]:flex" aria-label="Основная навигация">
+    <nav className="hidden min-w-0 items-center gap-0.5 min-[1180px]:flex" aria-label="Основная навигация">
       <HeaderCatalogMenuClient label="Фильмы" base="/films" kind="movies" />
       <HeaderCatalogMenuClient label="Сериалы" base="/series" kind="series" />
       <HeaderCatalogMenuClient label="Мультфильмы" base="/cartoons" kind="cartoons" />
@@ -34,7 +31,7 @@ function DesktopNavigation() {
         <Link
           key={item.href}
           href={item.href}
-          className="rounded-full px-3 py-2 text-[13px] font-bold text-[#d4d4d8] transition hover:bg-white/[.07] hover:text-white"
+          className="flex min-h-11 items-center whitespace-nowrap rounded-lg px-2.5 text-[13px] font-medium text-[#aeb0b7] transition hover:bg-white/[.045] hover:text-white"
         >
           {item.label}
         </Link>
@@ -45,8 +42,8 @@ function DesktopNavigation() {
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b border-[#e50914]/25 bg-[rgba(5,5,8,.84)] shadow-[0_18px_60px_rgba(0,0,0,.28)] backdrop-blur-[18px]">
-      <div className="container relative flex min-h-[72px] items-center gap-3 py-2.5 lg:gap-4">
+    <header className="sticky top-0 z-50 border-b border-white/[.055] bg-[rgba(7,7,8,.78)] backdrop-blur-[20px]">
+      <div className="container relative flex min-h-[64px] items-center gap-3 py-1 lg:gap-4">
         <HeaderLogo />
         <DesktopNavigation />
         <div className="ml-auto flex min-w-0 items-center gap-2">

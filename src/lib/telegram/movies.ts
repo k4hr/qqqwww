@@ -1,14 +1,20 @@
-import type { Prisma, TelegramUser } from "@prisma/client";
+import { MovieArtworkType, type Prisma, type TelegramUser } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { normalizeSearchQuery, searchMovies, type SearchMovie } from "@/lib/search";
 import { watchPath } from "@/lib/seo-links";
+import { redfilmBackdropFallback, selectPublicBackdrop } from "@/lib/movie-artwork";
 
-export const tgMovieInclude = { genres: { include: { genre: true } } } as const;
+export const tgMovieInclude = {
+  genres: { include: { genre: true } },
+  artworks: { where: { type: MovieArtworkType.BACKDROP }, orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }], take: 8 },
+} satisfies Prisma.MovieInclude;
 
 export type TgMovie = Prisma.MovieGetPayload<{ include: typeof tgMovieInclude }>;
 
-export function compactTgMovie(movie: Pick<TgMovie, "id" | "slug" | "titleRu" | "titleOriginal" | "year" | "type" | "posterUrl" | "backdropUrl" | "quality" | "kpRating" | "imdbRating" | "description" | "genres">) {
+type CompactTgMovie = Pick<TgMovie, "id" | "slug" | "titleRu" | "titleOriginal" | "year" | "type" | "posterUrl" | "backdropUrl" | "quality" | "kpRating" | "imdbRating" | "description" | "genres"> & { artworks?: TgMovie["artworks"] };
+
+export function compactTgMovie(movie: CompactTgMovie) {
   return {
     id: movie.id,
     slug: movie.slug,
@@ -17,7 +23,7 @@ export function compactTgMovie(movie: Pick<TgMovie, "id" | "slug" | "titleRu" | 
     year: movie.year,
     type: movie.type,
     posterUrl: movie.posterUrl,
-    backdropUrl: movie.backdropUrl,
+    backdropUrl: selectPublicBackdrop(movie.artworks ?? [])?.url ?? redfilmBackdropFallback(),
     quality: movie.quality,
     kpRating: movie.kpRating,
     imdbRating: movie.imdbRating,

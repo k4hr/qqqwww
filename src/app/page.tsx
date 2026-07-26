@@ -1,8 +1,9 @@
 import { ContentType, type Movie, type Prisma } from "@prisma/client";
-import Image from "next/image";
 import Link from "next/link";
 import { ClientLibrary } from "@/components/client-library";
 import { TodayPicker } from "@/components/discovery/today-picker";
+import { HomeMatchPromo } from "@/components/home-match-promo";
+import { HomeBand } from "@/components/home-band";
 import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
 import { VibixBanner } from "@/components/vibix-banner";
@@ -11,6 +12,7 @@ import { isAdultLikeTitle } from "@/lib/catalog-safety";
 import { prisma } from "@/lib/prisma";
 import { getDiscoveryRecommendations } from "@/lib/discovery/recommendations";
 import { getHomeSelectionForHero } from "@/lib/home-selection";
+import { getPublicBackdropMap } from "@/lib/movie-artwork";
 
 
 export const revalidate = 120;
@@ -21,64 +23,25 @@ export const metadata = {
   alternates: { canonical: "/" },
 };
 
-const HOME_SECTION_LIMIT = 6;
+const HOME_SECTION_LIMIT = 7;
 const HOMEPAGE_CANDIDATE_LIMIT = 120;
 
-async function getPublishedCreatorHubs() {
-  const counts = await prisma.creatorCollection.groupBy({
-    where: { status: "PUBLISHED" },
-    by: ["partnerId"],
-    _count: { _all: true },
-  }).catch(() => []);
-  const sortedCounts = [...counts].sort((a, b) => b._count._all - a._count._all);
-  const partnerIds = sortedCounts.filter((item) => item._count._all > 0).slice(0, 12).map((item) => item.partnerId);
-  if (!partnerIds.length) return [];
-
-  const [hubs, partners] = await Promise.all([
-    prisma.creatorHub.findMany({
-      where: { isPublished: true, partnerId: { in: partnerIds } },
-      orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
-      take: 6,
-    }),
-    prisma.partner.findMany({
-      where: { id: { in: partnerIds }, status: "ACTIVE" },
-      select: { id: true, name: true, publicName: true, avatarUrl: true, description: true },
-    }),
-  ]);
-
-  const partnerById = new Map(partners.map((partner) => [partner.id, partner]));
-  const countByPartner = new Map(sortedCounts.map((item) => [item.partnerId, item._count._all]));
-  return hubs
-    .map((hub) => ({ hub, partner: partnerById.get(hub.partnerId), count: countByPartner.get(hub.partnerId) ?? 0 }))
-    .filter((item) => item.partner);
-}
-
-function CreatorHubsSection({ hubs }: { hubs: Awaited<ReturnType<typeof getPublishedCreatorHubs>> }) {
-  if (!hubs.length) return null;
+function HomeTaxonomy() {
+  const links = [
+    ["/genre/boeviki", "Боевики"],
+    ["/genre/trillery", "Триллеры"],
+    ["/genre/fantastika", "Фантастика"],
+    ["/genre/komedii", "Комедии"],
+    ["/genre/dramy", "Драмы"],
+    ["/collections/filmy-smotret-online", "Все коллекции"],
+  ];
   return (
-    <section className="mf-panel mt-8 overflow-hidden p-4 sm:p-5 lg:p-6">
-      <div className="relative mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="text-xs font-black uppercase tracking-[.16em] text-[#e50914]">Авторские подборки</div>
-          <h2 className="mt-2 text-[clamp(1.45rem,4vw,2.2rem)] font-black tracking-[-.04em] text-white">Кино от авторов REDFILM</h2>
-        </div>
-        <Link href="/collections?view=bloggers" className="mf-btn">Все авторы</Link>
+    <section className="rf-section border-t border-white/[.07] pt-8">
+      <div className="rf-section-header">
+        <h2 className="rf-section-title">Выбрать по настроению</h2>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {hubs.map(({ hub, partner, count }) => partner ? (
-          <Link key={hub.id} href={`/collections/${hub.slug}`} className="collections-author-card overflow-hidden rounded-[24px] border border-white/10 transition hover:-translate-y-1 hover:border-[#e50914]/55">
-            <div className="collections-author-card-cover relative h-40">
-              {hub.coverUrl ? <Image src={hub.coverUrl} alt="" fill unoptimized sizes="(max-width: 767px) 100vw, 33vw" className="collections-author-card-image" /> : null}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-              {partner.avatarUrl ? <Image src={partner.avatarUrl} alt={partner.publicName || partner.name} width={62} height={62} unoptimized className="absolute bottom-4 left-4 rounded-full border-2 border-white object-cover" /> : null}
-            </div>
-            <div className="collections-author-card-body p-5">
-              <h3 className="text-xl font-black text-white">{hub.title}</h3>
-              <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#a1a1aa]">{hub.description || partner.description || "Авторские подборки фильмов и сериалов."}</p>
-              <div className="mt-4 text-sm font-black text-[#ff4d55]">Подборок: {count}</div>
-            </div>
-          </Link>
-        ) : null)}
+      <div className="flex flex-wrap gap-2">
+        {links.map(([href, label]) => <Link key={href} href={href} className="rf-filter">{label}</Link>)}
       </div>
     </section>
   );
@@ -141,6 +104,27 @@ function bestMovieRankScore(movie: Movie) {
     + movie.actorPowerScore * 0.5
     + (isValidCinematicImage(movie.backdropUrl) ? 4 : 0)
     + (movie.year <= new Date().getFullYear() - 3 ? 4 : 0);
+}
+
+function normalizeArtworkUrl(url?: string | null) {
+  const raw = url?.trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    parsed.hash = "";
+    parsed.search = "";
+    return decodeURIComponent(parsed.toString()).toLocaleLowerCase("en-US");
+  } catch {
+    return raw.split(/[?#]/, 1)[0].toLocaleLowerCase("en-US");
+  }
+}
+
+function movieBackdropFallback(movie: Pick<Movie, "backdropUrl" | "posterUrl">) {
+  if (!isValidCinematicImage(movie.backdropUrl)) return null;
+  const backdrop = normalizeArtworkUrl(movie.backdropUrl);
+  const poster = normalizeArtworkUrl(movie.posterUrl);
+  if (!backdrop || (poster && backdrop === poster)) return null;
+  return movie.backdropUrl;
 }
 
 function isRussianTitle(movie: Pick<Movie, "titleRu">) {
@@ -358,10 +342,9 @@ async function getHomeMovies(currentYear: number) {
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
-  const [homeMovies, manualSelection, creatorHubs, todayMovies] = await Promise.all([
+  const [homeMovies, manualSelection, todayMovies] = await Promise.all([
     getHomeMovies(currentYear),
     getHomeSelectionForHero(),
-    getPublishedCreatorHubs(),
     getDiscoveryRecommendations({ filters: { mood: "evening" }, limit: 10 }),
   ]);
   const {
@@ -380,15 +363,23 @@ export default async function HomePage() {
 
   const legacySafe = legacyCandidates.filter(isLegacyHomeSafe).sort((a, b) => legacyScore(b) - legacyScore(a));
   const strongLegacy = legacySafe.filter(isStrongKnownTitle);
+  const backdropCandidates = uniqueById([...heroMovies, ...heroFallback, ...legacySafe, ...manualSelection.movies]);
+  const featuredBackdrops = await getPublicBackdropMap(backdropCandidates.map((movie) => movie.id), { enrichMissing: true, maxEnrich: 5 });
+  const featuredBackdrop = (movie: Pick<Movie, "id" | "backdropUrl" | "posterUrl">) =>
+    featuredBackdrops.get(movie.id) ?? movieBackdropFallback(movie);
+  const hasValidatedBackdrop = (movie: Pick<Movie, "id" | "backdropUrl" | "posterUrl">) => Boolean(featuredBackdrop(movie));
 
-  const legacyHero = legacySafe.filter((movie) => isValidCinematicImage(movie.backdropUrl));
+  const legacyHero = legacySafe.filter(hasValidatedBackdrop);
   const autoFeatured = fillMovies(
-    heroMovies,
-    [...heroFallback.filter((movie) => isRussianTitle(movie) && isValidCinematicImage(movie.posterUrl) && isValidCinematicImage(movie.backdropUrl) && hasPlayableSource(movie)), ...legacyHero],
+    heroMovies.filter(hasValidatedBackdrop),
+    [
+      ...heroFallback.filter((movie) => isRussianTitle(movie) && isValidCinematicImage(movie.posterUrl) && hasValidatedBackdrop(movie) && hasPlayableSource(movie)),
+      ...legacyHero,
+    ],
     manualSelection.settings.limit,
   );
 
-  const manualFeatured = manualSelection.movies.filter((movie) => isValidCinematicImage(movie.posterUrl) || isValidCinematicImage(movie.backdropUrl));
+  const manualFeatured = manualSelection.movies.filter((movie) => hasValidatedBackdrop(movie));
   const featured = manualSelection.settings.isEnabled && manualSelection.settings.mode === "MANUAL"
     ? (manualFeatured.length ? manualFeatured.slice(0, manualSelection.settings.limit) : autoFeatured)
     : manualSelection.settings.isEnabled && manualSelection.settings.mode === "MIXED"
@@ -438,6 +429,37 @@ export default async function HomePage() {
     withoutIds(strongLegacy.filter((movie) => movie.year <= currentYear - 5), bestMovieIds),
   );
 
+  const homeSectionMovies = uniqueById([
+    ...trending,
+    ...newest,
+    ...popularSeries,
+    ...bestMovies,
+    ...popularAnime,
+    ...popularCartoons,
+    ...classics,
+    ...todayMovies,
+  ]);
+  const backgroundPriority = uniqueById([
+    ...trending.slice(0, 2),
+    ...newest.slice(0, 2),
+    ...todayMovies.slice(0, 2),
+    ...popularSeries.slice(0, 2),
+    ...bestMovies.slice(0, 2),
+    ...popularAnime.slice(0, 2),
+    ...popularCartoons.slice(0, 2),
+    ...classics.slice(0, 2),
+    ...homeSectionMovies,
+  ]);
+  const homeSectionBackdrops = await getPublicBackdropMap(backgroundPriority.map((movie) => movie.id), { enrichMissing: true, maxEnrich: 12 });
+  const sectionBackdrop = (movies: Array<Pick<Movie, "id" | "backdropUrl" | "posterUrl">>) => {
+    for (const movie of movies) {
+      const artwork = homeSectionBackdrops.get(movie.id) ?? movieBackdropFallback(movie);
+      if (artwork) return artwork;
+    }
+    return null;
+  };
+  const todayBackdrop = sectionBackdrop(todayMovies);
+
   const featuredForClient = featured.slice(0, 5).map((movie) => ({
     id: movie.id,
     slug: movie.slug,
@@ -446,23 +468,57 @@ export default async function HomePage() {
     year: movie.year,
     quality: movie.quality,
     posterUrl: movie.posterUrl,
-    backdropUrl: movie.backdropUrl,
+    backdropUrl: featuredBackdrop(movie),
     kpRating: movie.kpRating,
     imdbRating: movie.imdbRating,
   }));
 
-  return <div className="container py-4 sm:py-7">
-    <MovieHeroSlider movies={featuredForClient} />
-    <TodayPicker initialMood="evening" initialMovies={todayMovies} />
-    <CreatorHubsSection hubs={creatorHubs} />
-    <SectionGrid title="В тренде" href="/trending" movies={trending} showSorts={false} mobileCarousel />
-    <SectionGrid title="Лучшие фильмы" href="/films/top-100" movies={bestMovies} showSorts={false} mobileCarousel />
-    <ClientLibrary mode="recent-home" />
-    <SectionGrid title="Популярные сериалы" href="/series/popular" movies={popularSeries} showSorts={false} mobileCarousel />
-    <SectionGrid title="Новинки" href="/latest" movies={newest} showSorts={false} mobileCarousel />
-    <SectionGrid title="Популярные мультфильмы" href="/cartoons/popular" movies={popularCartoons} showSorts={false} mobileCarousel />
-    <SectionGrid title="Популярное аниме" href="/anime/popular" movies={popularAnime} showSorts={false} mobileCarousel />
-    <div className="home-catalog-ad"><VibixBanner slot="home_after_popular" size="728x90" /></div>
-    <SectionGrid title="Классика и хиты" href="/top" movies={classics} showSorts={false} mobileCarousel />
+  return <div className="pb-8">
+    <div className="container pt-4 sm:pt-6">
+      <MovieHeroSlider movies={featuredForClient} />
+    </div>
+
+    <HomeBand artworkUrl={sectionBackdrop(trending)} artworkAlt="" tone="red">
+      <SectionGrid title="Сейчас популярно" href="/trending" movies={trending} showSorts={false} mobileCarousel />
+    </HomeBand>
+    <HomeBand artworkUrl={sectionBackdrop(newest)} artworkAlt="" tone="neutral">
+      <SectionGrid title="Новинки" href="/latest" movies={newest} showSorts={false} mobileCarousel />
+    </HomeBand>
+    <HomeBand artworkUrl={todayBackdrop} artworkAlt="" tone="amber">
+      <TodayPicker initialMood="evening" initialMovies={todayMovies} />
+    </HomeBand>
+    <HomeBand artworkUrl={sectionBackdrop(popularSeries)} artworkAlt="" tone="blue">
+      <SectionGrid title="Популярные сериалы" href="/series/popular" movies={popularSeries} showSorts={false} mobileCarousel />
+    </HomeBand>
+    <HomeBand artworkUrl={sectionBackdrop(bestMovies)} artworkAlt="" tone="red" compact>
+      <HomeMatchPromo movies={uniqueById([...bestMovies, ...trending]).slice(0, 4)} />
+    </HomeBand>
+    <HomeBand artworkUrl={sectionBackdrop(bestMovies)} artworkAlt="" tone="neutral">
+      <SectionGrid title="Лучшие фильмы" href="/films/top-100" movies={bestMovies} showSorts={false} mobileCarousel />
+    </HomeBand>
+    <HomeBand artworkUrl={sectionBackdrop(popularAnime)} artworkAlt="" tone="violet">
+      <SectionGrid title="Аниме" href="/anime/popular" movies={popularAnime} showSorts={false} mobileCarousel />
+    </HomeBand>
+    <HomeBand artworkUrl={sectionBackdrop(popularCartoons)} artworkAlt="" tone="blue">
+      <SectionGrid title="Мультфильмы" href="/cartoons/popular" movies={popularCartoons} showSorts={false} mobileCarousel />
+    </HomeBand>
+    <HomeBand tone="red" compact>
+      <HomeTaxonomy />
+    </HomeBand>
+
+    <div className="container">
+      <ClientLibrary mode="recent-home" />
+      <div className="home-catalog-ad"><VibixBanner slot="home_after_popular" size="728x90" /></div>
+    </div>
+
+    <HomeBand artworkUrl={sectionBackdrop(classics)} artworkAlt="" tone="amber">
+      <SectionGrid title="Классика и хиты" href="/top" movies={classics} showSorts={false} mobileCarousel />
+    </HomeBand>
+
+    <div className="container">
+      <section className="mt-14 max-w-3xl border-t border-white/[.07] pt-7 text-sm leading-7 text-[#74757d]">
+        REDFILM помогает выбрать фильм, сериал, мультфильм или аниме по настроению, рейтингу и году. В каталоге доступны описания, подборки и похожие истории.
+      </section>
+    </div>
   </div>;
 }

@@ -53,23 +53,30 @@ export default async function SearchPage({ searchParams }: Props) {
   return (
     <div className="container py-6">
       {query ? <AnalyticsEvent type="search" query={query} results={movies.length} /> : null}
-      <section className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
-        <h1 className="break-words text-[clamp(1.75rem,5vw,3.5rem)] font-black tracking-[-.035em] text-white">Поиск: {query || "введите запрос"}</h1>
-        <form className="mt-5 grid gap-2 md:grid-cols-[minmax(220px,1fr)_150px_130px_180px_auto]" action="/search">
+      <section className="rf-catalog-intro mb-7">
+        <h1 className="rf-page-title break-words">Поиск: {query || "введите запрос"}</h1>
+        <form className="mt-5" action="/search">
           <input type="hidden" name="country" value={selectedCountry} />
-          <input name="q" defaultValue={query} className="h-12 min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-[16px] text-white outline-none placeholder:text-[#666670] focus:border-[#e50914]" placeholder="Название, оригинальное название или ID" />
-          <select name="type" defaultValue={params.type ?? ""} className="h-12 min-w-0 rounded-2xl border border-white/10 bg-[#111118] px-3 text-[16px] text-white"><option value="">Все типы</option><option value={ContentType.MOVIE}>Фильмы</option><option value={ContentType.SERIES}>Сериалы</option><option value={ContentType.CARTOON}>Мультфильмы</option><option value={ContentType.ANIME}>Аниме</option></select>
-          <select name="year" defaultValue={params.year ?? ""} className="h-12 min-w-0 rounded-2xl border border-white/10 bg-[#111118] px-3 text-[16px] text-white"><option value="">Все годы</option>{Array.from({ length: 20 }, (_, index) => currentYear - index).map((year) => <option key={year} value={year}>{year}</option>)}</select>
-          <select name="genre" defaultValue={params.genre ?? ""} className="h-12 min-w-0 rounded-2xl border border-white/10 bg-[#111118] px-3 text-[16px] text-white"><option value="">Все жанры</option>{genres.map((genre) => <option key={genre.id} value={genre.slug}>{genre.name}</option>)}</select>
-          <button className="mf-btn mf-btn-primary max-md:w-full">Найти</button>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <input name="q" defaultValue={query} className="min-h-12 min-w-0 rounded-xl border border-white/[.08] bg-white/[.035] px-4 text-[16px] text-white outline-none placeholder:text-[#666670] focus:border-[#e31b32]/60" placeholder="Название, оригинальное название или ID" />
+            <button className="mf-btn mf-btn-primary min-w-[112px] max-sm:w-full">Найти</button>
+          </div>
+          <details className="rf-responsive-filters mt-3">
+            <summary className="mf-btn w-full cursor-pointer list-none md:hidden">Фильтры</summary>
+            <div className="mt-3 grid gap-2 border-t border-white/[.055] pt-4 md:mt-0 md:grid-cols-3 md:border-0 md:pt-0">
+              <select name="type" defaultValue={params.type ?? ""} className="mf-input min-h-12 min-w-0 w-full"><option value="">Все типы</option><option value={ContentType.MOVIE}>Фильмы</option><option value={ContentType.SERIES}>Сериалы</option><option value={ContentType.CARTOON}>Мультфильмы</option><option value={ContentType.ANIME}>Аниме</option></select>
+              <select name="year" defaultValue={params.year ?? ""} className="mf-input min-h-12 min-w-0 w-full"><option value="">Все годы</option>{Array.from({ length: 20 }, (_, index) => currentYear - index).map((year) => <option key={year} value={year}>{year}</option>)}</select>
+              <select name="genre" defaultValue={params.genre ?? ""} className="mf-input min-h-12 min-w-0 w-full"><option value="">Все жанры</option>{genres.map((genre) => <option key={genre.id} value={genre.slug}>{genre.name}</option>)}</select>
+            </div>
+          </details>
         </form>
         <CountryFilter country={selectedCountry} preserve={{ q: query || undefined, type: params.type, year: params.year, genre: params.genre }} />
       </section>
 
       {parsedQuery.season && movies[0]?.type === ContentType.SERIES ? (
-        <section className="glass-panel mb-6 rounded-[22px] border border-[#e50914]/25 p-4 text-white">
-          <div className="text-sm font-black uppercase tracking-[.14em] text-[#ff4d55]">Сезонный запрос</div>
-          <h2 className="mt-2 text-xl font-black">{movies[0].titleRu}: {parsedQuery.season.season} сезон{parsedQuery.season.episode ? `, ${parsedQuery.season.episode} серия` : ""}</h2>
+        <section className="mb-7 border-l-2 border-[#e31b32] py-2 pl-4 text-white">
+          <div className="rf-section-eyebrow">Сезонный запрос</div>
+          <h2 className="mt-2 text-xl font-semibold">{movies[0].titleRu}: {parsedQuery.season.season} сезон{parsedQuery.season.episode ? `, ${parsedQuery.season.episode} серия` : ""}</h2>
           <p className="mt-2 text-sm text-[#a1a1aa]">
             {(movies[0].vibixSeasonCount ?? 0) >= parsedQuery.season.season
               ? "Сезон подтверждён в каталоге, ссылка ведёт сразу на страницу сезона."
@@ -83,8 +90,8 @@ export default async function SearchPage({ searchParams }: Props) {
 
       {movies.length ? <div className="movie-grid">{movies.map((movie) => <MovieCard key={movie.id} movie={movie} />)}</div> : null}
       {query && !movies.length ? <>
-        <div className="glass-panel rounded-3xl p-7 text-center"><h2 className="text-xl font-black text-white">Ничего не найдено</h2><p className="mt-2 text-[#a1a1aa]">Проверьте написание, сократите запрос или попробуйте оригинальное название.</p></div>
-        {popularFallback.length ? <section className="mt-8"><h2 className="mb-5 text-2xl font-black text-white">Популярные фильмы</h2><div className="movie-grid">{popularFallback.map((movie) => <MovieCard key={movie.id} movie={movie} />)}</div></section> : null}
+        <div className="border-y border-white/[.055] py-10 text-center"><h2 className="text-xl font-semibold text-white">Ничего не найдено</h2><p className="mt-2 text-[#a1a1aa]">Проверьте написание, сократите запрос или попробуйте оригинальное название.</p></div>
+        {popularFallback.length ? <section className="rf-section"><h2 className="rf-section-title mb-5">Популярные фильмы</h2><div className="movie-grid">{popularFallback.map((movie) => <MovieCard key={movie.id} movie={movie} />)}</div></section> : null}
       </> : null}
     </div>
   );

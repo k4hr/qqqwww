@@ -7,6 +7,7 @@ import { SimilarityRecalculateControls } from "../similarity/SimilarityRecalcula
 import { TrendControls } from "../trends/trend-controls";
 import { getVibixCatalogDashboardData } from "@/lib/vibix-catalog/catalog-audit";
 import { getLatestVibixCatalogMagicJob } from "@/lib/vibix-catalog/catalog-magic-sync";
+import { getArtworkSyncState, getPublicBackdropDiagnostics } from "@/lib/movie-artwork";
 import { VIBIX_CATEGORY_IDS } from "@/lib/vibix-catalog/vibix-taxonomy-ids";
 import {
   buildVibixIndexAction,
@@ -29,7 +30,10 @@ import {
   refreshVibixReferencesAction,
   refreshVibixTotalsAction,
   startDailyCatalogPipelineAction,
-  syncMovieArtworkBatchAction,
+  continueMovieArtworkSyncAction,
+  pauseMovieArtworkSyncAction,
+  resetMovieArtworkSyncAction,
+  startMovieArtworkSyncAction,
   startVibixCatalogMagicAction,
   startVibixCoverageRepairAction,
 } from "./actions";
@@ -148,7 +152,7 @@ async function getTrendDashboardData() {
 export default async function AdminCatalogPage({ searchParams }: Props) {
   const params = await searchParams;
   const actionResult = parseResult(params.result);
-  const [data, magicJob, similaritySnapshot, trendData] = await Promise.all([getVibixCatalogDashboardData(), getLatestVibixCatalogMagicJob(), getSimilarityJobSnapshot(), getTrendDashboardData()]);
+  const [data, magicJob, similaritySnapshot, trendData, artworkState, backdropDiagnostics] = await Promise.all([getVibixCatalogDashboardData(), getLatestVibixCatalogMagicJob(), getSimilarityJobSnapshot(), getTrendDashboardData(), getArtworkSyncState(), getPublicBackdropDiagnostics()]);
   const similarityQ = params.similarityQ?.trim() || "Мстители: Война бесконечности";
   const movieTotal = data.safeVibix.availableMovie || null;
   const serialTotal = data.safeVibix.availableSerial || null;
@@ -442,17 +446,40 @@ export default async function AdminCatalogPage({ searchParams }: Props) {
           </div>
         </div>
         {!trendData.tmdbConfigured ? <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-900">TMDB_API_KEY не указан. Это нормально: базовая витрина работает в Vibix-first режиме.</div> : null}
-        <form action={syncMovieArtworkBatchAction} className="mt-4 rounded-2xl border border-[#ddd] bg-white p-4">
-          <h3 className="text-lg font-black text-[#222]">Movie Artwork: задники, постеры, логотипы</h3>
-          <p className="mt-1 text-sm text-neutral-600">Идемпотентно проходит каталог: сначала фильмы без artwork/backdrop, затем устаревшие и приоритетные. Cursor из результата можно передать в следующий запуск.</p>
-          {!trendData.tmdbConfigured ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">TMDB_API_KEY не указан. Кнопка вернёт disabled state, сайт продолжит использовать сохранённые backdropUrl.</div> : null}
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Input label="Фильмов за запуск" name="limit" defaultValue="25" min="1" max="100" />
-            <Input label="Concurrency" name="concurrency" defaultValue="2" min="1" max="4" />
-            <TextInput label="Cursor (необязательно)" name="cursor" defaultValue="" />
-            <button className="h-12 self-end rounded-xl bg-[#e50914] px-5 font-bold text-white">Докачать artwork</button>
+        <div className="mt-4 rounded-2xl border border-[#ddd] bg-white p-4">
+          <h3 className="text-lg font-black text-[#222]">Movie Artwork: Vibix backdrop_url и poster_url</h3>
+          <p className="mt-1 text-sm text-neutral-600">Для каждого фильма берётся detail по Kinopoisk ID, при необходимости — по IMDb ID. В публичный фон допускаются только MANUAL и проверенный VIBIX_DETAIL.</p>
+          {!process.env.VIBIX_API_KEY?.trim() ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">VIBIX_API_KEY не указан. Artwork sync отключён.</div> : null}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <Stat label="Статус" value={artworkState.status} />
+            <Stat label="Phase" value={artworkState.phase} />
+            <Stat label="Обработано" value={artworkState.processed} />
+            <Stat label="Создано" value={artworkState.imported} />
+            <Stat label="Обновлено" value={artworkState.updated} />
+            <Stat label="Удалено stale" value={artworkState.deleted} />
           </div>
-        </form>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat label="Vibix detail / manual" value={backdropDiagnostics.valid} good={backdropDiagnostics.valid > 0} />
+            <Stat label="Непроверенные старые" value={backdropDiagnostics.unknown} bad={backdropDiagnostics.unknown > 0} />
+            <Stat label="Без проверенного backdrop" value={backdropDiagnostics.fallback} bad={backdropDiagnostics.fallback > 0} />
+            <Stat label="Rejected" value={backdropDiagnostics.invalid} />
+          </div>
+          <div className="mt-3 rounded-xl bg-[#f5f5f5] p-3 text-sm text-[#333]">
+            <div><b>Cursor:</b> <code className="break-all">{artworkState.cursor ?? "—"}</code></div>
+            <div className="mt-1"><b>Ошибки:</b> {artworkState.failed} · <b>Обновлено:</b> {date(artworkState.updatedAt)}</div>
+            {artworkState.lastError ? <div className="mt-1 text-red-700"><b>Последняя ошибка:</b> {artworkState.lastError.slice(0, 500)}</div> : null}
+          </div>
+          <form action={startMovieArtworkSyncAction} className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Input label="Фильмов за batch" name="limit" defaultValue={String(artworkState.batchSize)} min="1" max="100" />
+            <Input label="Concurrency" name="concurrency" defaultValue={String(Math.min(artworkState.concurrency, 2))} min="1" max="2" />
+            <button className="h-12 self-end rounded-xl bg-[#e50914] px-5 font-bold text-white">Начать заново</button>
+          </form>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <form action={continueMovieArtworkSyncAction}><button className="h-12 w-full rounded-xl bg-[#333] px-5 font-bold text-white">Продолжить</button></form>
+            <form action={pauseMovieArtworkSyncAction}><button className="h-12 w-full rounded-xl border border-[#bbb] bg-white px-5 font-bold text-[#222]">Пауза</button></form>
+            <form action={resetMovieArtworkSyncAction} className="flex gap-2"><input name="confirmation" placeholder="RESET" className="min-w-0 flex-1 rounded-xl border border-[#ddd] px-3 text-[#222]" /><button className="h-12 rounded-xl border border-red-200 bg-white px-4 font-bold text-[#e50914]">Сбросить cursor</button></form>
+          </div>
+        </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <Stat label="Всего Movie" value={trendData.totalMovies} />
           <Stat label="Public visible" value={trendData.publicVisibleCount} good={trendData.publicVisibleCount > 0} />
@@ -556,9 +583,9 @@ function DailyStep({ step, title, description, action }: { step: string; title: 
   );
 }
 
-function Stat({ label, value, accent, good, bad }: { label: string; value?: number | null; accent?: boolean; good?: boolean; bad?: boolean }) {
+function Stat({ label, value, accent, good, bad }: { label: string; value?: number | string | null; accent?: boolean; good?: boolean; bad?: boolean }) {
   const color = accent ? "text-[#e50914]" : good ? "text-green-700" : bad ? "text-red-700" : "text-[#222]";
-  return <div className="rounded-2xl bg-[#f5f5f5] px-4 py-3"><div className="text-xs text-neutral-500">{label}</div><div className={`mt-1 text-2xl font-black ${color}`}>{format(value)}</div></div>;
+  return <div className="rounded-2xl bg-[#f5f5f5] px-4 py-3"><div className="text-xs text-neutral-500">{label}</div><div className={`mt-1 text-2xl font-black ${color}`}>{typeof value === "string" ? value : format(value)}</div></div>;
 }
 
 function Input({ label, name, defaultValue, min, max }: { label: string; name: string; defaultValue: string; min: string; max: string }) {

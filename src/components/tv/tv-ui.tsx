@@ -2,6 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { Film, Play, Search } from "lucide-react";
 import type { TvMovie } from "@/lib/tv";
+import type { SearchMovie } from "@/lib/search";
+
+type TvDisplayMovie = TvMovie | SearchMovie;
 import { tvMoviePath, tvPlayerPath, tvPoster, tvTypeLabel } from "@/lib/tv";
 
 export function TvShell({ children }: { children: React.ReactNode }) {
@@ -28,7 +31,7 @@ export function TvTopBar() {
   );
 }
 
-export function TvHero({ movie }: { movie: TvMovie }) {
+export function TvHero({ movie }: { movie: TvDisplayMovie }) {
   const backdrop = movie.backdropUrl || "/redfilm-hero.webp";
   const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
   return (
@@ -53,7 +56,7 @@ export function TvHero({ movie }: { movie: TvMovie }) {
   );
 }
 
-export function TvSection({ title, movies }: { title: string; movies: TvMovie[] }) {
+export function TvSection({ title, movies }: { title: string; movies: TvDisplayMovie[] }) {
   if (!movies.length) return null;
   return (
     <section className="px-10 py-8">
@@ -65,7 +68,7 @@ export function TvSection({ title, movies }: { title: string; movies: TvMovie[] 
   );
 }
 
-export function TvPosterGrid({ movies }: { movies: TvMovie[] }) {
+export function TvPosterGrid({ movies }: { movies: TvDisplayMovie[] }) {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-6 px-10 pb-12">
       {movies.map((movie) => <TvPosterCard key={movie.id} movie={movie} />)}
@@ -73,7 +76,7 @@ export function TvPosterGrid({ movies }: { movies: TvMovie[] }) {
   );
 }
 
-export function TvPosterCard({ movie }: { movie: TvMovie }) {
+export function TvPosterCard({ movie }: { movie: TvDisplayMovie }) {
   const poster = tvPoster(movie);
   const rating = movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating;
   return (

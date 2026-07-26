@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { MatchDeckClient } from "@/components/match/match-deck-client";
-import { PosterMosaic } from "@/components/poster-mosaic";
 import { getMatchCandidates } from "@/lib/discovery/recommendations";
 
 export const revalidate = 300;
@@ -16,20 +14,14 @@ export default async function MatchPage() {
   const movies = await getMatchCandidates({ limit: 24 });
 
   return (
-    <div className="container py-5 sm:py-7">
-      <PosterMosaic movies={movies} />
-      <section className="glass-panel section-glow mb-6 overflow-hidden rounded-[28px] p-5 sm:p-7">
-        <div className="max-w-4xl">
-          <div className="mb-3 text-xs font-black uppercase tracking-[.18em] text-[#e50914]">REDFILM Match</div>
-          <h2 className="text-[clamp(2rem,8vw,4.5rem)] font-black leading-none tracking-[-.055em] text-white">Выберите кино по настроению</h2>
-          <p className="mt-4 max-w-3xl text-base leading-7 text-[#c9c9d1]">
-            Листайте карточки, сохраняйте понравившееся и переходите к просмотру. Все варианты берутся из текущего каталога REDFILM и имеют доступный источник воспроизведения.
+    <div className="container py-6 sm:py-8">
+      <section className="mb-8 border-b border-white/[.055] pb-7 sm:pb-9">
+        <div className="max-w-3xl">
+          <div className="rf-section-eyebrow mb-3">REDFILM Match</div>
+          <h1 className="rf-page-title">Выберите кино по настроению</h1>
+          <p className="rf-copy mt-4 max-w-2xl">
+            Отмечайте, что нравится, — REDFILM будет точнее подбирать следующий вариант.
           </p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Link href="/films" className="mf-btn">Фильмы</Link>
-            <Link href="/series" className="mf-btn">Сериалы</Link>
-            <Link href="/collections" className="mf-btn">Подборки</Link>
-          </div>
         </div>
       </section>
       <div id="match-deck">

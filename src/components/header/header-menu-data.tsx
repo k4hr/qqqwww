@@ -26,7 +26,7 @@ export function countriesByKind(kind: CatalogMenuKind) {
 function MenuColumn({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-3 text-xs font-black uppercase tracking-[.14em] text-[#e50914]">{title}</div>
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[.12em] text-[#e31b32]">{title}</div>
       <div className="grid gap-1">{children}</div>
     </div>
   );
@@ -34,7 +34,7 @@ function MenuColumn({ title, children }: { title: string; children: React.ReactN
 
 export function HeaderMenuLink({ href, children, onClick }: { href: string; children: React.ReactNode; onClick?: () => void }) {
   return (
-    <Link href={href} onClick={onClick} className="rounded-lg px-2 py-2 text-sm font-semibold text-[#d4d4d8] transition hover:bg-white/[.06] hover:text-white">
+    <Link href={href} onClick={onClick} className="flex min-h-10 items-center rounded-lg px-2 text-sm font-medium text-[#b5b6bd] transition hover:bg-white/[.045] hover:text-white">
       {children}
     </Link>
   );
@@ -43,7 +43,7 @@ export function HeaderMenuLink({ href, children, onClick }: { href: string; chil
 export function MegaMenu({ base, kind }: { base: CatalogBase; kind: CatalogMenuKind }) {
   const labels = labelByKind(kind);
   return (
-    <div className="mega-menu fixed left-1/2 top-[72px] z-[70] w-[min(calc(100vw_-_32px),1100px)] -translate-x-1/2 rounded-[18px] border border-white/10 bg-[rgba(10,10,14,.97)] p-6 shadow-[0_28px_90px_rgba(0,0,0,.72)] backdrop-blur-xl">
+    <div className="mega-menu fixed left-1/2 top-[66px] z-[70] w-[min(calc(100vw_-_32px),1080px)] -translate-x-1/2 rounded-[16px] border border-white/[.08] bg-[rgba(11,12,15,.97)] p-6 shadow-[0_24px_72px_rgba(0,0,0,.62)] backdrop-blur-xl">
       <div className="grid grid-cols-4 gap-7">
         <MenuColumn title={labels.menu}>
           <HeaderMenuLink href={base}>Все {labels.plural}</HeaderMenuLink>

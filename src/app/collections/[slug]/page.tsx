@@ -95,24 +95,25 @@ export default async function CollectionPage({ params }: Props) {
   return (
     <div className="container py-6">
       <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: h1, url: siteUrl(`/collections/${slug}`), mainEntity: { "@type": "ItemList", itemListElement: movies.map((movie, index) => ({ "@type": "ListItem", position: index + 1, name: movie.titleRu, url: siteUrl(watchPath(movie)), image: movie.posterUrl || undefined })) } }} />
-      <section className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
-        <h1 className="text-3xl font-black tracking-[-.035em] text-white">{h1}</h1>
-        <p className="mt-3 max-w-4xl leading-relaxed text-[#a1a1aa]">{description}</p>
+      <section className="rf-catalog-intro mb-7">
+        <div className="rf-section-eyebrow mb-3">Подборка REDFILM</div>
+        <h1 className="rf-page-title">{h1}</h1>
+        <p className="rf-copy mt-4 max-w-3xl">{description}</p>
       </section>
 
       <div className="movie-grid">
         {movies.map((movie) => <MovieCard key={movie.slug} movie={movie} />)}
       </div>
-      {franchiseConfig ? <section className="mf-panel mt-7 p-5 sm:p-6"><h2 className="text-xl font-black text-white">Как смотреть по порядку</h2><p className="mt-3 max-w-4xl leading-relaxed text-[#a1a1aa]">На странице сначала показываются фильмы, найденные в каталоге REDFILM, а порядок строится по хронологии и известным веткам киновселенной. Если какой-то части нет в каталоге, она не выводится пустой карточкой.</p></section> : null}
+      {franchiseConfig ? <section className="rf-section border-t border-white/[.07] pt-6"><h2 className="rf-section-title">Как смотреть по порядку</h2><p className="rf-copy mt-3 max-w-4xl">На странице сначала показываются фильмы, найденные в каталоге REDFILM, а порядок строится по хронологии и известным веткам киновселенной. Если какой-то части нет в каталоге, она не выводится пустой карточкой.</p></section> : null}
 
-      {aiDraft?.sections?.length ? <section className="mf-panel mt-7 space-y-6 p-5 sm:p-6">{aiDraft.sections.map((section) => {
+      {aiDraft?.sections?.length ? <section className="rf-section space-y-8 border-t border-white/[.07] pt-6">{aiDraft.sections.map((section) => {
         const sectionMovies = section.movieSlugs.map((movieSlug) => movieBySlug.get(movieSlug)).filter(Boolean).slice(0, 12);
-        return <div key={section.title}><h2 className="text-xl font-black text-white">{section.title}</h2><p className="mt-3 max-w-4xl leading-relaxed text-[#a1a1aa]">{section.body}</p>{sectionMovies.length ? <div className="movie-grid mt-4">{sectionMovies.map((movie) => movie ? <MovieCard key={`${section.title}-${movie.slug}`} movie={movie} /> : null)}</div> : null}</div>;
+        return <div key={section.title}><h2 className="rf-section-title">{section.title}</h2><p className="rf-copy mt-3 max-w-4xl">{section.body}</p>{sectionMovies.length ? <div className="movie-grid mt-5">{sectionMovies.map((movie) => movie ? <MovieCard key={`${section.title}-${movie.slug}`} movie={movie} /> : null)}</div> : null}</div>;
       })}</section> : null}
 
-      {aiDraft?.faq?.length ? <section className="mf-panel mt-7 p-5 sm:p-6"><h2 className="text-xl font-black text-white">Вопросы и ответы</h2><div className="mt-4 grid gap-3">{aiDraft.faq.map((item) => <div key={item.question} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"><h3 className="font-black text-white">{item.question}</h3><p className="mt-2 text-[#a1a1aa]">{item.answer}</p></div>)}</div></section> : null}
+      {aiDraft?.faq?.length ? <section className="rf-section border-t border-white/[.07] pt-6"><h2 className="rf-section-title">Вопросы и ответы</h2><div className="mt-4 divide-y divide-white/[.07]">{aiDraft.faq.map((item) => <div key={item.question} className="py-4"><h3 className="font-semibold text-white">{item.question}</h3><p className="rf-copy mt-2">{item.answer}</p></div>)}</div></section> : null}
 
-      <section className="mf-panel mt-7 p-5 sm:p-6"><h2 className="text-xl font-black text-white">Почему эти фильмы в подборке</h2><p className="mt-3 max-w-4xl leading-relaxed text-[#a1a1aa]">Картины объединены общей темой, жанровыми признаками и ключевыми мотивами. В списке остаются только доступные для просмотра позиции каталога.</p><h3 className="mt-6 font-black text-white">Смотрите также</h3><div className="mt-3 flex flex-wrap gap-2">{aiDraft?.internalLinks?.map((item) => <Link key={item.url} href={item.url} className="mf-btn">{item.label}</Link>)}{franchiseConfig?.relatedLinks.map((item) => <Link key={item.href} href={item.href} className="mf-btn">{item.label}</Link>)}{relatedTopics.map((item) => <Link key={item[0]} href={`/collections/${item[0]}`} className="mf-btn">{item[1]}</Link>)}{genres.map((genre) => <Link key={genre.slug} href={genrePath(genre)} className="mf-btn">{genre.name}</Link>)}</div></section>
+      <section className="rf-section border-t border-white/[.07] pt-6"><h2 className="rf-section-title">Почему эти фильмы в подборке</h2><p className="rf-copy mt-3 max-w-4xl">Картины объединены общей темой, жанровыми признаками и ключевыми мотивами. В списке остаются только доступные для просмотра позиции каталога.</p><h3 className="mt-6 font-semibold text-white">Смотрите также</h3><div className="rf-filter-row mt-3">{aiDraft?.internalLinks?.map((item) => <Link key={item.url} href={item.url} className="rf-filter">{item.label}</Link>)}{franchiseConfig?.relatedLinks.map((item) => <Link key={item.href} href={item.href} className="rf-filter">{item.label}</Link>)}{relatedTopics.map((item) => <Link key={item[0]} href={`/collections/${item[0]}`} className="rf-filter">{item[1]}</Link>)}{genres.map((genre) => <Link key={genre.slug} href={genrePath(genre)} className="rf-filter">{genre.name}</Link>)}</div></section>
     </div>
   );
 }

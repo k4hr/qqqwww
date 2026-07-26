@@ -11,7 +11,7 @@ type Props = { params: Promise<{ year: string }>; searchParams: Promise<{ sort?:
 export async function generateMetadata({ params }: Props) {
   const { year } = await params;
   const parsedYear = Number(year);
-  if (!isValidYear(parsedYear)) return {};
+  if (!isValidYear(parsedYear)) notFound();
   return {
     title: `Сериалы ${parsedYear} смотреть онлайн — REDFILM`,
     description: `Сериалы ${parsedYear} года онлайн в хорошем качестве: карточки, описания, рейтинги, трейлеры и подборки на REDFILM.`,

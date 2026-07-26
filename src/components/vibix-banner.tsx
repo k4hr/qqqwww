@@ -23,7 +23,7 @@ export async function VibixBanner({ slot, size }: Props) {
 
   return (
     <aside
-      className={`${deviceClass} ${wide ? "" : ""} glass-panel section-glow my-7 w-full max-w-full min-w-0 items-center justify-center overflow-hidden rounded-3xl p-3 md:min-h-[110px]`}
+      className={`${deviceClass} ${wide ? "" : ""} vibix-ad-shell my-7 w-full max-w-full min-w-0 items-center justify-center overflow-hidden py-2`}
       aria-label="Реклама"
       data-redfilm-ad-slot={slot}
     >

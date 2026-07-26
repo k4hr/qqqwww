@@ -4,6 +4,7 @@ import { slugify } from "@/lib/slug";
 import { evaluateMovieCatalogVisibility } from "@/lib/catalog-filters";
 import { calculateHomeQuality } from "@/lib/home-quality-score";
 import { calculateCatalogScore } from "@/lib/catalog-score";
+import { syncVibixArtworkUrls } from "@/lib/movie-artwork";
 import { classifyCatalogKindFromVibix } from "@/lib/catalog-kind";
 import {
   getVibixVideoByImdbId,
@@ -306,7 +307,8 @@ async function enrichVibixVideo(
     || base.persons
     || stringValue(base.embed_code),
   );
-  if (hasPlayer && hasDetailData) return { video: base, rateLimited: false, retryAfterMs: null };
+  const hasArtworkData = Boolean(stringValue(base.poster_url) && stringValue(base.backdrop_url));
+  if (hasPlayer && hasDetailData && hasArtworkData) return { video: base, rateLimited: false, retryAfterMs: null };
 
   let enriched = { ...base };
   const kpId = stringValue(base.kp_id) || stringValue(base.kinopoisk_id);
@@ -316,7 +318,7 @@ async function enrichVibixVideo(
     if (lookup.rateLimited) return { video: enriched, rateLimited: true, retryAfterMs: lookup.retryAfterMs };
     if (lookup.video) {
       enriched = mergeVibixRecords(enriched, lookup.video);
-      if (stringValue(enriched.iframe_url) || stringValue(enriched.embed_code)) {
+      if ((stringValue(enriched.iframe_url) || stringValue(enriched.embed_code)) && stringValue(enriched.backdrop_url)) {
         result.enrichedByKp += 1;
         return { video: enriched, rateLimited: false, retryAfterMs: null };
       }
@@ -330,7 +332,7 @@ async function enrichVibixVideo(
     if (lookup.rateLimited) return { video: enriched, rateLimited: true, retryAfterMs: lookup.retryAfterMs };
     if (lookup.video) {
       enriched = mergeVibixRecords(enriched, lookup.video);
-      if (stringValue(enriched.iframe_url) || stringValue(enriched.embed_code)) {
+      if ((stringValue(enriched.iframe_url) || stringValue(enriched.embed_code)) && stringValue(enriched.backdrop_url)) {
         result.enrichedByImdb += 1;
         return { video: enriched, rateLimited: false, retryAfterMs: null };
       }
@@ -439,6 +441,15 @@ async function forceManualImportVisibility(movieId: string) {
   });
 }
 
+async function persistVibixArtwork(movieId: string, video: VibixVideo) {
+  if (!stringValue(video.backdrop_url) && !stringValue(video.poster_url)) return;
+  try {
+    await syncVibixArtworkUrls(movieId, video);
+  } catch (error) {
+    console.warn(`[VibixSync] Artwork validation failed for ${movieId}:`, error instanceof Error ? error.message : error);
+  }
+}
+
 export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string, options: SaveVibixVideoOptions = {}) {
   const normalized = normalizeVideoData(video);
   if ("reason" in normalized) return { status: "skipped" as const, reason: normalized.reason };
@@ -491,6 +502,7 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string, 
     });
     await syncVibixRelations(updated.id, video);
     await applyQualityGate(updated.id, video);
+    await persistVibixArtwork(updated.id, video);
     if (options.forcePublic) await forceManualImportVisibility(updated.id);
     return { status: "updated" as const, movieId: existing.id };
   }
@@ -537,6 +549,7 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string, 
   });
   await syncVibixRelations(created.id, video);
   await applyQualityGate(created.id, video);
+  await persistVibixArtwork(created.id, video);
   if (options.forcePublic) await forceManualImportVisibility(created.id);
   return { status: "imported" as const, movieId: created.id };
 }

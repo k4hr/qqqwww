@@ -50,25 +50,36 @@ export async function ListPage({ title, type, year, yearFilter, genreSlug, filte
   const currentSort = normalizeSort(sort);
   const movies = await getCatalogMovies({ type, year, yearFilter, genreSlug: selectedGenre, countrySlug: country, sort: currentSort, page: safePage, pageSize: 48 });
   const genreOptions = CATALOG_GENRES.slice(0, 14);
+  const filterControls = (
+    <div className="grid gap-3">
+      <div className="rf-filter-row">
+        <FilterLink href={filterHref({ sort: "fresh", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Новинки" active={currentSort === "fresh"} />
+        <FilterLink href={filterHref({ sort: "popular", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Популярные" active={currentSort === "popular"} />
+        <FilterLink href={filterHref({ sort: "top", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="ТОП" active={currentSort === "top"} />
+        <FilterLink href={filterHref({ sort: "year", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="По году" active={currentSort === "year"} />
+      </div>
+      {showTypeFilter ? <div className="rf-filter-row"><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, genre: selectedGenre })} label="Все типы" active={!type} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "MOVIE", genre: selectedGenre })} label="Фильмы" active={type === "MOVIE"} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "SERIES", genre: selectedGenre })} label="Сериалы" active={type === "SERIES"} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "CARTOON", genre: selectedGenre })} label="Мультфильмы" active={type === "CARTOON"} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "ANIME", genre: selectedGenre })} label="Аниме" active={type === "ANIME"} /></div> : null}
+      {showYearFilter ? <div className="rf-filter-row"><FilterLink href={filterHref({ sort: currentSort, country, type: typeParam, genre: selectedGenre })} label="Все годы" active={!yearFilter} />{Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((item) => <FilterLink key={item} href={filterHref({ sort: currentSort, country, year: item, type: typeParam, genre: selectedGenre })} label={String(item)} active={yearFilter === String(item)} />)}</div> : null}
+      {showGenreFilter ? <div className="rf-filter-row"><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: typeParam })} label="Все жанры" active={!selectedGenre} />{genreOptions.map((item) => <FilterLink key={item.slug} href={filterHref({ sort: currentSort, country, year: yearParam, type: typeParam, genre: item.slug })} label={item.label} active={genreLabel(selectedGenre) === item.label} />)}</div> : null}
+      {showCountryFilter ? <CountryFilter country={country} preserve={{ sort: currentSort, year: yearParam ? String(yearParam) : undefined, type: typeParam, genre: selectedGenre }} /> : null}
+    </div>
+  );
 
   return (
-    <div className="container py-6">
+    <div className="container pb-8">
       <JsonLd data={{ "@context": "https://schema.org", "@type": "CollectionPage", name: title, mainEntity: { "@type": "ItemList", itemListElement: movies.map((movie, index) => ({ "@type": "ListItem", position: (safePage - 1) * 48 + index + 1, name: movie.titleRu, url: siteUrl(watchPath(movie)), image: movie.posterUrl || undefined })) } }} />
-      <div className="glass-panel section-glow mb-6 rounded-[24px] p-5 sm:p-6">
-        <h1 className="text-[clamp(1.75rem,5vw,3.5rem)] font-black tracking-[-.035em] text-white">{title}</h1>
-        {description ? (Array.isArray(description) ? description : [description]).map((text) => <p key={text} className="mt-3 max-w-4xl leading-relaxed text-[#a9a9b2]">{text}</p>) : null}
+      <header className="rf-catalog-intro mb-7">
+        <h1 className="rf-page-title">{title}</h1>
+        {description ? <div className="mt-3 max-w-4xl">{(Array.isArray(description) ? description : [description]).map((text) => <p key={text} className="rf-copy mt-2 first:mt-0">{text}</p>)}</div> : null}
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          <FilterLink href={filterHref({ sort: "fresh", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Новинки" active={currentSort === "fresh"} />
-          <FilterLink href={filterHref({ sort: "popular", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="Популярные" active={currentSort === "popular"} />
-          <FilterLink href={filterHref({ sort: "top", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="ТОП" active={currentSort === "top"} />
-          <FilterLink href={filterHref({ sort: "year", country, year: yearParam, type: typeParam, genre: selectedGenre })} label="По году" active={currentSort === "year"} />
+        <div className="mt-5 hidden md:block">
+          {filterControls}
         </div>
-        {showTypeFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, genre: selectedGenre })} label="Все типы" active={!type} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "MOVIE", genre: selectedGenre })} label="Фильмы" active={type === "MOVIE"} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "SERIES", genre: selectedGenre })} label="Сериалы" active={type === "SERIES"} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "CARTOON", genre: selectedGenre })} label="Мультфильмы" active={type === "CARTOON"} /><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: "ANIME", genre: selectedGenre })} label="Аниме" active={type === "ANIME"} /></div> : null}
-        {showYearFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort: currentSort, country, type: typeParam, genre: selectedGenre })} label="Все годы" active={!yearFilter} />{Array.from({ length: 10 }, (_, index) => new Date().getFullYear() - index).map((item) => <FilterLink key={item} href={filterHref({ sort: currentSort, country, year: item, type: typeParam, genre: selectedGenre })} label={String(item)} active={yearFilter === String(item)} />)}</div> : null}
-        {showGenreFilter ? <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]"><FilterLink href={filterHref({ sort: currentSort, country, year: yearParam, type: typeParam })} label="Все жанры" active={!selectedGenre} />{genreOptions.map((item) => <FilterLink key={item.slug} href={filterHref({ sort: currentSort, country, year: yearParam, type: typeParam, genre: item.slug })} label={item.label} active={genreLabel(selectedGenre) === item.label} />)}</div> : null}
-        {showCountryFilter ? <CountryFilter country={country} preserve={{ sort: currentSort, year: yearParam ? String(yearParam) : undefined, type: typeParam, genre: selectedGenre }} /> : null}
-      </div>
+        <details className="mt-4 md:hidden">
+          <summary className="rf-filter rf-filter-active cursor-pointer list-none">Фильтры</summary>
+          <div className="mt-3 border-t border-white/[.055] pt-4">{filterControls}</div>
+        </details>
+      </header>
 
       {movies.length ? (
         <div className="movie-grid">
@@ -77,7 +88,7 @@ export async function ListPage({ title, type, year, yearFilter, genreSlug, filte
           ))}
         </div>
       ) : (
-        <div className="glass-panel rounded-3xl p-8 text-[#a1a1aa]">
+        <div className="border-y border-dashed border-white/[.08] py-10 text-[#8f9098]">
           Каталог обновляется. Фильмы скоро появятся.
         </div>
       )}
@@ -91,7 +102,7 @@ function FilterLink({ href, label, active }: { href: string; label: string; acti
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={active ? "mf-btn mf-btn-primary" : "mf-btn"}
+      className={active ? "rf-filter rf-filter-active" : "rf-filter"}
     >
       {label}
     </Link>

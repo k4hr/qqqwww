@@ -9,7 +9,12 @@ import { checkTrendCandidatesInVibix, recalculateAllHomeScores, runTrendSync } f
 import { classifyCatalogKind } from "@/lib/catalog-kind";
 import { forceMoviesToAnimeByIds } from "@/lib/admin-anime-tools";
 import { prisma } from "@/lib/prisma";
-import { syncMovieArtworkBatch } from "@/lib/movie-artwork";
+import {
+  continueArtworkSyncState,
+  pauseArtworkSyncState,
+  resetArtworkSyncState,
+  startArtworkSyncState,
+} from "@/lib/movie-artwork";
 import {
   buildVibixCatalogIndexBatch,
   buildVibixPlayableLinksIndexBatch,
@@ -113,19 +118,37 @@ export async function activateTrendsCatalogAction() {
   redirectWithResult({ ok: catalog.errors + home.errors === 0, message: `Витрина обновлена: каталог ${catalog.processed}, home ${home.processed}, hero ${home.heroEligible}, homeEligible ${home.homeEligible}.`, details: { catalog, home } });
 }
 
-export async function syncMovieArtworkBatchAction(formData: FormData) {
+export async function startMovieArtworkSyncAction(formData: FormData) {
   const limit = numberField(formData, "limit", 25, 1, 100);
-  const concurrency = numberField(formData, "concurrency", 2, 1, 4);
-  const cursor = optionalStringField(formData, "cursor") ?? undefined;
-  const result = await syncMovieArtworkBatch({ limit, concurrency, cursor });
+  const concurrency = numberField(formData, "concurrency", 2, 1, 2);
+  const result = await startArtworkSyncState({ limit, concurrency });
   revalidatePath("/admin/catalog");
   redirectWithResult({
     ok: result.ok,
-    message: result.disabled
-      ? "TMDB_API_KEY не указан. Artwork enrichment отключён, публичный сайт продолжает использовать существующие backdrop."
-      : `Artwork sync: обработано ${result.processed}, импортировано ${result.imported}, обновлено ${result.updated}, удалено устаревших ${result.deleted}, ошибок ${result.failed}. Следующий cursor: ${result.nextCursor ?? "конец"}.`,
+    message: result.message ?? "Artwork sync запущен.",
     details: result,
   });
+}
+
+export async function continueMovieArtworkSyncAction() {
+  const result = await continueArtworkSyncState();
+  revalidatePath("/admin/catalog");
+  redirectWithResult({ ok: result.ok, message: result.message ?? "Artwork sync продолжен.", details: result });
+}
+
+export async function pauseMovieArtworkSyncAction() {
+  const state = await pauseArtworkSyncState();
+  revalidatePath("/admin/catalog");
+  redirectWithResult({ ok: true, message: "Artwork sync поставлен на паузу после текущего batch.", details: state });
+}
+
+export async function resetMovieArtworkSyncAction(formData: FormData) {
+  if (optionalStringField(formData, "confirmation") !== "RESET") {
+    redirectWithResult({ ok: false, message: "Для сброса cursor введите RESET." });
+  }
+  const state = await resetArtworkSyncState();
+  revalidatePath("/admin/catalog");
+  redirectWithResult({ ok: true, message: "Artwork cursor и накопленная статистика сброшены.", details: state });
 }
 
 export async function moveMoviesToAnimeAction() {

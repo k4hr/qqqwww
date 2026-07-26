@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sleep } from "@/lib/vibix";
+import { continueArtworkSyncState, getArtworkSyncState, startArtworkSyncState } from "@/lib/movie-artwork";
 import { recalculateAllCatalogScores } from "@/lib/catalog-score";
 import { createSimilarityJob, getSimilarityJobSnapshot, processSimilarityJobBatch } from "@/lib/similarity/similarity-job";
 import { checkTrendCandidatesInVibix, recalculateAllHomeScores, runTrendSync } from "@/lib/trend-engine";
@@ -11,6 +12,27 @@ import {
 } from "@/lib/vibix-catalog/catalog-audit";
 
 const ACTIVE_STATUSES = ["QUEUED", "RUNNING", "PAUSED"];
+let lastArtworkMaintenanceAt = 0;
+
+async function maybeRunArtworkMaintenance() {
+  if (process.env.ARTWORK_BACKGROUND_SYNC_ENABLED === "false") return null;
+  const intervalMs = envInt("ARTWORK_BACKGROUND_INTERVAL_MS", 10 * 60_000, 60_000, 24 * 60 * 60_000);
+  if (Date.now() - lastArtworkMaintenanceAt < intervalMs) return null;
+  lastArtworkMaintenanceAt = Date.now();
+
+  const state = await getArtworkSyncState();
+  if (state.status === "PAUSED" || state.status === "FAILED") return null;
+  const batchSize = envInt("ARTWORK_BACKGROUND_BATCH_SIZE", 12, 1, 50);
+  const concurrency = envInt("ARTWORK_BACKGROUND_CONCURRENCY", 2, 1, 4);
+
+  if (state.status === "IDLE") return startArtworkSyncState({ limit: batchSize, concurrency });
+  if (state.status === "COMPLETED") {
+    const refreshAfterMs = envInt("ARTWORK_BACKGROUND_REFRESH_MS", 24 * 60 * 60_000, 60 * 60_000, 14 * 24 * 60 * 60_000);
+    if (state.completedAt && Date.now() - state.completedAt.getTime() < refreshAfterMs) return null;
+    return startArtworkSyncState({ limit: batchSize, concurrency });
+  }
+  return continueArtworkSyncState();
+}
 
 function envInt(name: string, fallback: number, min: number, max: number) {
   const parsed = Number.parseInt(process.env[name] ?? "", 10);
@@ -739,6 +761,13 @@ export async function runVibixCatalogMagicWorkerLoop() {
     const result = await runVibixCatalogMagicJobIteration();
     const resultForLog = result as { job?: { status: string }; message?: string | null };
     if (resultForLog.message) console.log(`[VibixCatalogWorker] ${statusLabel(resultForLog.job?.status ?? "IDLE")}: ${resultForLog.message}`);
+
+    try {
+      const artwork = await maybeRunArtworkMaintenance();
+      if (artwork?.message) console.log(`[ArtworkWorker] ${artwork.message}`);
+    } catch (error) {
+      console.error("[ArtworkWorker] Background batch failed", errorText(error));
+    }
 
     const latest = await getLatestVibixCatalogMagicJob();
     const waitUntil = latest?.status === "PAUSED" && latest.rateLimitUntil ? latest.rateLimitUntil.getTime() - Date.now() : null;

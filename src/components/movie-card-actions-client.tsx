@@ -20,14 +20,16 @@ export function MovieCardActionsClient({ movie, href, similarHref }: Props) {
   }, [movie.id]);
 
   return (
-    <div className="movie-card-actions flex gap-2">
+    <div className="movie-card-actions flex items-center justify-center gap-2">
       <Link
         href={href}
         data-analytics-event="watch_click"
         data-analytics-movie-id={movie.id}
-        className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#e50914] px-3 text-xs font-black text-white shadow-[0_0_32px_rgba(229,9,20,.34)] transition hover:scale-[1.02]"
+        aria-label={`Смотреть ${movie.title}`}
+        title="Смотреть"
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--rf-red)] text-white shadow-[0_8px_22px_rgba(0,0,0,.38)] transition hover:bg-[var(--rf-red-hover)]"
       >
-        <Play size={14} fill="currentColor" /> Смотреть
+        <Play size={16} fill="currentColor" />
       </Link>
       <button
         type="button"
@@ -38,14 +40,16 @@ export function MovieCardActionsClient({ movie, href, similarHref }: Props) {
           setFavorite(next);
           trackEvent("favorite_toggle", { movieId: movie.id });
         }}
-        className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-white/10 ${favorite ? "bg-[#e50914] text-white" : "bg-black/55 text-white"} transition hover:border-[#e50914]/70`}
+        title={favorite ? "Убрать из избранного" : "В избранное"}
+        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 ${favorite ? "bg-[var(--rf-red)] text-white" : "bg-black/72 text-white"} backdrop-blur-md transition hover:border-white/25`}
       >
         <Heart size={16} fill={favorite ? "currentColor" : "none"} />
       </button>
       <Link
         href={similarHref}
         aria-label="Похожие"
-        className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white transition hover:border-[#e50914]/70"
+        title="Похожие"
+        className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/72 text-white backdrop-blur-md transition hover:border-white/25 md:inline-flex"
       >
         <Rows3 size={16} />
       </Link>

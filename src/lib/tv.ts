@@ -1,9 +1,17 @@
-import { ContentType, type Prisma } from "@prisma/client";
+import { ContentType, MovieArtworkType, type Prisma } from "@prisma/client";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { prisma } from "@/lib/prisma";
-import { normalizeSearchQuery, searchMovies } from "@/lib/search";
+import { normalizeSearchQuery, searchMovies, type SearchMovie } from "@/lib/search";
+import { redfilmBackdropFallback, selectPublicBackdrop } from "@/lib/movie-artwork";
 
-const tvMovieInclude = { genres: { include: { genre: true } } } as const;
+const tvMovieInclude = {
+  genres: { include: { genre: true } },
+  artworks: {
+    where: { type: MovieArtworkType.BACKDROP },
+    orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }],
+    take: 8,
+  },
+} satisfies Prisma.MovieInclude;
 export type TvMovie = Prisma.MovieGetPayload<{ include: typeof tvMovieInclude }>;
 
 export const TV_REVALIDATE_SECONDS = 300;
@@ -42,7 +50,7 @@ export async function getTvMovies(options: {
   where?: Prisma.MovieWhereInput;
 } = {}) {
   const { type, take = 24, orderBy = popularOrder, where } = options;
-  return prisma.movie.findMany({
+  const movies = await prisma.movie.findMany({
     where: {
       AND: [
         baseTvWhere,
@@ -54,6 +62,10 @@ export async function getTvMovies(options: {
     orderBy,
     take,
   });
+  return movies.map((movie) => ({
+    ...movie,
+    backdropUrl: selectPublicBackdrop(movie.artworks)?.url ?? redfilmBackdropFallback(),
+  }));
 }
 
 export async function getTvHome() {
@@ -83,10 +95,11 @@ export async function getTvHome() {
 }
 
 export async function getTvMovieBySlug(slug: string) {
-  return prisma.movie.findFirst({
+  const movie = await prisma.movie.findFirst({
     where: { AND: [baseTvWhere, { slug }] },
     include: tvMovieInclude,
   });
+  return movie ? { ...movie, backdropUrl: selectPublicBackdrop(movie.artworks)?.url ?? redfilmBackdropFallback() } : null;
 }
 
 export async function searchTvMovies(query: string, take = 36) {
@@ -95,7 +108,8 @@ export async function searchTvMovies(query: string, take = 36) {
   return searchMovies(normalized, { country: "all" }, take);
 }
 
-export function serializeTvMovie(movie: TvMovie) {
+export function serializeTvMovie(movie: TvMovie | SearchMovie) {
+  const artworks = "artworks" in movie ? movie.artworks : [];
   return {
     id: movie.id,
     slug: movie.slug,
@@ -105,7 +119,7 @@ export function serializeTvMovie(movie: TvMovie) {
     type: movie.type,
     typeLabel: tvTypeLabel(movie.type),
     posterUrl: movie.posterUrl,
-    backdropUrl: movie.backdropUrl,
+    backdropUrl: selectPublicBackdrop(artworks)?.url ?? redfilmBackdropFallback(),
     rating: movie.kpRating ?? movie.imdbRating ?? movie.tmdbRating,
     duration: movie.duration,
     country: movie.country,

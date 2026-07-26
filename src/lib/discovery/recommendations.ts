@@ -13,6 +13,7 @@ import {
   normalizeDiscoveryRuntime,
   normalizeDiscoveryType,
 } from "@/lib/discovery/types";
+import { countryPreferenceScore, rerankMatchCandidatesWithDiversity } from "@/lib/discovery/match-ranking";
 import { isWideBackdropArtwork, redfilmBackdropFallback } from "@/lib/movie-artwork";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 import { prisma } from "@/lib/prisma";
@@ -37,6 +38,7 @@ const discoveryMovieSelect = {
   imdbVotes: true,
   description: true,
   country: true,
+  director: true,
   homeScore: true,
   trendScore: true,
   qualityScore: true,
@@ -164,19 +166,6 @@ function runtimeKey(duration: number | null) {
   return "OVER_120";
 }
 
-function franchiseKey(title: string) {
-  return title
-    .toLocaleLowerCase("ru-RU")
-    .replaceAll("ё", "е")
-    .replace(/\b(?:часть|сезон|глава|эпизод|part|chapter|season)\s*\d+\b/gi, " ")
-    .replace(/\b\d+\b/g, " ")
-    .replace(/[^a-zа-я]+/gi, " ")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 3)
-    .join(" ");
-}
-
 function candidateScore(movie: DiscoveryMovieRow, filters: DiscoveryFilters, preferences: Partial<MatchPreferences>, seed: string) {
   const genres = movie.genres.map(({ genre }) => genre.slug);
   const preferredGenres = preferences.genreWeights ?? {};
@@ -189,7 +178,7 @@ function candidateScore(movie: DiscoveryMovieRow, filters: DiscoveryFilters, pre
   const learned = genres.reduce((sum, genre) => sum + (preferredGenres[genre] ?? 0), 0)
     + (typeWeights[movie.type] ?? 0) * 1.3
     + (decadeWeights[decadeKey(movie.year)] ?? 0)
-    + (countryWeights[movie.country ?? ""] ?? 0) * 0.6
+    + countryPreferenceScore(countryWeights, movie.country) * 0.6
     + (runtimeWeights[runtimeKey(movie.duration)] ?? 0) * 0.8;
   const moodBonus = moodGenres[filters.mood].some((genre) => genres.includes(genre)) ? 24 : 0;
   const randomRange = filters.randomGood ? 28 : 5;
@@ -235,52 +224,13 @@ function serializeMovie(movie: DiscoveryMovieRow, filters: DiscoveryFilters): Di
     imdbRating: movie.imdbRating,
     description: movie.description,
     country: movie.country,
+    director: movie.director,
     genres: movie.genres.map(({ genre }) => genre.slug),
     cast: movie.cast.map(({ person }) => person.nameRu).filter(Boolean),
     homeScore: movie.homeScore,
     trendScore: movie.trendScore,
     explanation: explanationFor(movie, filters),
   };
-}
-
-function diversityRerank(rows: DiscoveryMovieRow[], target: number, filters: DiscoveryFilters) {
-  const selected: DiscoveryMovieRow[] = [];
-  const deferred: DiscoveryMovieRow[] = [];
-  const franchiseCounts = new Map<string, number>();
-  const genreCounts = new Map<string, number>();
-  const decadeCounts = new Map<string, number>();
-  const typeCounts = new Map<ContentType, number>();
-  let previousCast = new Set<string>();
-
-  for (const movie of rows) {
-    const franchise = franchiseKey(movie.titleRu);
-    const genres = movie.genres.map(({ genre }) => genre.slug);
-    const decade = decadeKey(movie.year);
-    const cast = new Set(movie.cast.map(({ person }) => person.nameRu));
-    const sameLead = [...cast].some((name) => previousCast.has(name));
-    const tooSimilar = (franchise && (franchiseCounts.get(franchise) ?? 0) >= 2)
-      || genres.some((genre) => (genreCounts.get(genre) ?? 0) >= Math.max(4, Math.ceil(target * 0.45)))
-      || (decadeCounts.get(decade) ?? 0) >= Math.max(4, Math.ceil(target * 0.45))
-      || (filters.type === "ANY" && (typeCounts.get(movie.type) ?? 0) >= Math.max(5, Math.ceil(target * 0.65)))
-      || (selected.length > 0 && sameLead);
-    if (tooSimilar) {
-      deferred.push(movie);
-      continue;
-    }
-    selected.push(movie);
-    if (franchise) franchiseCounts.set(franchise, (franchiseCounts.get(franchise) ?? 0) + 1);
-    for (const genre of genres) genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1);
-    decadeCounts.set(decade, (decadeCounts.get(decade) ?? 0) + 1);
-    typeCounts.set(movie.type, (typeCounts.get(movie.type) ?? 0) + 1);
-    previousCast = cast;
-    if (selected.length >= target) return selected;
-  }
-
-  for (const movie of deferred) {
-    if (!selected.some((item) => item.id === movie.id)) selected.push(movie);
-    if (selected.length >= target) break;
-  }
-  return selected;
 }
 
 export async function getDiscoveryRecommendations(options: RecommendationOptions = {}) {
@@ -317,7 +267,22 @@ export async function getDiscoveryRecommendations(options: RecommendationOptions
   const ranked = rows
     .filter((movie) => isSafeForHome(movie))
     .sort((a, b) => candidateScore(b, filters, preferences, seed) - candidateScore(a, filters, preferences, seed));
-  const diverse = diversityRerank(ranked, limit, filters);
+  const diverse = rerankMatchCandidatesWithDiversity(
+    ranked.map((movie) => ({
+      movie,
+      id: movie.id,
+      titleRu: movie.titleRu,
+      year: movie.year,
+      type: movie.type,
+      genres: movie.genres.map(({ genre }) => genre.slug),
+      cast: movie.cast.map(({ person }) => person.nameRu).filter(Boolean),
+      director: movie.director,
+      country: movie.country,
+      duration: movie.duration,
+    })),
+    limit,
+    filters,
+  ).selected.map(({ movie }) => movie);
   return diverse.map((movie) => serializeMovie(movie, filters));
 }
 

@@ -93,6 +93,7 @@ export type DiscoveryMovie = {
   imdbRating: number | null;
   description: string;
   country: string | null;
+  director?: string | null;
   genres: string[];
   cast: string[];
   homeScore: number;

@@ -9,6 +9,7 @@ import type { FormEvent, KeyboardEvent } from "react";
 import { resolveSearchRedirectPath } from "@/lib/search-route-intents";
 import { trackEvent } from "@/lib/client-analytics";
 import { navigateWithProgress } from "@/components/navigation-progress-client";
+import { MOBILE_MENU_OPEN_EVENT, SEARCH_OVERLAY_OPEN_EVENT } from "@/components/header/header-overlay-events";
 
 type Suggestion = {
   id: string;
@@ -60,20 +61,31 @@ export function SearchOverlayClient() {
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  function openSearch() {
+    window.dispatchEvent(new Event(SEARCH_OVERLAY_OPEN_EVENT));
+    setOpen(true);
+  }
+
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setOpen(true);
+        openSearch();
       } else if (event.key === "/" && !isTypingTarget(event.target)) {
         event.preventDefault();
-        setOpen(true);
+        openSearch();
       } else if (event.key === "Escape") {
         setOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const closeForMobileMenu = () => setOpen(false);
+    window.addEventListener(MOBILE_MENU_OPEN_EVENT, closeForMobileMenu);
+    return () => window.removeEventListener(MOBILE_MENU_OPEN_EVENT, closeForMobileMenu);
   }, []);
 
   useEffect(() => {
@@ -147,18 +159,18 @@ export function SearchOverlayClient() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="hidden h-11 w-[clamp(190px,22vw,320px)] items-center gap-3 rounded-2xl border border-white/10 bg-white/[.05] px-4 text-left text-sm text-[#a1a1aa] transition hover:border-[#e50914]/60 hover:bg-white/[.07] min-[760px]:flex"
+        onClick={openSearch}
+        className="hidden h-11 w-[clamp(180px,19vw,270px)] items-center gap-3 rounded-[11px] border border-white/[.07] bg-white/[.025] px-3.5 text-left text-[13px] text-[#8f9098] transition hover:border-white/[.14] hover:bg-white/[.045] min-[760px]:flex"
         aria-haspopup="dialog"
       >
-        <Search size={18} className="text-[#e50914]" />
+        <Search size={17} className="text-[#a0a1a8]" />
         <span className="min-w-0 flex-1 truncate">Поиск по сайту...</span>
-        <kbd className="rounded-md border border-white/10 bg-black/30 px-1.5 py-0.5 text-[11px] text-[#71717a]">Ctrl K</kbd>
+        <kbd className="rounded border border-white/[.07] px-1.5 py-0.5 text-[10px] text-[#64656c]">Ctrl K</kbd>
       </button>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[.05] text-white transition hover:border-[#e50914]/60 min-[760px]:hidden"
+        onClick={openSearch}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[11px] border border-white/[.07] bg-white/[.025] text-white transition hover:border-white/[.14] min-[760px]:hidden"
         aria-label="Открыть поиск"
         aria-haspopup="dialog"
       >
@@ -172,11 +184,11 @@ export function SearchOverlayClient() {
       </noscript>
 
       {open ? (
-        <div role="dialog" aria-modal="true" aria-label="Поиск REDFILM" className="fixed inset-0 z-[120] bg-black/78 p-3 backdrop-blur-xl sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
-          <div ref={panelRef} onKeyDown={trapFocus} className="search-overlay-panel mx-auto flex max-h-[calc(100svh-24px)] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#09090d]/95 shadow-[0_34px_110px_rgba(0,0,0,.72),0_0_80px_rgba(229,9,20,.16)] sm:max-h-[calc(100svh-48px)]">
-            <div className="border-b border-white/10 p-3 sm:p-5">
-              <form onSubmit={submitSearch} action="/search" className="flex min-h-14 items-center gap-3 rounded-2xl border border-[#e50914]/35 bg-black/35 px-4 shadow-[0_0_34px_rgba(229,9,20,.12)]">
-                <Search size={22} className="shrink-0 text-[#e50914]" />
+        <div role="dialog" aria-modal="true" aria-label="Поиск REDFILM" className="fixed inset-0 z-[120] bg-[#070708]/98 px-3 py-4 backdrop-blur-xl sm:px-8 sm:py-10" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+          <div ref={panelRef} onKeyDown={trapFocus} className="search-overlay-panel mx-auto flex max-h-[calc(100svh-24px)] w-full max-w-[760px] flex-col overflow-hidden rounded-[16px] border border-white/[.06] bg-[#090a0c] shadow-[0_28px_90px_rgba(0,0,0,.48)] sm:max-h-[calc(100svh-64px)]">
+            <div className="border-b border-white/[.055] p-3 sm:p-4">
+              <form onSubmit={submitSearch} action="/search" className="flex min-h-14 items-center gap-3 rounded-[11px] border border-white/[.075] bg-white/[.02] px-4 focus-within:border-white/[.16] focus-within:bg-white/[.032]">
+                <Search size={20} className="shrink-0 text-[#8f9098]" />
                 <input
                   ref={inputRef}
                   name="q"
@@ -185,36 +197,35 @@ export function SearchOverlayClient() {
                   autoComplete="off"
                   enterKeyHint="search"
                   placeholder="Название, жанр, страна или ID"
-                  className="min-w-0 flex-1 bg-transparent text-[16px] font-bold text-white outline-none placeholder:text-[#71717a] sm:text-xl"
+                  className="min-h-11 min-w-0 flex-1 bg-transparent text-[16px] font-medium text-white outline-none placeholder:text-[#64656c] sm:text-lg"
                 />
-                <button type="button" onClick={() => setOpen(false)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[.05] text-white" aria-label="Закрыть поиск">
+                <button type="button" onClick={() => setOpen(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#a0a1a8] transition hover:bg-white/[.05] hover:text-white" aria-label="Закрыть поиск">
                   <X size={19} />
                 </button>
               </form>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
               {query.trim().length < 2 ? (
                 <div>
-                  <div className="text-sm font-black uppercase tracking-[.16em] text-[#e50914]">Быстрый старт</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[.12em] text-[#e31b32]">Быстрый старт</div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {quickLinks.map((item) => <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="mf-btn">{item.label}</Link>)}
+                    {quickLinks.map((item) => <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="rf-filter">{item.label}</Link>)}
                   </div>
-                  <p className="mt-5 max-w-2xl text-sm leading-6 text-[#a1a1aa]">Введите название фильма, сериала, жанр или ID. Полная страница поиска остаётся доступна по обычной ссылке `/search?q=...`.</p>
                 </div>
               ) : loading ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {Array.from({ length: 6 }, (_, index) => <div key={index} className="grid grid-cols-[52px_minmax(0,1fr)] gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-3"><div className="skeleton aspect-[2/3] rounded-lg" /><div className="space-y-3 py-2"><div className="skeleton h-4 rounded" /><div className="skeleton h-3 w-1/2 rounded" /></div></div>)}
+                <div className="grid gap-1">
+                  {Array.from({ length: 6 }, (_, index) => <div key={index} className="grid grid-cols-[48px_minmax(0,1fr)] gap-3 border-b border-white/[.06] py-2.5"><div className="skeleton aspect-[2/3] rounded-md" /><div className="space-y-3 py-2"><div className="skeleton h-4 rounded" /><div className="skeleton h-3 w-1/2 rounded" /></div></div>)}
                 </div>
               ) : hasResults ? (
                 <div className="grid gap-6">
                   {groups.filter((group) => group.results.length > 0).map((group) => (
                     <section key={group.key}>
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <h2 className="text-lg font-black text-white">{group.title}</h2>
-                        <Link href={group.href} onClick={() => setOpen(false)} className="text-sm font-bold text-[#ff4d55]">Все результаты</Link>
+                        <h2 className="text-base font-semibold text-white">{group.title}</h2>
+                        <Link href={group.href} onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center px-1 text-sm font-medium text-[#a0a1a8] hover:text-white">Все результаты</Link>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="divide-y divide-white/[.06]">
                         {group.results.map((movie) => (
                           <Link
                             key={movie.id}
@@ -223,15 +234,15 @@ export function SearchOverlayClient() {
                               trackEvent("search_suggestion_click", { movieId: movie.id, query });
                               setOpen(false);
                             }}
-                            className="grid grid-cols-[52px_minmax(0,1fr)] items-center gap-3 rounded-2xl border border-white/10 bg-white/[.035] p-2.5 transition hover:border-[#e50914]/55 hover:bg-white/[.07]"
+                            className="grid min-h-[70px] grid-cols-[44px_minmax(0,1fr)] items-center gap-3 px-1 py-2.5 transition hover:bg-white/[.035]"
                           >
                             <div className="poster-fallback relative aspect-[2/3] overflow-hidden rounded-lg">
                               {movie.posterUrl ? <Image src={movie.posterUrl} alt="" fill sizes="52px" className="object-cover" /> : null}
                             </div>
                             <div className="min-w-0">
-                              <div className="truncate font-black text-white">{movie.title}</div>
-                              {movie.originalTitle ? <div className="truncate text-xs font-semibold text-[#b8b8c2]">{movie.originalTitle}</div> : null}
-                              <div className="mt-1 text-sm text-[#8d8d97]">{movie.type === "COLLECTION" ? "REDFILM" : movie.year} · {typeLabel(movie.type)}{movie.season ? ` · ${movie.season} сезон${movie.seasonAvailable ? "" : " пока не подтверждён"}` : ""}</div>
+                              <div className="truncate text-sm font-medium text-white">{movie.title}</div>
+                              {movie.originalTitle ? <div className="truncate text-xs font-normal text-[#74757d]">{movie.originalTitle}</div> : null}
+                              <div className="mt-1 text-xs text-[#74757d]">{movie.type === "COLLECTION" ? "REDFILM" : movie.year} · {typeLabel(movie.type)}{movie.season ? ` · ${movie.season} сезон${movie.seasonAvailable ? "" : " пока не подтверждён"}` : ""}</div>
                             </div>
                           </Link>
                         ))}
@@ -240,8 +251,8 @@ export function SearchOverlayClient() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-3xl border border-white/10 bg-white/[.035] p-6 text-center">
-                  <h2 className="text-xl font-black text-white">Ничего не найдено</h2>
+                <div className="border-t border-white/[.07] p-6 text-center">
+                  <h2 className="text-xl font-semibold text-white">Ничего не найдено</h2>
                   <p className="mt-2 text-[#a1a1aa]">Попробуйте сократить запрос или открыть полный поиск.</p>
                   <button type="button" onClick={() => submitSearch()} className="mf-btn mf-btn-primary mt-4">Открыть /search</button>
                 </div>

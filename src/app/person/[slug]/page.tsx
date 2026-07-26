@@ -65,17 +65,17 @@ export default async function PersonPage({ params }: Props) {
 
     <nav className="mb-5 text-sm text-[#85858f]"><Link href="/">REDFILM</Link> / Актёры / {person.nameRu}</nav>
 
-    <section className="glass-panel section-glow mb-6 rounded-[26px] p-5 sm:p-7">
-      <span className="mf-badge">Персона</span>
-      <h1 className="mt-3 text-[clamp(1.8rem,5vw,3.2rem)] font-black tracking-[-.035em] text-white">Фильмы с {person.nameRu} смотреть онлайн</h1>
-      <p className="mt-4 max-w-4xl leading-relaxed text-[#b7b7c0]">На этой странице собраны доступные на REDFILM фильмы и сериалы с {person.nameRu}. Подборка помогает закрывать запросы «фильмы с {person.nameRu}», быстро выбирать тайтлы по рейтингу, жанрам и переходить к просмотру.</p>
-      {person.nameOriginal ? <p className="mt-2 text-sm text-[#85858f]">Также известен как: {person.nameOriginal}</p> : null}
-    </section>
+    <header className="rf-catalog-intro mb-7">
+      <div className="rf-section-eyebrow">Актёрская подборка</div>
+      <h1 className="rf-page-title mt-2">Фильмы с {person.nameRu}</h1>
+      <p className="rf-copy mt-3 max-w-3xl">Доступные фильмы и сериалы с {person.nameRu}, собранные в одном аккуратном каталоге.</p>
+      {person.nameOriginal ? <p className="mt-2 text-sm text-[#74757d]">{person.nameOriginal}</p> : null}
+    </header>
 
     <div className="movie-grid">{movies.map((movie) => <MovieCard key={movie.id} movie={movie} />)}</div>
 
-    <section className="mf-panel mt-7 p-5 sm:p-6">
-      <h2 className="text-xl font-black text-white">Похожие страницы</h2>
+    <section className="rf-section border-t border-white/[.055] pt-7">
+      <h2 className="rf-section-title">Похожие страницы</h2>
       <div className="mt-4 flex flex-wrap gap-2">
         {genres.map((genre) => <Link key={genre.slug} href={`/genre/${genre.slug}`} className="mf-btn">{genre.name}</Link>)}
         <Link href="/popular" className="mf-btn">Популярное</Link>

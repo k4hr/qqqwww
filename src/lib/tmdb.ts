@@ -36,6 +36,11 @@ type TmdbDetails = TmdbSummary & {
   images?: TmdbImagesResponse;
 };
 
+type TmdbFindResponse = {
+  movie_results?: TmdbSummary[];
+  tv_results?: TmdbSummary[];
+};
+
 type TmdbKeywordResponse = {
   keywords?: Array<{ id: number; name: string }>;
   results?: Array<{ id: number; name: string }>;
@@ -127,6 +132,59 @@ export function tmdbImage(path?: string | null, size = "w500") {
 
 export function tmdbOriginalImage(path?: string | null) {
   return tmdbImage(path, "original");
+}
+
+
+export async function findTmdbByImdbId(imdbId: string, type: ContentType) {
+  const normalized = imdbId.trim();
+  if (!/^tt\d+$/i.test(normalized)) return null;
+  const data = await tmdbFetch<TmdbFindResponse>(`/find/${encodeURIComponent(normalized)}?external_source=imdb_id&language=ru-RU`, 86400);
+  const prefersTv = type === ContentType.SERIES;
+  const preferred = prefersTv ? data.tv_results?.[0] : data.movie_results?.[0];
+  if (preferred) return { ...preferred, media_type: prefersTv ? "tv" as const : "movie" as const };
+  const fallback = prefersTv ? data.movie_results?.[0] : data.tv_results?.[0];
+  if (!fallback) return null;
+  return { ...fallback, media_type: prefersTv ? "movie" as const : "tv" as const };
+}
+
+function normalizedTmdbTitle(value?: string | null) {
+  return (value ?? "")
+    .toLocaleLowerCase("ru-RU")
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/giu, " ")
+    .trim();
+}
+
+export async function resolveTmdbSummary(input: {
+  type: ContentType;
+  imdbId?: string | null;
+  titleRu: string;
+  titleOriginal?: string | null;
+  year: number;
+}) {
+  if (input.imdbId) {
+    const byImdb = await findTmdbByImdbId(input.imdbId, input.type);
+    if (byImdb) return byImdb;
+  }
+
+  const queries = Array.from(new Set([input.titleOriginal, input.titleRu].map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
+  const expectedTitles = new Set(queries.map(normalizedTmdbTitle));
+  for (const query of queries) {
+    const results = input.type === ContentType.SERIES
+      ? await searchTvByTitle(query, input.year)
+      : await searchMovieByTitle(query, input.year);
+    const ranked = results
+      .map((item) => {
+        const itemYear = Number((item.release_date ?? item.first_air_date ?? "").slice(0, 4)) || 0;
+        const titles = [item.title, item.name, item.original_title, item.original_name].map(normalizedTmdbTitle);
+        const exactTitle = titles.some((title) => expectedTitles.has(title));
+        const yearDistance = itemYear ? Math.abs(itemYear - input.year) : 99;
+        return { item, score: (exactTitle ? 100 : 0) + (yearDistance == 0 ? 40 : yearDistance == 1 ? 18 : 0) + Math.log10(1 + (item.vote_count ?? 0)) * 3 + Math.log10(1 + (item.popularity ?? 0)) };
+      })
+      .sort((a, b) => b.score - a.score);
+    if (ranked[0] && ranked[0].score >= 55) return ranked[0].item;
+  }
+  return null;
 }
 
 export async function getTmdbImages(tmdbId: string, type: ContentType) {

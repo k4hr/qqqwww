@@ -92,9 +92,12 @@ export function getCountryTaxonomy(slug?: string | null) {
 }
 
 export function genreWhere(slug?: string | null): Prisma.MovieWhereInput {
-  const item = getGenreTaxonomy(slug);
-  if (!item) return {};
-  const names = [item.slug, item.label, ...item.aliases];
+  const raw = slug?.trim();
+  if (!raw) return {};
+
+  const item = getGenreTaxonomy(raw);
+  const names = item ? [item.slug, item.label, ...item.aliases] : [raw];
+
   return {
     OR: names.flatMap((value) => [
       { genres: { some: { genre: { slug: { equals: value, mode: "insensitive" } } } } },

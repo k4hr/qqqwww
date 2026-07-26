@@ -64,17 +64,19 @@ export default async function CollectionsPage({ searchParams }: Props) {
 
   return (
     <div className="container py-6">
-      <h1 className="text-3xl font-black tracking-[-.035em] text-white">
-        Подборки фильмов и сериалов
-      </h1>
+      <section className="rf-catalog-intro">
+        <div className="rf-section-eyebrow mb-3">Коллекции REDFILM</div>
+        <h1 className="rf-page-title">Подборки фильмов и сериалов</h1>
+        <p className="rf-copy mt-4 max-w-2xl">Тематические коллекции редакции и авторов: от жанровых маршрутов до коротких списков на один вечер.</p>
+      </section>
 
-      <div className="mt-5 inline-flex rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+      <div className="rf-filter-row mt-6">
         <Link
           href="/collections?view=bloggers"
-          className={`rounded-xl px-4 py-2 text-sm font-black ${
+          className={`rf-filter ${
             current === "bloggers"
-              ? "bg-[#e50914] text-white"
-              : "text-white/70"
+              ? "rf-filter-active"
+              : ""
           }`}
         >
           Подборки блогеров
@@ -82,10 +84,10 @@ export default async function CollectionsPage({ searchParams }: Props) {
 
         <Link
           href="/collections?view=redfilm"
-          className={`rounded-xl px-4 py-2 text-sm font-black ${
+          className={`rf-filter ${
             current === "redfilm"
-              ? "bg-[#e50914] text-white"
-              : "text-white/70"
+              ? "rf-filter-active"
+              : ""
           }`}
         >
           Подборки REDFILM
@@ -102,9 +104,9 @@ export default async function CollectionsPage({ searchParams }: Props) {
               <Link
                 key={hub.id}
                 href={`/collections/${hub.slug}`}
-                className="mf-panel overflow-hidden p-0 hover:border-[#e50914]/50"
+                className="collections-author-card group overflow-hidden rounded-[13px] transition"
               >
-                <div className="relative h-44 overflow-hidden bg-white/[0.04]">
+                <div className="collections-author-card-cover relative h-44 overflow-hidden bg-white/[0.025]">
                   {hub.coverUrl ? (
                     <Image
                       src={hub.coverUrl}
@@ -112,7 +114,7 @@ export default async function CollectionsPage({ searchParams }: Props) {
                       fill
                       unoptimized
                       sizes="(max-width: 767px) 100vw, (max-width: 1279px) 50vw, 33vw"
-                      className="block object-cover"
+                      className="collections-author-card-image block object-cover"
                     />
                   ) : null}
 
@@ -130,18 +132,18 @@ export default async function CollectionsPage({ searchParams }: Props) {
                   ) : null}
                 </div>
 
-                <div className="p-5">
-                  <h2 className="text-xl font-black text-white">
+                <div className="collections-author-card-body px-1 pb-1 pt-3">
+                  <h2 className="text-[16px] font-medium text-[#ececef]">
                     {partner.publicName || partner.name}
                   </h2>
 
-                  <p className="mt-2 line-clamp-2 text-sm text-[#a1a1aa]">
+                  <p className="mt-1.5 line-clamp-2 text-[13px] leading-5 text-[#74757d]">
                     {hub.description ||
                       partner.description ||
                       "Авторские подборки фильмов и сериалов."}
                   </p>
 
-                  <div className="mt-4 text-sm font-bold text-[#ff4d55]">
+                  <div className="mt-2.5 text-xs font-medium text-[#6f7179]">
                     Подборок: {countByPartner.get(partner.id) || 0}
                   </div>
                 </div>
@@ -150,24 +152,25 @@ export default async function CollectionsPage({ searchParams }: Props) {
           })}
 
           {!hubs.length ? (
-            <div className="mf-panel p-5 text-[#a1a1aa]">
+            <div className="border-y border-white/[.07] py-8 text-[#a1a1aa]">
               Опубликованных подборок блогеров пока нет.
             </div>
           ) : null}
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {publicCollections.map((collection) => (
+        <div className="mt-8 grid gap-x-7 md:grid-cols-2 lg:grid-cols-3">
+          {publicCollections.map((collection, index) => (
             <Link
               key={collection.slug}
               href={`/collections/${collection.slug}`}
-              className="glass-panel section-glow rounded-3xl p-5 transition-all hover:-translate-y-1 hover:border-[#e50914]/60"
+              className="group border-t border-white/[.08] py-5 transition-colors hover:border-white/[.18]"
             >
-              <h2 className="mb-2 text-xl font-black text-white">
+              <div className="mb-5 text-xs font-medium tracking-[.12em] text-[#74757d]">{String(index + 1).padStart(2, "0")}</div>
+              <h2 className="mb-2 text-[17px] font-medium text-[#e8e8eb] transition-colors group-hover:text-white">
                 {collection.h1}
               </h2>
 
-              <p className="leading-relaxed text-[#a1a1aa]">
+              <p className="text-sm leading-6 text-[#7f8189]">
                 {collection.description}
               </p>
             </Link>

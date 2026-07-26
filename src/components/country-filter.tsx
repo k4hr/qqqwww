@@ -19,15 +19,15 @@ export function CountryFilter({ country, preserve }: Props) {
   const activeCountry = normalizeCatalogCountry(country);
 
   return (
-    <div className="mt-5 min-w-0">
-      <div className="mb-2 text-xs font-black uppercase tracking-[.14em] text-[#777781]">Страна</div>
-      <nav className="country-filter flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Фильтр по стране">
+    <div className="min-w-0">
+      <div className="mb-2 text-[11px] font-medium text-[#74757d]">Страна</div>
+      <nav className="country-filter rf-filter-row max-w-full" aria-label="Фильтр по стране">
         {COUNTRY_FILTER_OPTIONS.map((option) => (
           <Link
             key={option.value}
             href={countryHref(option.value, preserve)}
             aria-current={activeCountry === option.value ? "page" : undefined}
-            className={`${activeCountry === option.value ? "mf-btn mf-btn-primary" : "mf-btn"} shrink-0`}
+            className={`${activeCountry === option.value ? "rf-filter rf-filter-active" : "rf-filter"} shrink-0`}
           >
             {option.label}
           </Link>

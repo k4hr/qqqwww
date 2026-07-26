@@ -6,6 +6,7 @@ import {
   type MatchHistoryEvent,
   type MatchPreferences,
 } from "@/lib/discovery/types";
+import { normalizeMovieCountries } from "@/lib/discovery/match-ranking";
 
 export const MATCH_PREFERENCES_KEY = "redfilm:match:preferences:v1";
 export const MATCH_HISTORY_KEY = "redfilm:match:history:v1";
@@ -126,7 +127,7 @@ export function applyMatchDecision(current: MatchPreferences, movie: DiscoveryMo
   for (const genre of movie.genres) boundedWeight(next.genreWeights, genre, 1.4 * factor);
   boundedWeight(next.typeWeights, movie.type, 1.8 * factor);
   boundedWeight(next.decadeWeights, `${Math.floor(movie.year / 10) * 10}`, 1.1 * factor);
-  for (const country of (movie.country ?? "").split(/[,;/|]+/).map((item) => item.trim()).filter(Boolean).slice(0, 3)) {
+  for (const country of normalizeMovieCountries(movie.country).slice(0, 3)) {
     boundedWeight(next.countryWeights, country, 0.7 * factor);
   }
   boundedWeight(next.runtimeBuckets, runtimeBucket(movie.duration), 0.8 * factor);

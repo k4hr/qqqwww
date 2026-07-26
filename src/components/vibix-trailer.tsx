@@ -137,12 +137,12 @@ export function VibixTrailer(props: Props) {
   if (!source || !srcDoc) return null;
 
   return (
-    <div className="border-t border-white/10 bg-[#09090c] px-4 py-4 sm:px-5">
+    <div className="border-t border-white/[.055] py-4">
       {!open ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/[.06] px-4 py-2.5 text-sm font-black text-white transition hover:border-[#e50914]/70 hover:bg-[#e50914]/10"
+          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/[.07] bg-white/[.025] px-4 py-2.5 text-sm font-medium text-[#e7e7ea] transition hover:border-white/[.14] hover:bg-white/[.05]"
           aria-expanded="false"
         >
           <Clapperboard size={18} />
@@ -151,20 +151,20 @@ export function VibixTrailer(props: Props) {
       ) : (
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="min-w-0 break-words text-base font-black text-white">
+            <h3 className="min-w-0 break-words text-base font-semibold text-white">
               Трейлер: {props.title}
             </h3>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[.06] text-white/80 transition hover:bg-white/10 hover:text-white"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[.06] text-white/80 transition hover:bg-white/10 hover:text-white"
               aria-label="Закрыть трейлер"
             >
               <X size={18} />
             </button>
           </div>
 
-          <div className="aspect-video overflow-hidden rounded-2xl bg-black">
+          <div className="aspect-video overflow-hidden rounded-[14px] bg-black">
             <iframe
               key={`trailer-${source.type}-${source.id}`}
               srcDoc={srcDoc}

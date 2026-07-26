@@ -12,7 +12,7 @@
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "next lint",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "tsx src/scripts/search-unit-tests.ts",
+    "test:unit": "tsx src/scripts/search-unit-tests.ts && tsx src/scripts/discovery-unit-tests.ts",
     "test:integration": "tsx src/scripts/search-integration-tests.ts",
     "test:fixture": "tsx src/scripts/test-fixture.ts",
     "postinstall": "prisma generate",
@@ -30,6 +30,7 @@
     "similarity:recalculate": "tsx src/scripts/recalculate-similarities.ts",
     "similarity:golden": "tsx src/scripts/similarity-golden-check.ts",
     "search:golden": "tsx src/scripts/search-golden.ts",
+    "search:benchmark": "tsx src/scripts/search-benchmark.ts",
     "similarity:worker": "tsx src/scripts/similarity-worker.ts",
     "vibix:catalog-worker": "tsx src/scripts/vibix-catalog-worker.ts",
     "vibix:repair-player-embeds": "tsx src/scripts/repair-vibix-player-embeds.ts",
@@ -39,7 +40,9 @@
     "prebuild:clean-routes": "node scripts/prebuild-clean-routes.mjs",
     "render:worker": "npm run vibix:catalog-worker",
     "render:cron-daily": "node scripts/render-trigger-daily-catalog.mjs",
-    "render:db:push": "prisma db push"
+    "render:db:push": "prisma db push",
+    "artwork:sync-run": "tsx src/scripts/artwork-sync-run.ts",
+    "artwork:sync-slugs": "tsx src/scripts/artwork-sync-slugs.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

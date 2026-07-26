@@ -8,18 +8,17 @@ type Props = {
 
 export function PlayerBlock({ movie }: Props) {
   return (
-    <section className="cinema-glow mf-panel mt-6 overflow-hidden">
-      <div className="relative flex min-w-0 flex-col gap-2 border-b border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <h2 className="min-w-0 break-words text-base font-bold text-white sm:text-lg">Смотреть онлайн {movie.titleRu} ({movie.year})</h2>
-        <div className="shrink-0 text-left sm:text-right">
-          <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-[#e50914] sm:text-xs">REDFILM</span>
-          <span className="mt-1 block text-[11px] font-semibold leading-snug text-white sm:text-xs">Не загрузился плеер? Отключите VPN или смените сервер VPN.</span>
+    <section className="rf-player-section mt-8">
+      <div className="mb-3 flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[.13em] text-[#e31b32]">REDFILM</div>
+          <h2 className="mt-1 min-w-0 break-words text-[17px] font-semibold text-white">Смотреть {movie.titleRu}</h2>
         </div>
+        <p className="max-w-md text-xs leading-5 text-[#74757d]">Если источник не загружается, отключите VPN или смените его сервер.</p>
       </div>
 
-      <div className="relative bg-black text-white">
+      <div className="rf-player-shell relative overflow-hidden rounded-[14px] bg-black text-white">
         <AnalyticsEvent type="player_view" movieId={movie.id} />
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-[#e50914]/80 to-transparent" />
         <VibixPlayer
           movieId={movie.id}
           title={movie.titleRu}

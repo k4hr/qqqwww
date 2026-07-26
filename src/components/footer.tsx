@@ -1,62 +1,53 @@
 import Link from "next/link";
-import { Play } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="mt-16 border-t border-white/10 bg-[#050507] text-white">
-      <div className="container relative flex flex-col gap-7 py-10 md:flex-row md:items-center md:justify-between">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#e50914]/60 to-transparent" />
-
-        <div>
+    <footer className="mt-16 border-t border-white/[.07] text-white">
+      <div className="container grid gap-8 py-10 md:grid-cols-[minmax(260px,1.2fr)_minmax(320px,1fr)_minmax(220px,.8fr)] md:items-start">
+        <div className="max-w-md">
           <Link
             href="/"
-            className="inline-flex items-center gap-3 text-xl font-black tracking-[-0.04em]"
+            className="inline-flex min-h-11 items-center text-lg font-semibold tracking-[-0.025em]"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#e50914] text-white shadow-[0_0_28px_rgba(229,9,20,.3)]">
-              <Play size={18} fill="currentColor" />
-            </span>
-
-            <span>
-              <span className="text-[#e50914]">RED</span>FILM
-            </span>
+            <span><span className="text-[#f02b42]">RED</span>FILM</span>
           </Link>
 
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#71717a]">
+          <p className="mt-3 text-sm leading-relaxed text-[#74757d]">
             Каталог фильмов и сериалов с описаниями, рейтингами и новыми подборками.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3 text-sm font-bold text-[#8b8b95] md:justify-end">
-          <Link className="hover:text-white" href="/films">
+        <nav className="grid grid-cols-2 gap-x-5 text-sm font-medium text-[#8c8e96]" aria-label="Разделы сайта">
+          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/films">
             Фильмы
           </Link>
-          <Link className="hover:text-white" href="/series">
+          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/series">
             Сериалы
           </Link>
-          <Link className="hover:text-white" href="/latest">
+          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/latest">
             Последнее
           </Link>
-          <Link className="hover:text-white" href="/top">
+          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/top">
             ТОП
           </Link>
-          <Link className="hover:text-white" href="/favorites">
+          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/favorites">
             Избранное
           </Link>
-          <Link className="hover:text-white" href="/history">
+          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/history">
             Недавно смотрели
           </Link>
-        </div>
+        </nav>
 
-        <div className="text-sm text-[#71717a] md:text-right">
+        <div className="text-sm text-[#74757d] md:text-right">
           <p>© {new Date().getFullYear()} REDFILM</p>
 
           <a
             href="https://t.me/seimngr"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-1 inline-block text-[#71717a] transition-colors hover:text-[#e50914]"
+            className="mt-2 inline-flex min-h-11 items-center leading-relaxed text-[#74757d] transition-colors hover:text-white"
           >
-            По всем вопросам, включая сотрудничество и поддержку, обращайтесь в Telegram.
+            Сотрудничество и поддержка в Telegram
           </a>
         </div>
       </div>

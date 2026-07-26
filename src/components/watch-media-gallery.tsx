@@ -87,6 +87,7 @@ export function WatchMediaGallery({ title, trailerUrl, artworks }: Props) {
     ];
   }, [artworks, title, trailerUrl]);
 
+  const availableTabs = tabs.filter((tab) => items.some((item) => item.tab === tab.key));
   const visibleItems = items.filter((item) => item.tab === activeTab);
   const lightboxItem = lightboxIndex !== null ? visibleItems[lightboxIndex] : null;
   const safeLightboxIndex = lightboxIndex ?? 0;
@@ -116,19 +117,18 @@ export function WatchMediaGallery({ title, trailerUrl, artworks }: Props) {
   if (!items.length) return null;
 
   return (
-    <section className="mf-panel mt-8 overflow-hidden p-4 sm:p-5 lg:p-6">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="text-xs font-black uppercase tracking-[.16em] text-[#e50914]">Медиа</div>
-          <h2 className="mt-2 text-2xl font-black tracking-[-.035em] text-white">Материалы к фильму</h2>
-        </div>
-        <div className="flex gap-2 overflow-x-auto rounded-full border border-white/[.07] bg-black/20 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tabs.map((tab) => (
-            <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className={`mf-pill ${activeTab === tab.key ? "active" : ""}`} aria-pressed={activeTab === tab.key}>
-              {tab.label}
-            </button>
-          ))}
-        </div>
+    <section className="rf-section rf-media-gallery">
+      <div className="mb-5">
+        <h2 className="rf-section-title">Материалы</h2>
+        {availableTabs.length > 1 ? (
+          <div className="rf-filter-row mt-3">
+            {availableTabs.map((tab) => (
+              <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className={`rf-filter ${activeTab === tab.key ? "rf-filter-active" : ""}`} aria-pressed={activeTab === tab.key}>
+                {tab.key === "videos" ? "Трейлеры" : tab.key === "backdrops" ? "Кадры" : tab.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="media-scroll-grid">
@@ -143,11 +143,11 @@ export function WatchMediaGallery({ title, trailerUrl, artworks }: Props) {
               restoreFocusRef.current = event.currentTarget;
               setLightboxIndex(index);
             }}
-            className={`poster-fallback relative snap-start overflow-hidden rounded-2xl border border-white/10 text-left transition hover:border-[#e50914]/60 ${item.tab === "posters" ? "aspect-[2/3]" : "aspect-video"}`}
+            className={`poster-fallback relative snap-start overflow-hidden rounded-[11px] bg-[#0c0d10] text-left transition hover:brightness-110 ${item.tab === "posters" ? "aspect-[2/3]" : "aspect-video"}`}
             aria-label={`Открыть ${item.title}`}
           >
-            <Image src={item.thumbUrl} alt={item.title} fill loading="lazy" sizes="(max-width: 640px) 72vw, (max-width: 1024px) 34vw, 260px" className="object-cover" />
-            {item.kind === "video" ? <span className="absolute left-3 top-3 rounded-full bg-[#e50914] px-3 py-1 text-xs font-black text-white">Видео</span> : null}
+            <Image src={item.thumbUrl} alt={item.title} fill loading="lazy" sizes="(max-width: 640px) 72vw, 280px" className="object-cover" />
+            {item.kind === "video" ? <span className="absolute left-3 top-3 rounded-md bg-black/72 px-2 py-1 text-[10px] font-semibold uppercase tracking-[.08em] text-white">Видео</span> : null}
           </button>
         ))}
       </div>

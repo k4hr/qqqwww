@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import WatchPage from "@/app/watch/[slug]/page";
 import { resolveSeasonSeoPage, seasonSeoDescription, seasonSeoTitle } from "@/lib/seo/season-pages";
 import { seasonPath } from "@/lib/seo-links";
+import { getPublicBackdrop } from "@/lib/movie-artwork";
 
 export const revalidate = 600;
 
@@ -15,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const canonical = seasonPath(page.movie, page.season);
   const title = seasonSeoTitle(page);
   const description = seasonSeoDescription(page);
-  const image = page.movie.backdropUrl || page.movie.posterUrl;
+  const image = await getPublicBackdrop(page.movie.id);
 
   return {
     title,

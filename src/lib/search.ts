@@ -295,6 +295,10 @@ function splitWords(text: string) {
   return normalizeSearchQuery(text).split(" ").filter(Boolean);
 }
 
+function searchableWords(text: string) {
+  return Array.from(new Set([...splitWords(text), ...tokenizeSearchQuery(text)]));
+}
+
 function hasBoundaryAfter(text: string, position: number, phrase: string) {
   const next = text[position + phrase.length];
   return !next || WORD_BOUNDARY_PATTERN.test(next);
@@ -341,7 +345,7 @@ function popularityBoost(movie: SearchMovie) {
 function scoreOneTextField(text: string, variant: string, tokens: string[], exactWeight: number, prefixWeight: number, wordWeight: number) {
   const normalizedText = normalizeSearchQuery(text);
   if (!normalizedText || !variant) return 0;
-  const words = splitWords(normalizedText);
+  const words = searchableWords(normalizedText);
   let score = 0;
   if (normalizedText === variant) score += exactWeight;
   else if (phraseStartsAtBoundary(normalizedText, variant)) score += prefixWeight;
@@ -363,7 +367,7 @@ function scoreOneTextField(text: string, variant: string, tokens: string[], exac
       score += 8;
     }
   }
-  if (tokens.length && matchedTokens === tokens.length) score += tokens.length >= 2 ? 28 : 12;
+  if (tokens.length && matchedTokens === tokens.length) score += tokens.length >= 2 ? 28 : 48;
   return score;
 }
 
@@ -441,12 +445,12 @@ export function explainSearchResult(movie: SearchMovie, query: string): { score:
     if (aliasTargets.some((alias) => [titleRu, titleOriginal, slug].includes(normalizeSearchQuery(alias)))) provenance.add("EXACT_ALIAS");
     if (variantCompact && compactTitle === variantCompact) provenance.add("EXACT_COMPACT_TITLE");
     if (phraseStartsAtBoundary(titleRu, variant) || (titleOriginal && phraseStartsAtBoundary(titleOriginal, variant))) provenance.add("PREFIX");
-    if (variantTokens.length && variantTokens.every((token) => splitWords(titleRu).includes(token) || splitWords(titleOriginal).includes(token) || splitWords(slug).includes(token))) provenance.add("ALL_TITLE_TOKENS");
+    if (variantTokens.length && variantTokens.every((token) => searchableWords(titleRu).includes(token) || searchableWords(titleOriginal).includes(token) || searchableWords(slug).includes(token))) provenance.add("ALL_TITLE_TOKENS");
     const transliteratedTitle = normalizeSearchQuery(transliterateSearchQuery(movie.titleRu));
     if (transliteratedTitle === variant || phraseStartsAtBoundary(transliteratedTitle, variant)) provenance.add("TRANSLITERATION");
     const keyboardCorrected = [convertKeyboardLayout(intent, "en-to-ru"), convertKeyboardLayout(intent, "ru-to-en")];
     if (keyboardCorrected.some((corrected) => corrected === titleRu || corrected === titleOriginal)) provenance.add("KEYBOARD_LAYOUT");
-    if (variantTokens.some((token) => token.length >= 4 && [...splitWords(titleRu), ...splitWords(titleOriginal)].some((word) => {
+    if (variantTokens.some((token) => token.length >= 4 && [...searchableWords(titleRu), ...searchableWords(titleOriginal)].some((word) => {
       const distance = editDistance(token, word);
       return distance > 0 && distance <= (token.length >= 7 ? 2 : 1);
     }))) provenance.add("FUZZY");
@@ -499,33 +503,43 @@ async function trigramCandidateIds(query: string, take: number) {
   if (normalized.length < 4) return [];
   const threshold = normalized.includes(" ") ? 0.16 : normalized.length >= 12 ? 0.22 : normalized.length >= 8 ? 0.26 : 0.31;
   try {
+    const publicCandidateWhere = Prisma.sql`
+      "isPublished" = true
+      AND "isCatalogAllowed" = true
+      AND "vibixAvailable" = true
+      AND "posterUrl" IS NOT NULL
+      AND "posterUrl" <> ''
+      AND (
+        ("vibixIframeUrl" IS NOT NULL AND "vibixIframeUrl" <> '')
+        OR ("vibixEmbedCode" IS NOT NULL AND "vibixEmbedCode" <> '')
+      )
+    `;
     const rows = await prisma.$queryRaw<Array<{ id: string; similarity: number }>>(Prisma.sql`
-      SELECT "id",
+      WITH candidates AS MATERIALIZED (
+        SELECT "id" FROM "Movie" WHERE ${publicCandidateWhere} AND lower("titleRu") % ${normalized}
+        UNION
+        SELECT "id" FROM "Movie" WHERE ${publicCandidateWhere} AND "titleOriginal" IS NOT NULL AND lower("titleOriginal") % ${normalized}
+        UNION
+        SELECT "id" FROM "Movie" WHERE ${publicCandidateWhere} AND lower("slug") % ${normalized}
+      )
+      SELECT movie."id",
         GREATEST(
-          similarity(lower("titleRu"), ${normalized}),
-          similarity(lower(COALESCE("titleOriginal", '')), ${normalized}),
-          similarity(lower("slug"), ${normalized}),
-          similarity(regexp_replace(lower("titleRu"), '[^a-zа-я0-9]+', '', 'g'), ${compact}),
-          word_similarity(${normalized}, lower("titleRu")),
-          word_similarity(${normalized}, lower(COALESCE("titleOriginal", '')))
+          similarity(lower(movie."titleRu"), ${normalized}),
+          similarity(lower(COALESCE(movie."titleOriginal", '')), ${normalized}),
+          similarity(lower(movie."slug"), ${normalized}),
+          similarity(regexp_replace(lower(movie."titleRu"), '[^a-zа-я0-9]+', '', 'g'), ${compact}),
+          word_similarity(${normalized}, lower(movie."titleRu")),
+          word_similarity(${normalized}, lower(COALESCE(movie."titleOriginal", '')))
         ) AS "similarity"
-      FROM "Movie"
-      WHERE "isPublished" = true
-        AND "isCatalogAllowed" = true
-        AND "vibixAvailable" = true
-        AND "posterUrl" IS NOT NULL
-        AND "posterUrl" <> ''
-        AND (
-          ("vibixIframeUrl" IS NOT NULL AND "vibixIframeUrl" <> '')
-          OR ("vibixEmbedCode" IS NOT NULL AND "vibixEmbedCode" <> '')
-        )
-        AND GREATEST(
-          similarity(lower("titleRu"), ${normalized}),
-          similarity(lower(COALESCE("titleOriginal", '')), ${normalized}),
-          similarity(lower("slug"), ${normalized}),
-          similarity(regexp_replace(lower("titleRu"), '[^a-zа-я0-9]+', '', 'g'), ${compact}),
-          word_similarity(${normalized}, lower("titleRu")),
-          word_similarity(${normalized}, lower(COALESCE("titleOriginal", '')))
+      FROM candidates
+      JOIN "Movie" movie ON movie."id" = candidates."id"
+      WHERE GREATEST(
+          similarity(lower(movie."titleRu"), ${normalized}),
+          similarity(lower(COALESCE(movie."titleOriginal", '')), ${normalized}),
+          similarity(lower(movie."slug"), ${normalized}),
+          similarity(regexp_replace(lower(movie."titleRu"), '[^a-zа-я0-9]+', '', 'g'), ${compact}),
+          word_similarity(${normalized}, lower(movie."titleRu")),
+          word_similarity(${normalized}, lower(COALESCE(movie."titleOriginal", '')))
         ) >= ${threshold}
       ORDER BY "similarity" DESC, "kpRating" DESC NULLS LAST
       LIMIT ${Math.min(160, Math.max(20, take))}
@@ -535,6 +549,10 @@ async function trigramCandidateIds(query: string, take: number) {
     console.warn("[Search] pg_trgm retrieval unavailable, using bounded fallback", error instanceof Error ? error.message : error);
     return [];
   }
+}
+
+export async function getTrigramSearchCandidateIds(query: string, take = 100) {
+  return trigramCandidateIds(query, Math.min(160, Math.max(20, take)));
 }
 
 function strongVariants(query: string) {
