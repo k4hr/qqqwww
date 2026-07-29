@@ -36,6 +36,12 @@ export function Footer() {
           <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/history">
             Недавно смотрели
           </Link>
+          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/privacy">
+            Конфиденциальность
+          </Link>
+          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/terms">
+            Условия использования
+          </Link>
         </nav>
 
         <div className="text-sm text-[#74757d] md:text-right">

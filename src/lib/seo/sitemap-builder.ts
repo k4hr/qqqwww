@@ -106,6 +106,8 @@ export async function buildStaticSitemapXml() {
     { loc: siteUrl("/popular"), changefreq: "daily", priority: .8 },
     { loc: siteUrl("/top-100"), changefreq: "weekly", priority: .8 },
     { loc: siteUrl("/collections"), changefreq: "weekly", priority: .7 },
+    { loc: siteUrl("/privacy"), changefreq: "yearly", priority: .3 },
+    { loc: siteUrl("/terms"), changefreq: "yearly", priority: .3 },
     ...years.flatMap((year) => [
       { loc: siteUrl(`/year/${year}`), changefreq: "weekly", priority: .7 },
       { loc: siteUrl(`/films/year/${year}`), changefreq: "weekly", priority: .7 },
