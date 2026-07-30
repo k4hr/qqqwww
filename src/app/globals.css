@@ -1953,3 +1953,45 @@ footer::before {
     font-size: 13.5px;
   }
 }
+
+/* REDFILM Social Studio form controls */
+.social-studio input:not([type="checkbox"]):not([type="radio"]),
+.social-studio textarea,
+.social-studio select {
+  background: #343434 !important;
+  color: #ffffff !important;
+  border-color: #666666 !important;
+  caret-color: #ffffff;
+  outline: none;
+}
+
+.social-studio input:not([type="checkbox"]):not([type="radio"])::placeholder,
+.social-studio textarea::placeholder {
+  color: #d4d4d4 !important;
+  opacity: 1;
+}
+
+.social-studio select option {
+  background: #242424;
+  color: #ffffff;
+}
+
+.social-studio input:not([type="checkbox"]):not([type="radio"]):focus,
+.social-studio textarea:focus,
+.social-studio select:focus {
+  border-color: #e50914 !important;
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.14);
+}
+
+.social-studio input:-webkit-autofill,
+.social-studio input:-webkit-autofill:hover,
+.social-studio input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff !important;
+  box-shadow: 0 0 0 1000px #343434 inset !important;
+  transition: background-color 9999s ease-out 0s;
+}
+
+.social-studio input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.9;
+}
