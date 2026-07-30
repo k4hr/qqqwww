@@ -1,52 +1,32 @@
 "use client";
 
+import Script from "next/script";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 
+const DEFAULT_COUNTER_ID = 111162427;
+const configuredCounterId = Number(
+  process.env.NEXT_PUBLIC_YANDEX_METRIKA_ID || DEFAULT_COUNTER_ID,
+);
+const COUNTER_ID = Number.isInteger(configuredCounterId) && configuredCounterId > 0
+  ? configuredCounterId
+  : DEFAULT_COUNTER_ID;
+
 declare global {
   interface Window {
-    ym?: (...args: unknown[]) => void;
-    __redfilmYandexMetrikaInitialized110229115?: boolean;
+    ym?: (counterId: number, method: string, ...args: unknown[]) => void;
   }
 }
 
-const COUNTER_ID = 110229115;
-const SCRIPT_ID = "yandex-metrika-tag";
-
-function loadMetrika() {
-  if (window.__redfilmYandexMetrikaInitialized110229115) return;
-  window.__redfilmYandexMetrikaInitialized110229115 = true;
-
-  window.ym = window.ym || function (...args: unknown[]) {
-    const queue = (window.ym as unknown as { a?: unknown[][] }).a || [];
-    queue.push(args);
-    (window.ym as unknown as { a?: unknown[][] }).a = queue;
-  };
-
-  if (!document.getElementById(SCRIPT_ID)) {
-    const script = document.createElement("script");
-    script.id = SCRIPT_ID;
-    script.async = true;
-    script.src = "https://mc.yandex.ru/metrika/tag.js";
-    document.head.appendChild(script);
-  }
-
-  window.ym(COUNTER_ID, "init", {
-    ssr: true,
-    webvisor: true,
-    clickmap: true,
-    ecommerce: "dataLayer",
-    accurateTrackBounce: true,
-    trackLinks: true,
-  });
+function isMetrikaEnabled(pathname: string | null) {
+  return process.env.NODE_ENV === "production" && !pathname?.startsWith("/admin");
 }
 
-function YandexMetrikaInner() {
+function YandexMetrikaNavigationTracker() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const previousUrlRef = useRef<string | null>(null);
 
-  const enabled = process.env.NODE_ENV === "production" && !pathname?.startsWith("/admin");
   const currentUrl = useMemo(() => {
     const path = pathname || "/";
     const query = searchParams?.toString();
@@ -54,34 +34,71 @@ function YandexMetrikaInner() {
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!isMetrikaEnabled(pathname)) return;
 
-    let idleId: number | undefined;
-    const timeoutId = window.setTimeout(loadMetrika, 8000);
-    if (window.requestIdleCallback) {
-      idleId = window.requestIdleCallback(loadMetrika, { timeout: 7500 });
-    }
-
-    return () => {
-      window.clearTimeout(timeoutId);
-      if (idleId !== undefined) window.cancelIdleCallback?.(idleId);
-    };
-  }, [enabled]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    if (previousUrlRef.current === null) {
-      previousUrlRef.current = currentUrl;
-      return;
-    }
-    if (previousUrlRef.current === currentUrl) return;
+    const previousUrl = previousUrlRef.current;
     previousUrlRef.current = currentUrl;
-    window.ym?.(COUNTER_ID, "hit", currentUrl);
-  }, [currentUrl, enabled]);
+
+    // The init call records the initial page view. Only client-side route
+    // transitions need an explicit hit so Next.js navigation is not missed.
+    if (previousUrl === null || previousUrl === currentUrl) return;
+
+    window.ym?.(COUNTER_ID, "hit", currentUrl, {
+      title: document.title,
+      referer: `${window.location.origin}${previousUrl}`,
+    });
+  }, [currentUrl, pathname]);
 
   return null;
 }
 
 export function YandexMetrika() {
-  return <Suspense fallback={null}><YandexMetrikaInner /></Suspense>;
+  const pathname = usePathname();
+  const enabled = isMetrikaEnabled(pathname);
+
+  if (!enabled) return null;
+
+  return (
+    <>
+      <Script
+        id="yandex-metrika-counter"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function(m,e,t,r,i,k,a){
+              m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+              m[i].l=1*new Date();
+              for(var j=0;j<document.scripts.length;j++){
+                if(document.scripts[j].src===r){return;}
+              }
+              k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+            })(window,document,"script","https://mc.yandex.ru/metrika/tag.js?id=${COUNTER_ID}","ym");
+
+            ym(${COUNTER_ID}, "init", {
+              ssr: true,
+              webvisor: true,
+              clickmap: true,
+              trackLinks: true,
+              accurateTrackBounce: true
+            });
+          `,
+        }}
+      />
+
+      <noscript>
+        <div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`https://mc.yandex.ru/watch/${COUNTER_ID}`}
+            style={{ position: "absolute", left: "-9999px" }}
+            alt=""
+          />
+        </div>
+      </noscript>
+
+      <Suspense fallback={null}>
+        <YandexMetrikaNavigationTracker />
+      </Suspense>
+    </>
+  );
 }

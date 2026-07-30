@@ -35,7 +35,7 @@ services:
       - key: EMERGENCY_DEINDEX_MODE
         value: "false"
       - key: NEXT_PUBLIC_YANDEX_METRIKA_ID
-        value: "110229115"
+        value: "111162427"
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
