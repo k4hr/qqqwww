@@ -19,6 +19,13 @@ export const getSeoMovieBySlug = cache(async (slug: string) => {
   return prisma.movie.findFirst({ where: { slug, ...vibixWatchMovieWhere }, include: movieSeoInclude });
 });
 
+export const getMovieSlugRedirect = cache(async (oldSlug: string) => {
+  return prisma.movieSlugRedirect.findUnique({
+    where: { oldSlug },
+    include: { movie: { include: movieSeoInclude } },
+  });
+});
+
 export async function getSeoMovieByFilmSlug(slug: string) {
   const movieSlug = movieSlugFromFilmSeoSlug(slug);
   return movieSlug ? getSeoMovieBySlug(movieSlug) : null;

@@ -464,7 +464,7 @@ export async function saveVibixVideo(video: VibixVideo, targetMovieId?: string, 
     const updated = await prisma.movie.update({
       where: { id: existing.id },
       data: {
-        titleRu: data.title,
+        titleRu: existing.editorialTitleLocked ? undefined : data.title,
         titleOriginal: data.titleOriginal || undefined,
         description: data.description || undefined,
         year: data.year,

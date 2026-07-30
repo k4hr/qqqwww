@@ -36,6 +36,13 @@ model Movie {
   type                     ContentType                @default(MOVIE)
   posterUrl                String?
   backdropUrl              String?
+  editorialTitleRu         String?                    @db.Text
+  editorialSourceTitleRu   String?                    @db.Text
+  editorialSourceSlug      String?
+  editorialTitleLocked     Boolean                    @default(false)
+  editorialPosterUrl       String?                    @db.Text
+  editorialBackdropUrl     String?                    @db.Text
+  editorialUpdatedAt       DateTime?
   trailerUrl               String?
   country                  String?
   director                 String?
@@ -112,6 +119,7 @@ model Movie {
   telegramHistory          TelegramWatchHistory[]
   homeSelectionItems       RedfilmHomeSelectionItem[]
   artworks                 MovieArtwork[]
+  slugRedirects            MovieSlugRedirect[]
 
   @@index([type, year])
   @@index([isPublished])
@@ -183,6 +191,17 @@ model ProviderLink {
   movie         Movie        @relation(fields: [movieId], references: [id], onDelete: Cascade)
 
   @@index([provider, isAvailable])
+}
+
+
+model MovieSlugRedirect {
+  id        String   @id @default(cuid())
+  oldSlug   String   @unique
+  movieId   String
+  createdAt DateTime @default(now())
+  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@index([movieId])
 }
 
 model MovieArtwork {

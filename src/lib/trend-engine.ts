@@ -393,7 +393,7 @@ async function processCandidate(candidate: TrendCandidate) {
   await prisma.movie.update({
     where: { id: movieId },
     data: {
-      titleRu: details.titleRu,
+      titleRu: existing?.editorialTitleLocked ? undefined : details.titleRu,
       titleOriginal: details.titleOriginal,
       description: details.description,
       year: details.year,

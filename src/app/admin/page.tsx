@@ -69,6 +69,7 @@ export default async function AdminPage({ searchParams }: Props) {
           <p className="mt-1 text-neutral-600">Быстрый вход в операционный центр, SEO, Telegram, рекламу и аналитику.</p>
         </div>
         <div className="flex flex-wrap gap-2 max-sm:[&>a]:w-full max-sm:[&>a]:justify-center">
+          <Link href="/admin/editorial" className="rounded-sm bg-[#e50914] px-5 py-3 font-bold text-white">РЕДАКЦИЯ</Link>
           <Link href="/admin/catalog" className="rounded-sm bg-[#e50914] px-5 py-3 font-bold text-white">Операционный центр</Link>
           <Link href="/admin/catalog/vibix" className="rounded-sm bg-[#e50914] px-5 py-3 font-bold text-white">Смотреть VIBIX</Link>
           <Link href="/admin/seo" className="rounded-sm bg-[#e50914] px-5 py-3 font-bold text-white">SEO</Link>

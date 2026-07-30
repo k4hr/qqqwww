@@ -778,6 +778,8 @@ async function loadWatchArtwork(movieId: string) {
       where: { id: movieId },
       select: {
         posterUrl: true,
+        editorialPosterUrl: true,
+        editorialBackdropUrl: true,
         lastExternalEnrichmentAt: true,
         kinopoiskId: true,
         imdbId: true,
@@ -789,7 +791,8 @@ async function loadWatchArtwork(movieId: string) {
   return {
     primary,
     vibixDetailBackdrop,
-    posterUrl: movie?.posterUrl ?? null,
+    posterUrl: movie?.editorialPosterUrl ?? movie?.posterUrl ?? null,
+    editorialBackdropUrl: movie?.editorialBackdropUrl ?? null,
     lastExternalEnrichmentAt: movie?.lastExternalEnrichmentAt ?? null,
     hasLookupId: Boolean(movie?.kinopoiskId?.trim() || movie?.imdbId?.trim()),
   };
@@ -827,9 +830,9 @@ export async function getWatchArtwork(movieId: string, _fallbackBackdropUrl?: st
   }
 
   return {
-    backdropUrl: loaded.primary?.url ?? REDFILM_BACKDROP_FALLBACK,
+    backdropUrl: loaded.editorialBackdropUrl ?? loaded.primary?.url ?? REDFILM_BACKDROP_FALLBACK,
     posterUrl: loaded.posterUrl,
-    backdropSource: loaded.primary?.source ?? "REDFILM_FALLBACK" as const,
+    backdropSource: loaded.editorialBackdropUrl ? "EDITORIAL" : (loaded.primary?.source ?? "REDFILM_FALLBACK"),
     artworks: [],
   };
 }

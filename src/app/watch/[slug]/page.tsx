@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { Movie } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { ArtworkPlaceholder, isGenericRedfilmArtwork } from "@/components/artwork-placeholder";
 import { JsonLd } from "@/components/json-ld";
 import { MovieCard } from "@/components/movie-card";
@@ -16,7 +16,7 @@ import { PartnerTrack } from "@/components/partner-track";
 import { extractCountries } from "@/lib/catalog-filters";
 import { getWatchArtwork } from "@/lib/movie-artwork";
 import { takeUniqueMovies } from "@/lib/recommendation-dedupe";
-import { getSeoMovieBySlug, getSimilarMovieGroups } from "@/lib/seo-pages";
+import { getSeoMovieBySlug, getMovieSlugRedirect, getSimilarMovieGroups } from "@/lib/seo-pages";
 import { countryPath, genrePath, similarPath, watchPath, yearPath } from "@/lib/seo-links";
 import { breadcrumbJsonLd, itemListJsonLd, movieJsonLd, videoObjectJsonLd } from "@/lib/seo/schema";
 import { watchSeoDescription, watchSeoTitle } from "@/lib/seo/meta";
@@ -53,12 +53,19 @@ function runtimeLabel(duration?: number | null) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const movie = await getSeoMovieBySlug((await params).slug);
+  const requestedSlug = (await params).slug;
+  const movie = await getSeoMovieBySlug(requestedSlug) ?? (await getMovieSlugRedirect(requestedSlug))?.movie;
   if (!movie) return {};
-  const title = watchSeoTitle(movie);
-  const description = watchSeoDescription(movie);
-  const canonical = watchPath(movie);
   const artwork = await getWatchArtwork(movie.id, movie.backdropUrl);
+  const effectiveMovie = {
+    ...movie,
+    titleRu: movie.titleRu,
+    posterUrl: artwork.posterUrl,
+    backdropUrl: artwork.backdropUrl,
+  };
+  const title = watchSeoTitle(effectiveMovie);
+  const description = watchSeoDescription(effectiveMovie);
+  const canonical = watchPath(movie);
   const image = artwork.backdropUrl;
 
   return {
@@ -76,13 +83,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function WatchPage({ params }: Props) {
-  const movie = await getSeoMovieBySlug((await params).slug);
-  if (!movie) notFound();
+  const requestedSlug = (await params).slug;
+  const movie = await getSeoMovieBySlug(requestedSlug);
+  if (!movie) {
+    const redirectEntry = await getMovieSlugRedirect(requestedSlug);
+    if (redirectEntry?.movie) permanentRedirect(`/watch/${redirectEntry.movie.slug}`);
+    notFound();
+  }
   const countries = extractCountries(movie.country);
   const [similarGroups, watchArtwork] = await Promise.all([
     getSimilarMovieGroups(movie, 6, 4),
     getWatchArtwork(movie.id, movie.backdropUrl),
   ]);
+  const displayTitle = movie.titleRu;
+  const posterUrl = watchArtwork.posterUrl;
+  const effectiveMovie = { ...movie, titleRu: displayTitle, posterUrl, backdropUrl: watchArtwork.backdropUrl };
   const similar = takeUniqueMovies(similarGroups.primary, 6, new Set([movie.id])).map(toMovieCardData);
   const atmosphere = takeUniqueMovies(similarGroups.atmosphere, 4, new Set([movie.id, ...similar.map((item) => item.id)])).map(toMovieCardData);
   const description = movie.description.trim() || "Описание скоро появится";
@@ -93,7 +108,7 @@ export default async function WatchPage({ params }: Props) {
 
   const backdropUrl = watchArtwork.backdropUrl;
   const hasBackdrop = watchArtwork.backdropSource !== "REDFILM_FALLBACK" && !isGenericRedfilmArtwork(backdropUrl);
-  const hasPoster = !isGenericRedfilmArtwork(movie.posterUrl);
+  const hasPoster = !isGenericRedfilmArtwork(posterUrl);
 
 
   return (
@@ -101,14 +116,14 @@ export default async function WatchPage({ params }: Props) {
       <AnalyticsEvent type="page_view" movieId={movie.id} />
       <PartnerTrack type="MOVIE_OPEN" movieId={movie.id} />
       <JsonLd data={[
-        movieJsonLd({ ...movie, backdropUrl }),
-        videoObjectJsonLd({ ...movie, backdropUrl }),
+        movieJsonLd({ ...effectiveMovie, backdropUrl }),
+        videoObjectJsonLd({ ...effectiveMovie, backdropUrl }),
         breadcrumbJsonLd([
           { name: "REDFILM", url: "/" },
           { name: contentTypePlural, url: contentTypePath },
-          { name: movie.titleRu, url: watchPath(movie) },
+          { name: displayTitle, url: watchPath(movie) },
         ]),
-        itemListJsonLd(`${similarTitle} к ${movie.titleRu}`, similarPath(movie), similar),
+        itemListJsonLd(`${similarTitle} к ${displayTitle}`, similarPath(movie), similar),
       ]} />
 
       <article className="watch-cinematic-hero rf-watch-hero relative min-h-[420px] overflow-hidden border-b border-white/[.055] sm:min-h-[470px]">
@@ -121,6 +136,7 @@ export default async function WatchPage({ params }: Props) {
               priority
               sizes="100vw"
               quality={64}
+              unoptimized={backdropUrl.startsWith("data:")}
               className="rf-watch-backdrop-ambient"
             />
             <div className="rf-watch-backdrop-main-shell">
@@ -131,11 +147,12 @@ export default async function WatchPage({ params }: Props) {
                 priority
                 sizes="(max-width: 640px) 100vw, 78vw"
                 quality={82}
+                unoptimized={backdropUrl.startsWith("data:")}
                 className="rf-watch-backdrop-main"
               />
             </div>
           </div>
-        ) : <ArtworkPlaceholder title={movie.titleRu} compact />}
+        ) : <ArtworkPlaceholder title={displayTitle} compact />}
         <div className="rf-watch-scrim-primary absolute inset-0 bg-[linear-gradient(90deg,rgba(7,7,8,.94)_0%,rgba(7,7,8,.67)_46%,rgba(7,7,8,.12)_100%)] max-sm:bg-[linear-gradient(0deg,rgba(7,7,8,.98)_5%,rgba(7,7,8,.64)_68%,rgba(7,7,8,.12)_100%)]" />
         <div className="rf-watch-scrim-bottom absolute inset-0 bg-[linear-gradient(0deg,#070708_0%,transparent_31%)]" />
         <div className="absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,rgba(240,43,66,.42),transparent)]" />
@@ -148,17 +165,17 @@ export default async function WatchPage({ params }: Props) {
             </span>
             <span className="rf-watch-breadcrumb-part rf-watch-breadcrumb-tail">
               <span className="rf-watch-breadcrumb-separator" aria-hidden="true">/</span>
-              <span className="rf-watch-breadcrumb-current text-[#a0a1a8]">{movie.titleRu}</span>
+              <span className="rf-watch-breadcrumb-current text-[#a0a1a8]">{displayTitle}</span>
             </span>
           </nav>
           <div className="rf-watch-layout grid items-end gap-5">
             <div className="rf-watch-poster relative aspect-[2/3] overflow-hidden rounded-[11px] bg-[#111216] shadow-[0_18px_46px_rgba(0,0,0,.4)]">
-              {hasPoster ? <Image src={movie.posterUrl!} alt={movie.titleRu} fill className="object-cover" sizes="(max-width: 380px) 102px, (max-width: 640px) 112px, (max-width: 1099px) 180px, 200px" quality={76} /> : <ArtworkPlaceholder title={movie.titleRu} />}
+              {hasPoster ? <Image src={posterUrl!} alt={displayTitle} fill unoptimized={posterUrl?.startsWith("data:")} className="object-cover" sizes="(max-width: 380px) 102px, (max-width: 640px) 112px, (max-width: 1099px) 180px, 200px" quality={76} /> : <ArtworkPlaceholder title={displayTitle} />}
             </div>
             <div className="rf-watch-copy min-w-0 pb-1">
               <div className="rf-watch-heading min-w-0">
                 {movie.quality ? <span className="mf-badge">{movie.quality}</span> : null}
-                <h1 className="mt-3 max-w-4xl break-words text-[clamp(2rem,6vw,3.25rem)] font-semibold leading-[1.02] tracking-[-.045em] text-white">{movie.titleRu}</h1>
+                <h1 className="mt-3 max-w-4xl break-words text-[clamp(2rem,6vw,3.25rem)] font-semibold leading-[1.02] tracking-[-.045em] text-white">{displayTitle}</h1>
                 {movie.titleOriginal ? <p className="mt-2 break-words text-sm font-medium text-[#8f9098]">{movie.titleOriginal}</p> : null}
                 <div className="rf-watch-meta mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm font-medium text-[#b5b6bd]">
                   <Link href={yearPath(movie)} className="rf-watch-meta-item hover:text-white">{movie.year}</Link>
@@ -171,7 +188,7 @@ export default async function WatchPage({ params }: Props) {
               </div>
               <div className="rf-watch-body min-w-0">
                 <ExpandableDescription text={description} className="mt-4" />
-                <WatchClientActions movie={{ id: movie.id, slug: movie.slug, title: movie.titleRu, year: movie.year, posterUrl: movie.posterUrl, type: movie.type, kpRating: movie.kpRating, imdbRating: movie.imdbRating }} />
+                <WatchClientActions movie={{ id: movie.id, slug: movie.slug, title: displayTitle, year: movie.year, posterUrl, type: movie.type, kpRating: movie.kpRating, imdbRating: movie.imdbRating }} />
               </div>
             </div>
           </div>
@@ -181,7 +198,7 @@ export default async function WatchPage({ params }: Props) {
       <div className="container">
         <VibixBanner slot="movie_above_player" size="728x90" />
         <VibixFlyrollSlot slot="movie_above_player" />
-        <PlayerBlock movie={movie} />
+        <PlayerBlock movie={effectiveMovie} />
         <TelegramWatchPromo />
 
         <section className="rf-section">
