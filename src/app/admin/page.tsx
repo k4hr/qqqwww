@@ -63,6 +63,12 @@ export default async function AdminPage({ searchParams }: Props) {
 
   return (
     <div className="container admin-shell py-6">
+      <div className="mb-5 rounded-2xl border border-[#e50914]/20 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div><div className="text-lg font-bold text-[#222]">Продвижение REDFILM</div><div className="text-sm text-neutral-600">VK-посты, клипы, AI-редакция, Cloudflare R2 и расписание.</div></div>
+          <Link href="/admin/social" className="rounded-xl bg-[#e50914] px-5 py-3 text-center font-bold text-white">Открыть соцсети</Link>
+        </div>
+      </div>
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-[#222]">Админка REDFILM</h1>

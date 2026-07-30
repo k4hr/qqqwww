@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { deleteR2Object } from "@/lib/social/storage/r2";
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) { try { const { id } = await params; const media = await prisma.socialMediaAsset.findUnique({ where: { id }, include: { posts: true } }); if (!media) return NextResponse.json({ ok: true }); if (media.posts.length) throw new Error("Файл используется в публикации"); await deleteR2Object(media.objectKey); await prisma.socialMediaAsset.update({ where: { id }, data: { status: "DELETED", deletedAt: new Date() } }); return NextResponse.json({ ok: true }); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 }); } }

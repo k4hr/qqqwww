@@ -42,7 +42,9 @@
     "render:cron-daily": "node scripts/render-trigger-daily-catalog.mjs",
     "render:db:push": "prisma db push",
     "artwork:sync-run": "tsx src/scripts/artwork-sync-run.ts",
-    "artwork:sync-slugs": "tsx src/scripts/artwork-sync-slugs.ts"
+    "artwork:sync-slugs": "tsx src/scripts/artwork-sync-slugs.ts",
+    "social:worker": "tsx src/scripts/social-worker.ts",
+    "social:cleanup": "tsx src/scripts/social-cleanup.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

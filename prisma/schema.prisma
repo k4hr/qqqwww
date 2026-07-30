@@ -1046,3 +1046,413 @@ model RedfilmHomeSelectionItem {
   @@index([movieId], map: "redfilm_home_selection_items_movie_idx")
   @@map("redfilm_home_selection_items")
 }
+
+enum SocialProvider {
+  VK
+}
+
+enum SocialIntegrationStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+enum SocialPostType {
+  TEXT
+  IMAGE_POST
+  GALLERY
+  CLIP
+}
+
+enum SocialPostStatus {
+  DRAFT
+  RESEARCHING
+  GENERATING
+  NEEDS_REVIEW
+  APPROVED
+  SCHEDULED
+  PUBLISHING
+  PROCESSING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum SocialMediaKind {
+  IMAGE
+  VIDEO
+  VIDEO_COVER
+  VIDEO_FRAME
+  GIF
+}
+
+enum SocialMediaSourceType {
+  MANUAL_UPLOAD
+  REDFILM
+  TMDB
+  OFFICIAL_SOURCE
+  WEB_RESEARCH
+  OPENAI_GENERATED
+}
+
+enum SocialMediaStatus {
+  PENDING_UPLOAD
+  READY
+  PROCESSING
+  REJECTED
+  DELETED
+}
+
+enum SocialFactStatus {
+  VERIFIED
+  PARTIALLY_SUPPORTED
+  UNVERIFIED
+  CONTRADICTED
+}
+
+enum SocialJobType {
+  GENERATE_IDEAS
+  RESEARCH_TOPIC
+  GENERATE_POST
+  VERIFY_FACTS
+  FIND_IMAGES
+  ANALYZE_IMAGES
+  PUBLISH_VK_POST
+  UPLOAD_VK_CLIP
+  POLL_VK_VIDEO
+  COLLECT_METRICS
+  CLEAN_TEMP_OBJECTS
+}
+
+enum SocialJobStatus {
+  PENDING
+  LEASED
+  RUNNING
+  RETRY
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum SocialIdeaStatus {
+  NEW
+  SELECTED
+  USED
+  REJECTED
+}
+
+model SocialIntegration {
+  id                   String                  @id @default(cuid())
+  provider             SocialProvider         @unique
+  status               SocialIntegrationStatus @default(DISCONNECTED)
+  displayName          String?
+  externalGroupId      String?
+  encryptedAccessToken String?                 @db.Text
+  tokenLastFour        String?
+  capabilities         Json?
+  lastCheckedAt        DateTime?
+  lastSuccessAt        DateTime?
+  lastError            String?                 @db.Text
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  @@index([status])
+}
+
+model SocialPost {
+  id             String           @id @default(cuid())
+  type           SocialPostType
+  status         SocialPostStatus @default(DRAFT)
+  title          String?
+  body           String           @default("") @db.Text
+  hook           String?          @db.Text
+  hashtags       String[]         @default([])
+  timezone       String           @default("Europe/Moscow")
+  scheduledAt    DateTime?
+  publishedAt    DateTime?
+  movieId        String?
+  templateId     String?
+  researchId     String?
+  createdBy      String?
+  approvedAt     DateTime?
+  externalPostId String?
+  externalVideoId String?
+  externalUrl    String?          @db.Text
+  immutableSnapshot Json?
+  utmCode        String?          @unique
+  lastError      String?          @db.Text
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  media          SocialPostMedia[]
+  jobs           SocialPublishJob[]
+  metrics        SocialMetricSnapshot[]
+
+  @@index([status, scheduledAt])
+  @@index([type, createdAt])
+  @@index([movieId])
+}
+
+model SocialMediaAsset {
+  id                String                    @id @default(cuid())
+  kind              SocialMediaKind
+  sourceType        SocialMediaSourceType
+  status            SocialMediaStatus         @default(PENDING_UPLOAD)
+  storageProvider   String                    @default("R2")
+  bucket            String
+  objectKey         String                    @unique
+  mimeType          String
+  fileName          String
+  fileSize          BigInt?
+  sha256            String?
+  perceptualHash    String?
+  width             Int?
+  height            Int?
+  durationMs        Int?
+  fps               Float?
+  videoCodec        String?
+  audioCodec        String?
+  sourceUrl         String?                   @db.Text
+  sourceDomain      String?
+  sourceTitle       String?
+  licenseStatus     String?
+  attribution       String?                   @db.Text
+  watermarkDetected Boolean?
+  qualityScore      Float?
+  relevanceScore    Float?
+  duplicateGroup    String?
+  metadata          Json?
+  uploadExpiresAt   DateTime?
+  confirmedAt       DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  posts             SocialPostMedia[]
+
+  @@index([status, kind])
+  @@index([sha256])
+  @@index([sourceDomain])
+}
+
+model SocialPostMedia {
+  postId       String
+  mediaAssetId String
+  position     Int      @default(0)
+  role         String   @default("ATTACHMENT")
+  caption      String?  @db.Text
+  post         SocialPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  mediaAsset   SocialMediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+
+  @@id([postId, mediaAssetId])
+  @@index([postId, position])
+}
+
+model SocialResearch {
+  id          String    @id @default(cuid())
+  topic       String
+  query       String?   @db.Text
+  status      String    @default("PENDING")
+  summary     String?   @db.Text
+  movieId     String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  sources     SocialResearchSource[]
+  facts       SocialFact[]
+
+  @@index([status, createdAt])
+  @@index([movieId])
+}
+
+model SocialResearchSource {
+  id               String   @id @default(cuid())
+  researchId       String
+  url              String   @db.Text
+  domain           String
+  title            String?
+  sourceType       String?
+  publishedAt      DateTime?
+  retrievedAt      DateTime @default(now())
+  reliabilityScore Float?
+  contentHash      String?
+  excerpt          String?  @db.Text
+  metadata         Json?
+  research         SocialResearch @relation(fields: [researchId], references: [id], onDelete: Cascade)
+  facts            SocialFact[]
+
+  @@index([researchId])
+  @@index([domain])
+}
+
+model SocialFact {
+  id                String           @id @default(cuid())
+  researchId        String
+  sourceId          String?
+  claim             String           @db.Text
+  status            SocialFactStatus @default(UNVERIFIED)
+  confidence        Float?
+  supportingExcerpt String?          @db.Text
+  notes             String?          @db.Text
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  research          SocialResearch       @relation(fields: [researchId], references: [id], onDelete: Cascade)
+  source            SocialResearchSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([researchId, status])
+  @@index([sourceId])
+}
+
+model SocialIdea {
+  id             String           @id @default(cuid())
+  topic          String
+  category       String?
+  hook           String?          @db.Text
+  movieId        String?
+  noveltyScore   Float?
+  potentialScore Float?
+  duplicateHash  String?          @unique
+  status         SocialIdeaStatus @default(NEW)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([status, potentialScore])
+  @@index([movieId])
+}
+
+model SocialTemplate {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  category     String?
+  systemPrompt String   @db.Text
+  userPrompt   String   @db.Text
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SocialScheduleRule {
+  id             String   @id @default(cuid())
+  name           String
+  category       String?
+  postType       SocialPostType
+  timezone       String   @default("Europe/Moscow")
+  daysOfWeek     Int[]    @default([])
+  publishHour    Int
+  publishMinute  Int      @default(0)
+  dailyLimit     Int      @default(1)
+  minimumGapMin  Int      @default(60)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isActive, postType])
+}
+
+model SocialPublishJob {
+  id             String          @id @default(cuid())
+  postId         String?
+  type           SocialJobType
+  provider       SocialProvider? 
+  status         SocialJobStatus @default(PENDING)
+  scheduledAt    DateTime        @default(now())
+  nextAttemptAt  DateTime?
+  lockedAt       DateTime?
+  lockedBy       String?
+  heartbeatAt    DateTime?
+  leaseExpiresAt DateTime?
+  attemptCount   Int             @default(0)
+  maxAttempts    Int             @default(8)
+  priority       Int             @default(0)
+  idempotencyKey String          @unique
+  payload        Json?
+  result         Json?
+  lastError      String?         @db.Text
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  post           SocialPost?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  attempts       SocialPublishAttempt[]
+
+  @@index([status, scheduledAt, priority])
+  @@index([leaseExpiresAt])
+  @@index([postId])
+}
+
+model SocialPublishAttempt {
+  id            String          @id @default(cuid())
+  jobId         String
+  attemptNumber Int
+  status        SocialJobStatus
+  requestType   String?
+  startedAt     DateTime        @default(now())
+  finishedAt    DateTime?
+  errorCode     String?
+  errorMessage  String?         @db.Text
+  externalResponse Json?
+  job           SocialPublishJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, attemptNumber])
+  @@index([jobId, startedAt])
+}
+
+model SocialMetricSnapshot {
+  id             String   @id @default(cuid())
+  postId         String
+  capturedAt     DateTime @default(now())
+  views          Int?
+  likes          Int?
+  comments       Int?
+  reposts        Int?
+  clicks         Int?
+  watchTimeMs    BigInt?
+  completionRate Float?
+  raw            Json?
+  post           SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, capturedAt])
+}
+
+model SocialAiUsage {
+  id               String   @id @default(cuid())
+  operation        String
+  model            String
+  inputTokens      Int?
+  outputTokens     Int?
+  estimatedCostUsd Decimal? @db.Decimal(18, 8)
+  requestId        String?
+  postId           String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([postId])
+}
+
+model SocialAuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  actor      String?
+  ipHash     String?
+  before     Json?
+  after      Json?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model SocialTrackingClick {
+  id        String   @id @default(cuid())
+  code      String
+  postId    String?
+  path      String?
+  referer   String?  @db.Text
+  userAgent String?  @db.Text
+  ipHash    String?
+  createdAt DateTime @default(now())
+
+  @@index([code, createdAt])
+  @@index([postId, createdAt])
+}

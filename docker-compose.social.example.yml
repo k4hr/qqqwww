@@ -1,0 +1,9 @@
+services:
+  redfilm-social-worker:
+    build: .
+    command: npm run social:worker
+    restart: unless-stopped
+    env_file:
+      - .env.worker
+    environment:
+      NODE_ENV: production

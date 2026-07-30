@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { headR2Object } from "@/lib/social/storage/r2";
+export async function POST(request: Request) { try { const { mediaId } = await request.json(); const media = await prisma.socialMediaAsset.findUnique({ where: { id: String(mediaId) } }); if (!media) throw new Error("Медиа не найдено"); const head = await headR2Object(media.objectKey); if (media.fileSize && BigInt(head.size) !== media.fileSize) throw new Error("Размер загруженного объекта не совпадает"); const saved = await prisma.socialMediaAsset.update({ where: { id: media.id }, data: { status: "READY", confirmedAt: new Date(), metadata: { etag: head.etag, contentType: head.contentType, needsTechnicalAnalysis: media.kind === "VIDEO" } } }); return NextResponse.json({ ok: true, mediaId: saved.id }); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 }); } }

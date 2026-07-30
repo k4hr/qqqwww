@@ -1,0 +1,2 @@
+import { socialConfigState } from "@/lib/social/config";
+export default function Page(){const state=socialConfigState();return <div className="admin-panel p-5"><h2 className="text-2xl font-bold">Конфигурация</h2><div className="mt-4 space-y-2">{Object.entries(state).map(([k,v])=><div key={k} className="flex justify-between rounded-xl border p-3"><code>{k}</code><b className={v?"text-green-700":"text-red-600"}>{v?"настроено":"не настроено"}</b></div>)}</div><p className="mt-4 text-sm text-neutral-500">Секретные значения здесь никогда не выводятся.</p></div>}
