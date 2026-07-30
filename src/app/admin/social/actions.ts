@@ -12,7 +12,7 @@ import { generateSocialIdeas, ideaHash, researchSocialTopic, writeSocialPost } f
 
 function text(fd: FormData, key: string) { return String(fd.get(key) || "").trim(); }
 function dateValue(fd: FormData, key: string) { const value = text(fd, key); return value ? new Date(value) : null; }
-function go(path: string, params: Record<string, string>) { const q = new URLSearchParams(params); redirect(`${path}?${q}`); }
+function go(path: string, params: Record<string, string>): never { const q = new URLSearchParams(params); redirect(`${path}?${q}`); }
 
 export async function saveVkIntegrationAction(formData: FormData) {
   const groupId = text(formData, "groupId").replace(/^-/, "");
