@@ -24,12 +24,27 @@ export async function vkCall<T>(method: string, token: string, params: Record<st
   return json.response;
 }
 
+type VkCommunityTokenPermissions = {
+  mask: number;
+  permissions?: Array<{ name: string; setting: number }>;
+};
+
 export async function validateVkConnection(token: string, groupId: string) {
-  const [groups, permissions] = await Promise.all([
+  const [groups, tokenPermissions] = await Promise.all([
     vkCall<Array<{ id: number; name: string; screen_name: string; photo_200?: string }>>("groups.getById", token, { group_id: groupId, fields: "name,screen_name,photo_200" }),
-    vkCall<number>("account.getAppPermissions", token),
+    vkCall<VkCommunityTokenPermissions>("groups.getTokenPermissions", token),
   ]);
   const group = groups[0];
   if (!group) throw new Error("VK community was not found");
-  return { group, permissions, capabilities: { wall: Boolean(permissions & 8192), photos: Boolean(permissions & 4), video: Boolean(permissions & 16) } };
+
+  const permissions = tokenPermissions.mask || 0;
+  return {
+    group,
+    permissions,
+    capabilities: {
+      wall: Boolean(permissions & 8192),
+      photos: Boolean(permissions & 4),
+      video: Boolean(permissions & 16),
+    },
+  };
 }
