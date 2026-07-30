@@ -8,9 +8,8 @@ RUN apt-get update \
 
 COPY package*.json ./
 
-RUN npm install -g npm@12.0.1 --no-audit --no-fund \
-  && npm config set registry https://registry.npmjs.org/ \
-  && npm config set fetch-retries 5 \
+RUN npm config set registry https://registry.npmjs.org/ \
+  && npm config set fetch-retries 8 \
   && npm config set fetch-retry-mintimeout 20000 \
   && npm config set fetch-retry-maxtimeout 120000 \
   && npm config set fetch-timeout 600000 \
