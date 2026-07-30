@@ -2,7 +2,7 @@ import type { Movie, Prisma } from "@prisma/client";
 import { isLowPriorityCountry } from "@/lib/catalog-filters";
 import { vibixPublicMovieWhere } from "@/lib/movie-access";
 
-type HomeCatalogMovie = Pick<Movie, "titleRu" | "titleOriginal" | "description" | "country" | "posterUrl">;
+type HomeCatalogMovie = Pick<Movie, "titleRu" | "titleOriginal" | "description" | "country" | "posterUrl" | "editorialPosterUrl">;
 
 const ADULT_MARKERS = [
   "секс", "порно", "эротик", "эротика", "интим", "18+", "xxx", "анал", "анальный", "голые", "обнаж", "разврат",
@@ -28,7 +28,7 @@ export function isValidHomePoster(url?: string | null) {
 }
 
 export function isSafeForHome(movie: HomeCatalogMovie) {
-  return isValidHomePoster(movie.posterUrl) && !isLowPriorityCountry(movie.country) && !isAdultLikeTitle(movie);
+  return isValidHomePoster(movie.editorialPosterUrl ?? movie.posterUrl) && !isLowPriorityCountry(movie.country) && !isAdultLikeTitle(movie);
 }
 
 export function buildHomeCatalogWhere(): Prisma.MovieWhereInput {
@@ -36,8 +36,6 @@ export function buildHomeCatalogWhere(): Prisma.MovieWhereInput {
     AND: [
       vibixPublicMovieWhere,
       { isCatalogAllowed: true },
-      { posterUrl: { not: null } },
-      { posterUrl: { not: "" } },
     ],
   };
 }

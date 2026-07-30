@@ -13,8 +13,15 @@ export const vibixWatchMovieWhere = {
   AND: [playableMovieWhere],
 } satisfies Prisma.MovieWhereInput;
 
+export const catalogPosterWhere: Prisma.MovieWhereInput = {
+  OR: [
+    { AND: [{ posterUrl: { not: null } }, { posterUrl: { not: "" } }] },
+    { AND: [{ editorialPosterUrl: { not: null } }, { editorialPosterUrl: { not: "" } }] },
+  ],
+};
+
 export const vibixPublicMovieWhere = {
   ...vibixWatchMovieWhere,
   isCatalogAllowed: true,
-  posterUrl: { not: null },
+  AND: [playableMovieWhere, catalogPosterWhere],
 } satisfies Prisma.MovieWhereInput;

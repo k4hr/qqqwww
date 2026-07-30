@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/slug";
-import { readEditorialImageDataUrl } from "@/lib/editorial/image-upload";
+import { saveEditorialImageFile } from "@/lib/editorial/image-upload";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -69,8 +69,8 @@ export async function saveMovieEditorial(formData: FormData) {
 
   const newSlug = await uniqueSlugFromBase(`${titleValue}-${movie.year}`, movie.id);
   const [editorialPosterUrl, editorialBackdropUrl] = await Promise.all([
-    readEditorialImageDataUrl(formData, "editorialPosterUrl", movie.editorialPosterUrl),
-    readEditorialImageDataUrl(formData, "editorialBackdropUrl", movie.editorialBackdropUrl),
+    saveEditorialImageFile(formData, "editorialPosterUrl", movie.id, movie.editorialPosterUrl),
+    saveEditorialImageFile(formData, "editorialBackdropUrl", movie.id, movie.editorialBackdropUrl),
   ]);
 
   await prisma.$transaction(async (tx) => {

@@ -18,7 +18,7 @@ export async function GET(request: Request) {
       originalTitle: movie.titleOriginal,
       year: movie.year,
       type: movie.type,
-      posterUrl: movie.posterUrl,
+      posterUrl: movie.editorialPosterUrl ?? movie.posterUrl,
       season: parsed.season?.season,
       seasonAvailable: parsed.season ? (movie.vibixSeasonCount ?? 0) >= parsed.season.season : false,
       href: parsed.season && (movie.vibixSeasonCount ?? 0) >= parsed.season.season ? seasonPath(movie, parsed.season.season) : watchPath(movie),

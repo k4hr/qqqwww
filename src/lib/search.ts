@@ -411,7 +411,8 @@ export function scoreSearchResult(movie: SearchMovie, query: string) {
   if (isShortSingleToken(intent) && score < 70) return 0;
   if (score <= 0) return 0;
   if (movie.vibixAvailable) score += 8;
-  if (movie.posterUrl) score += 5;
+  if (movie.editorialPosterUrl ?? movie.posterUrl) score += 5;
+  if (movie.editorialTitleLocked && normalizeSearchQuery(movie.titleRu) === intent) score += 80;
   if (movie.isPublicVisible) score += 8;
   if (movie.isHomeEligible || movie.isPopularEligible || movie.isTopEligible) score += 5;
   score += popularityBoost(movie);
@@ -507,8 +508,10 @@ async function trigramCandidateIds(query: string, take: number) {
       "isPublished" = true
       AND "isCatalogAllowed" = true
       AND "vibixAvailable" = true
-      AND "posterUrl" IS NOT NULL
-      AND "posterUrl" <> ''
+      AND (
+        ("posterUrl" IS NOT NULL AND "posterUrl" <> '')
+        OR ("editorialPosterUrl" IS NOT NULL AND "editorialPosterUrl" <> '')
+      )
       AND (
         ("vibixIframeUrl" IS NOT NULL AND "vibixIframeUrl" <> '')
         OR ("vibixEmbedCode" IS NOT NULL AND "vibixEmbedCode" <> '')

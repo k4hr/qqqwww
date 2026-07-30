@@ -5,9 +5,9 @@ import { ArtworkPlaceholder, isGenericRedfilmArtwork } from "@/components/artwor
 import { similarPath, watchPath } from "@/lib/seo-links";
 import { MovieCardActionsClient } from "@/components/movie-card-actions-client";
 
-type Props = {
-  movie: Pick<Movie, "id" | "slug" | "titleRu" | "year" | "type" | "posterUrl" | "quality" | "kpRating" | "imdbRating">;
-};
+type MovieCardMovie = Pick<Movie, "id" | "slug" | "titleRu" | "year" | "type" | "posterUrl" | "quality" | "kpRating" | "imdbRating"> & { editorialPosterUrl?: string | null };
+
+type Props = { movie: MovieCardMovie };
 
 function qualityLabel(quality: string) {
   if (/4k|2160/i.test(quality)) return "4K";
@@ -24,7 +24,8 @@ export function MovieCard({ movie }: Props) {
       : movie.type === "ANIME" ? "Аниме"
         : "Фильм";
   const rating = movie.kpRating ?? movie.imdbRating;
-  const hasPoster = !isGenericRedfilmArtwork(movie.posterUrl);
+  const effectivePosterUrl = movie.editorialPosterUrl ?? movie.posterUrl;
+  const hasPoster = !isGenericRedfilmArtwork(effectivePosterUrl);
 
   return (
     <article className="mf-card group relative block min-w-0">
@@ -32,7 +33,7 @@ export function MovieCard({ movie }: Props) {
         <Link href={href} data-analytics-event="card_click" data-analytics-movie-id={movie.id} aria-label={`Смотреть: ${movie.titleRu}`} className="absolute inset-0 block">
           {hasPoster ? (
             <Image
-              src={movie.posterUrl!}
+              src={effectivePosterUrl!}
               alt={movie.titleRu}
               fill
               loading="lazy"
@@ -54,7 +55,7 @@ export function MovieCard({ movie }: Props) {
           <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/48 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         </Link>
         <div className="rf-card-actions absolute inset-x-2 bottom-2 z-20 translate-y-2 opacity-0 transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
-          <MovieCardActionsClient movie={{ id: movie.id, slug: movie.slug, title: movie.titleRu, year: movie.year, posterUrl: movie.posterUrl, type: movie.type, kpRating: movie.kpRating, imdbRating: movie.imdbRating }} href={href} similarHref={similarHref} />
+          <MovieCardActionsClient movie={{ id: movie.id, slug: movie.slug, title: movie.titleRu, year: movie.year, posterUrl: effectivePosterUrl, type: movie.type, kpRating: movie.kpRating, imdbRating: movie.imdbRating }} href={href} similarHref={similarHref} />
         </div>
       </div>
 

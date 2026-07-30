@@ -13,7 +13,7 @@ import { resolveSearchRedirectPath } from "@/lib/search-route-intents";
 import { parseSearchIntent } from "@/lib/search-v2";
 import { seasonPath, watchPath } from "@/lib/seo-links";
 
-export const revalidate = 600;
+export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Поиск фильмов и сериалов — REDFILM", description: "Умный поиск доступных фильмов и сериалов по всей базе REDFILM.", alternates: { canonical: "/search" }, robots: { index: false, follow: true } };
 
