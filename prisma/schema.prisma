@@ -1456,3 +1456,37 @@ model SocialTrackingClick {
   @@index([code, createdAt])
   @@index([postId, createdAt])
 }
+
+
+model AiMatchUsage {
+  id               String   @id @default(cuid())
+  sessionIdHash    String?
+  mode             String
+  model            String?
+  requestId        String?
+  inputTokens      Int?
+  outputTokens     Int?
+  estimatedCostUsd Float    @default(0)
+  durationMs       Int?
+  candidateCount   Int      @default(0)
+  resultCount      Int      @default(0)
+  intentLength     Int      @default(0)
+  fallbackReason   String?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([mode, createdAt])
+}
+
+model AiMatchConfig {
+  id                String   @id @default("default")
+  enabled           Boolean  @default(true)
+  model             String   @default("gpt-4.1-mini")
+  dailyBudgetUsd    Float    @default(5)
+  maxCandidates     Int      @default(60)
+  recommendations   Int      @default(24)
+  timeoutMs         Int      @default(12000)
+  inputPricePerM    Float    @default(0.4)
+  outputPricePerM   Float    @default(1.6)
+  updatedAt         DateTime @updatedAt
+}

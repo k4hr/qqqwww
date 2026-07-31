@@ -12,6 +12,7 @@ import { AnalyticsEvent } from "@/components/analytics-event";
 import { WatchClientActions } from "@/components/watch-client-actions";
 import { ExpandableDescription } from "@/components/expandable-description";
 import { TelegramWatchPromo } from "@/components/telegram-watch-promo";
+import { WatchInstallCard } from "@/components/pwa/watch-install-card";
 import { PartnerTrack } from "@/components/partner-track";
 import { extractCountries } from "@/lib/catalog-filters";
 import { getWatchArtwork } from "@/lib/movie-artwork";
@@ -211,6 +212,7 @@ export default async function WatchPage({ params }: Props) {
             <div className="movie-grid home-movie-strip">{atmosphere.map((item) => <MovieCard key={item.id} movie={item} />)}</div>
           </section>
         ) : null}
+        <WatchInstallCard />
       </div>
     </div>
   );

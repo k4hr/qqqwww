@@ -99,6 +99,8 @@ export type DiscoveryMovie = {
   homeScore: number;
   trendScore: number;
   explanation?: string;
+  matchedPreferences?: string[];
+  caution?: string;
 };
 
 export const defaultDiscoveryFilters: DiscoveryFilters = {

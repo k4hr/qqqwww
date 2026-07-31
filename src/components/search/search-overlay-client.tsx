@@ -43,7 +43,7 @@ const quickLinks = [
   { href: "/series", label: "Сериалы" },
   { href: "/cartoons", label: "Мультфильмы" },
   { href: "/anime", label: "Аниме" },
-  { href: "/match", label: "REDFILM Match" },
+  { href: "/match", label: "ИИ-подбор" },
 ];
 
 function isTypingTarget(target: EventTarget | null) {

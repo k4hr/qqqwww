@@ -8,6 +8,7 @@ import { TelegramWebAppBridge } from "@/components/telegram-webapp-bridge";
 import { YandexMetrika } from "@/components/yandex-metrika";
 import { AnalyticsClickBridge } from "@/components/analytics-click-bridge";
 import { NavigationProgressClient } from "@/components/navigation-progress-client";
+import { PwaProvider } from "@/components/pwa/pwa-provider";
 import { getVibixAdSettings, getVibixAddTypesAttribute } from "@/lib/vibix-ads";
 import { siteUrl } from "@/lib/seo-links";
 
@@ -42,6 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ru">
       <body className="site-shell">
+        <PwaProvider>
         <TelegramWebAppBridge />
         <YandexMetrika />
         <AnalyticsClickBridge />
@@ -58,6 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           scriptUrl={adSettings.scriptUrl}
           flyrollPosition={adSettings.flyrollPosition}
         />
+        </PwaProvider>
       </body>
     </html>
   );

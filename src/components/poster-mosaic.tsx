@@ -36,7 +36,7 @@ export function PosterMosaic({ movies }: Props) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_44%,rgba(229,9,20,.32),transparent_28%),linear-gradient(90deg,#050505_0%,rgba(5,5,5,.62)_24%,rgba(5,5,5,.52)_72%,#050505_100%),linear-gradient(0deg,#050505_0%,rgba(5,5,5,.45)_35%,#050505_100%)]" />
       <div className="relative z-10 flex min-h-[520px] items-center justify-center px-4 text-center lg:min-h-[680px]">
         <div className="max-w-3xl">
-          <div className="mx-auto mb-4 inline-flex rounded-full border border-[#e50914]/35 bg-[#e50914]/10 px-4 py-2 text-xs font-black uppercase tracking-[.16em] text-[#ff4d55]">REDFILM Match</div>
+          <div className="mx-auto mb-4 inline-flex rounded-full border border-[#e50914]/35 bg-[#e50914]/10 px-4 py-2 text-xs font-black uppercase tracking-[.16em] text-[#ff4d55]">ИИ-подбор</div>
           <h1 className="text-[clamp(2.9rem,14vw,7.5rem)] font-black leading-[.86] tracking-[-.075em] text-white drop-shadow-2xl">Что посмотреть?</h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-[#d8d8df] sm:text-lg">Быстрый подбор из реального каталога REDFILM: только опубликованные фильмы и сериалы с постером и рабочим источником воспроизведения.</p>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">

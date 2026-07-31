@@ -156,7 +156,7 @@ export function TodayPicker({ initialMood, initialMovies }: Props) {
 
       <div className="mt-5 flex flex-wrap gap-2">
         <button type="button" onClick={() => requestMovies(filters, true)} disabled={isPending || !movies.length} className="mf-btn gap-2 disabled:opacity-50"><RefreshCw size={16} /> Ещё варианты</button>
-        <Link href="/match" className="rf-section-link px-2">Открыть REDFILM Match →</Link>
+        <Link href="/match" className="rf-section-link px-2">Открыть ИИ-подбор →</Link>
       </div>
     </section>
   );

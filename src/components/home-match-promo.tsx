@@ -13,10 +13,10 @@ export function HomeMatchPromo({ movies }: { movies: PromoMovie[] }) {
     <section className="rf-section rf-match-promo overflow-hidden border-y border-white/[.055]">
       <div className="grid min-h-[250px] items-center gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_430px]">
         <div className="relative z-10 max-w-xl">
-          <div className="rf-section-eyebrow inline-flex items-center gap-2"><Sparkles size={13} /> REDFILM Match</div>
+          <div className="rf-section-eyebrow inline-flex items-center gap-2"><Sparkles size={13} /> ИИ-подбор</div>
           <h2 className="mt-3 text-[clamp(1.75rem,4vw,2.5rem)] font-semibold leading-[1.08] tracking-[-.035em] text-white">Не знаете, что посмотреть?</h2>
           <p className="mt-4 max-w-lg text-[15px] leading-7 text-[#a0a1a8]">Отмечайте, что нравится, и REDFILM соберёт персональную очередь из доступного каталога.</p>
-          <Link href="/match" className="mf-btn mf-btn-primary mt-6 gap-2">Открыть REDFILM Match <ArrowRight size={15} /></Link>
+          <Link href="/match" className="mf-btn mf-btn-primary mt-6 gap-2">Начать ИИ-подбор <ArrowRight size={15} /></Link>
         </div>
 
         {posters.length ? (

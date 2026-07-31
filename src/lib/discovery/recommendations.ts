@@ -92,7 +92,7 @@ type RecommendationOptions = {
   seed?: string;
 };
 
-function sanitizeIdList(value: unknown, limit: number) {
+export function sanitizeIdList(value: unknown, limit: number) {
   if (!Array.isArray(value)) return [];
   return Array.from(new Set(value.filter((item): item is string => typeof item === "string" && item.length > 0 && item.length <= 80))).slice(-limit);
 }

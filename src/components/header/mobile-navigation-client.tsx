@@ -94,7 +94,7 @@ export function MobileNavigationClient() {
           <div className="grid grid-cols-2 gap-2 pt-4">
             <Link onClick={close} className="mobile-menu-link" href="/latest">Последнее</Link>
             <Link onClick={close} className="mobile-menu-link" href="/top-100">ТОП</Link>
-            <Link onClick={close} className="mobile-menu-link" href="/match">REDFILM Match</Link>
+            <Link onClick={close} className="mobile-menu-link" href="/match">ИИ-подбор</Link>
             <Link onClick={close} className="mobile-menu-link" href="/favorites">Избранное</Link>
             <Link onClick={close} className="mobile-menu-link" href="/history">История</Link>
             <Link onClick={close} className="mobile-menu-link" href="/collections">Подборки</Link>

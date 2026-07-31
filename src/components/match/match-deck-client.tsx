@@ -55,6 +55,13 @@ type DragSession = {
 const SWIPE_DISTANCE = 92;
 const SWIPE_VELOCITY = 0.55;
 
+function getMatchSessionId() {
+  const key = "redfilm:ai-pick-session";
+  let value = window.localStorage.getItem(key);
+  if (!value) { value = crypto.randomUUID(); window.localStorage.setItem(key, value); }
+  return value;
+}
+
 function isEditableTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [role='dialog']"));
@@ -75,6 +82,8 @@ export function MatchDeckClient({ movies }: { movies: DiscoveryMovie[] }) {
   const [preferences, setPreferences] = useState<MatchPreferences>(() => emptyMatchPreferences());
   const [history, setHistory] = useState<MatchHistoryEvent[]>([]);
   const [filters, setFilters] = useState<DiscoveryFilters>({ ...defaultDiscoveryFilters });
+  const [intentText, setIntentText] = useState("");
+  const [aiMode, setAiMode] = useState<"AI" | "LOCAL_FALLBACK">("LOCAL_FALLBACK");
   const [matchState, setMatchState] = useState<MatchState>(movies.length ? "READY" : "EMPTY");
   const [hydrated, setHydrated] = useState(false);
   const [undoEntry, setUndoEntry] = useState<MatchUndoEntry | null>(null);
@@ -93,6 +102,7 @@ export function MatchDeckClient({ movies }: { movies: DiscoveryMovie[] }) {
   const nextMovies = queue.slice(1, 5);
 
   useEffect(() => {
+    trackEvent("ai_pick_opened");
     const storedPreferences = readMatchPreferences();
     const storedHistory = readMatchHistory();
     const excluded = new Set(seenIds(storedPreferences, storedHistory));
@@ -144,13 +154,18 @@ export function MatchDeckClient({ movies }: { movies: DiscoveryMovie[] }) {
             runtimePreference: nextFilters.runtime,
           },
           seed: `${Date.now()}-${currentHistory.length}`,
+          intentText,
+          useAi: intentText.trim().length >= 3,
+          sessionId: getMatchSessionId(),
         }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = await response.json() as { movies?: DiscoveryMovie[] };
+      const payload = await response.json() as { movies?: DiscoveryMovie[]; mode?: "AI" | "LOCAL_FALLBACK"; explanations?: Record<string, { reason: string; matchedPreferences: string[]; caution: string }> };
       if (requestId !== requestIdRef.current) return;
       const excluded = new Set(seenIds(currentPreferences, currentHistory));
-      const nextQueue = (payload.movies ?? []).filter((movie) => !excluded.has(movie.id));
+      const nextQueue = (payload.movies ?? []).filter((movie) => !excluded.has(movie.id)).map((movie) => { const info = payload.explanations?.[movie.id]; return info ? { ...movie, explanation: info.reason, matchedPreferences: info.matchedPreferences, caution: info.caution } : movie; });
+      setAiMode(payload.mode ?? "LOCAL_FALLBACK");
+      trackEvent(payload.mode === "AI" ? "ai_pick_batch_generated" : "ai_pick_fallback_used", { count: nextQueue.length });
       setQueue(nextQueue);
       setUndoEntry(null);
       setMatchState(nextQueue.length ? "READY" : "FINISHED");
@@ -344,6 +359,16 @@ export function MatchDeckClient({ movies }: { movies: DiscoveryMovie[] }) {
             <Undo2 size={17} /> Отменить
           </button>
         </div>
+        <div className="mt-4 rounded-2xl border border-white/[.08] bg-white/[.025] p-4">
+          <label className="block text-sm font-semibold text-white" htmlFor="ai-pick-intent">Что хочется посмотреть?</label>
+          <p className="mt-1 text-sm text-[#a1a1aa]">Опишите настроение и ограничения — ИИ выберет только из фильмов REDFILM.</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <textarea id="ai-pick-intent" value={intentText} onChange={(event) => setIntentText(event.target.value.slice(0, 600))} className="mf-input min-h-24 flex-1 resize-y" placeholder="Например: напряжённый детектив без мистики, не слишком длинный" />
+            <button type="button" onClick={() => { trackEvent("ai_pick_intent_submitted", { length: intentText.trim().length }); void loadNextBatch(filters, preferences, history, []); }} disabled={intentText.trim().length < 3 || matchState === "LOADING_NEXT"} className="mf-btn mf-btn-primary self-stretch disabled:opacity-40 sm:self-end">Подобрать с ИИ</button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">{["Лёгкое на вечер", "Мрачное и напряжённое", "Для просмотра вдвоём", "Семейное", "Что-нибудь необычное"].map((text) => <button key={text} type="button" onClick={() => setIntentText(text)} className="rf-filter">{text}</button>)}</div>
+          <div className="mt-3 text-xs text-[#74757d]">Режим: {aiMode === "AI" ? "ИИ-ранжирование" : "локальный подбор"}</div>
+        </div>
         <details className="mt-4">
           <summary className="rf-filter w-fit cursor-pointer list-none">Фильтры подбора</summary>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -390,7 +415,7 @@ export function MatchDeckClient({ movies }: { movies: DiscoveryMovie[] }) {
                   {activeMovie.posterUrl ? <Image src={activeMovie.posterUrl} alt={activeMovie.titleRu} fill sizes="185px" className="object-cover" /> : null}
                 </div>
                 <div>
-                  <div className="rf-section-eyebrow mb-3 inline-flex items-center gap-2"><Star size={13} /> REDFILM Match</div>
+                  <div className="rf-section-eyebrow mb-3 inline-flex items-center gap-2"><Star size={13} /> ИИ-подбор</div>
                   <h2 className="text-[clamp(1.9rem,4.6vw,2.8rem)] font-semibold leading-[1.02] tracking-[-.045em] text-white">{activeMovie.titleRu}</h2>
                   <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#b7b8bf]">
                     <span className="mf-badge">{activeMovie.quality || "HD"}</span>
@@ -399,7 +424,7 @@ export function MatchDeckClient({ movies }: { movies: DiscoveryMovie[] }) {
                     <span><b className="rating-kp">КП</b> {activeMovie.kpRating?.toFixed(1) ?? "—"}</span>
                     <span><b className="rating-imdb">IMDb</b> {activeMovie.imdbRating?.toFixed(1) ?? "—"}</span>
                   </div>
-                  <p className="mt-4 text-sm font-medium text-[#c98a91]">{activeMovie.explanation}</p>
+                  {activeMovie.explanation ? <div className="mt-4 rounded-xl border border-[#e31b32]/25 bg-[#e31b32]/[.07] p-4"><div className="text-xs font-black uppercase tracking-[.14em] text-[#ff596b]">Почему подходит вам</div><p className="mt-2 text-sm leading-6 text-white">{activeMovie.explanation}</p>{activeMovie.matchedPreferences?.length ? <div className="mt-2 text-xs text-[#b8b8bf]">Совпало: {activeMovie.matchedPreferences.join(" · ")}</div> : null}{activeMovie.caution ? <p className="mt-2 text-xs text-[#8f9098]">Учтите: {activeMovie.caution}</p> : null}</div> : null}
                   <p className="mt-3 line-clamp-3 max-w-2xl text-base leading-7 text-[#d4d4d8]">{activeMovie.description}</p>
                   <div className="mt-7 flex flex-wrap gap-3">
                     <button type="button" onClick={() => commitDecision("DISLIKE")} disabled={!hydrated || actionLocked || matchState !== "READY"} className="mf-btn min-h-11 gap-2 disabled:cursor-wait disabled:opacity-55" aria-label="Не нравится, показать следующий"><ThumbsDown size={17} /> Не сейчас</button>
@@ -427,7 +452,7 @@ export function MatchDeckClient({ movies }: { movies: DiscoveryMovie[] }) {
           <div className="border-b border-white/[.07] pb-5">
             <div className="flex items-center justify-between gap-3">
               <div><h2 className="text-xl font-semibold text-white">Очередь</h2><p className="mt-1 text-sm text-[#a1a1aa]">Осталось: {queue.length}</p></div>
-              <button type="button" onClick={hardReset} className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[.04] text-white" aria-label="Сбросить Match"><RotateCcw size={17} /></button>
+              <button type="button" onClick={hardReset} className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[.04] text-white" aria-label="Сбросить ИИ-подбор"><RotateCcw size={17} /></button>
             </div>
             <p className="mt-3 text-sm leading-6 text-[#a1a1aa]">Лайки мягко усиливают жанры и типы, дизлайки снижают их вес без жёсткой блокировки.</p>
           </div>
