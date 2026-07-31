@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 
 import { ContentType, MovieArtworkType, type Prisma } from "@prisma/client";
 import { isSafeForHome } from "@/lib/catalog-safety";
@@ -202,12 +202,12 @@ function resolveBackdrop(movie: DiscoveryMovieRow) {
 
 function explanationFor(movie: DiscoveryMovieRow, filters: DiscoveryFilters) {
   const labels: string[] = [];
-  if (moodGenres[filters.mood].some((slug) => movie.genres.some(({ genre }) => genre.slug === slug))) labels.push(`Подходит под настроение: ${filters.mood === "tense" ? "напряжённое" : filters.mood === "dark" ? "мрачное" : filters.mood === "heartfelt" ? "душевное" : filters.mood === "fantastic" ? "фантастическое" : filters.mood === "adventure" ? "приключенческое" : filters.mood === "unexpected" ? "неожиданное" : "лёгкое"}`);
-  if (filters.highRating) labels.push("Высокий рейтинг");
-  if (filters.popular) labels.push("Популярно у зрителей");
-  if (filters.period === "2020S") labels.push("Релиз 2020-х");
-  if (movie.type === ContentType.SERIES) labels.push("Сериал на несколько вечеров");
-  return labels.slice(0, 2).join(" · ") || "Подобрано по качеству и интересу зрителей";
+  if (moodGenres[filters.mood].some((slug) => movie.genres.some(({ genre }) => genre.slug === slug))) labels.push(`РџРѕРґС…РѕРґРёС‚ РїРѕРґ РЅР°СЃС‚СЂРѕРµРЅРёРµ: ${filters.mood === "tense" ? "РЅР°РїСЂСЏР¶С‘РЅРЅРѕРµ" : filters.mood === "dark" ? "РјСЂР°С‡РЅРѕРµ" : filters.mood === "heartfelt" ? "РґСѓС€РµРІРЅРѕРµ" : filters.mood === "fantastic" ? "С„Р°РЅС‚Р°СЃС‚РёС‡РµСЃРєРѕРµ" : filters.mood === "adventure" ? "РїСЂРёРєР»СЋС‡РµРЅС‡РµСЃРєРѕРµ" : filters.mood === "unexpected" ? "РЅРµРѕР¶РёРґР°РЅРЅРѕРµ" : "Р»С‘РіРєРѕРµ"}`);
+  if (filters.highRating) labels.push("Р’С‹СЃРѕРєРёР№ СЂРµР№С‚РёРЅРі");
+  if (filters.popular) labels.push("РџРѕРїСѓР»СЏСЂРЅРѕ Сѓ Р·СЂРёС‚РµР»РµР№");
+  if (filters.period === "2020S") labels.push("Р РµР»РёР· 2020-С…");
+  if (movie.type === ContentType.SERIES) labels.push("РЎРµСЂРёР°Р» РЅР° РЅРµСЃРєРѕР»СЊРєРѕ РІРµС‡РµСЂРѕРІ");
+  return labels.slice(0, 2).join(" В· ") || "РџРѕРґРѕР±СЂР°РЅРѕ РїРѕ РєР°С‡РµСЃС‚РІСѓ Рё РёРЅС‚РµСЂРµСЃСѓ Р·СЂРёС‚РµР»РµР№";
 }
 
 function serializeMovie(movie: DiscoveryMovieRow, filters: DiscoveryFilters): DiscoveryMovie {
@@ -295,4 +295,5 @@ export async function getMatchCandidates({ limit = 24, type }: { limit?: number;
   });
 }
 
-export { ContentType, sanitizeIdList };
+export { ContentType };
+
