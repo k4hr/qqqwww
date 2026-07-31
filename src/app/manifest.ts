@@ -1,10 +1,10 @@
-﻿import type { MetadataRoute } from "next";
+import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "REDFILM",
     short_name: "REDFILM",
-    description: "Р¤РёР»СЊРјС‹ Рё СЃРµСЂРёР°Р»С‹ РѕРЅР»Р°Р№РЅ",
+    description: "Фильмы и сериалы онлайн",
     start_url: "/",
     scope: "/",
     display: "standalone",

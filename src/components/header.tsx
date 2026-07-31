@@ -7,7 +7,7 @@ const primaryLinks = [
   { href: "/latest", label: "Последнее" },
   { href: "/top-100", label: "ТОП" },
   { href: "/collections", label: "Подборки" },
-  { href: "/match", label: "Match" },
+  { href: "/match", label: "ИИ-подбор" },
 ];
 
 function HeaderLogo() {

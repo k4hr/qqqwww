@@ -1,4 +1,4 @@
-﻿import "server-only";
+import "server-only";
 
 import { ContentType, MovieArtworkType, type Prisma } from "@prisma/client";
 import { isSafeForHome } from "@/lib/catalog-safety";
@@ -202,12 +202,32 @@ function resolveBackdrop(movie: DiscoveryMovieRow) {
 
 function explanationFor(movie: DiscoveryMovieRow, filters: DiscoveryFilters) {
   const labels: string[] = [];
-  if (moodGenres[filters.mood].some((slug) => movie.genres.some(({ genre }) => genre.slug === slug))) labels.push(`РџРѕРґС…РѕРґРёС‚ РїРѕРґ РЅР°СЃС‚СЂРѕРµРЅРёРµ: ${filters.mood === "tense" ? "РЅР°РїСЂСЏР¶С‘РЅРЅРѕРµ" : filters.mood === "dark" ? "РјСЂР°С‡РЅРѕРµ" : filters.mood === "heartfelt" ? "РґСѓС€РµРІРЅРѕРµ" : filters.mood === "fantastic" ? "С„Р°РЅС‚Р°СЃС‚РёС‡РµСЃРєРѕРµ" : filters.mood === "adventure" ? "РїСЂРёРєР»СЋС‡РµРЅС‡РµСЃРєРѕРµ" : filters.mood === "unexpected" ? "РЅРµРѕР¶РёРґР°РЅРЅРѕРµ" : "Р»С‘РіРєРѕРµ"}`);
-  if (filters.highRating) labels.push("Р’С‹СЃРѕРєРёР№ СЂРµР№С‚РёРЅРі");
-  if (filters.popular) labels.push("РџРѕРїСѓР»СЏСЂРЅРѕ Сѓ Р·СЂРёС‚РµР»РµР№");
-  if (filters.period === "2020S") labels.push("Р РµР»РёР· 2020-С…");
-  if (movie.type === ContentType.SERIES) labels.push("РЎРµСЂРёР°Р» РЅР° РЅРµСЃРєРѕР»СЊРєРѕ РІРµС‡РµСЂРѕРІ");
-  return labels.slice(0, 2).join(" В· ") || "РџРѕРґРѕР±СЂР°РЅРѕ РїРѕ РєР°С‡РµСЃС‚РІСѓ Рё РёРЅС‚РµСЂРµСЃСѓ Р·СЂРёС‚РµР»РµР№";
+  const moodMatches = moodGenres[filters.mood].some((slug) =>
+    movie.genres.some(({ genre }) => genre.slug === slug),
+  );
+
+  const moodLabels: Partial<Record<DiscoveryMood, string>> = {
+    tense: "напряжённое",
+    dark: "мрачное",
+    heartfelt: "душевное",
+    fantastic: "фантастическое",
+    adventure: "приключенческое",
+    unexpected: "необычное",
+    comfort: "уютное",
+    light: "лёгкое",
+    action: "динамичное",
+    deep: "серьёзное",
+  };
+
+  if (moodMatches && moodLabels[filters.mood]) {
+    labels.push(`Подходит под настроение: ${moodLabels[filters.mood]}`);
+  }
+  if (filters.highRating) labels.push("Высокий зрительский рейтинг");
+  if (filters.popular) labels.push("Популярно у зрителей");
+  if (filters.period === "2020S") labels.push("Современный релиз");
+  if (movie.type === ContentType.SERIES) labels.push("Сериал на несколько вечеров");
+
+  return labels.slice(0, 2).join(" · ") || "Подобрано по качеству, рейтингу и интересам зрителей";
 }
 
 function serializeMovie(movie: DiscoveryMovieRow, filters: DiscoveryFilters): DiscoveryMovie {
