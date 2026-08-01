@@ -364,7 +364,9 @@ export default async function HomePage() {
   const legacySafe = legacyCandidates.filter(isLegacyHomeSafe).sort((a, b) => legacyScore(b) - legacyScore(a));
   const strongLegacy = legacySafe.filter(isStrongKnownTitle);
   const backdropCandidates = uniqueById([...heroMovies, ...heroFallback, ...legacySafe, ...manualSelection.movies]);
-  const featuredBackdrops = await getPublicBackdropMap(backdropCandidates.map((movie) => movie.id), { enrichMissing: true, maxEnrich: 5 });
+  const featuredBackdrops = await getPublicBackdropMap(
+    backdropCandidates.map((movie) => movie.id),
+  );
   const featuredBackdrop = (movie: Pick<Movie, "id" | "backdropUrl" | "posterUrl">) =>
     featuredBackdrops.get(movie.id) ?? movieBackdropFallback(movie);
   const hasValidatedBackdrop = (movie: Pick<Movie, "id" | "backdropUrl" | "posterUrl">) => Boolean(featuredBackdrop(movie));
@@ -450,7 +452,9 @@ export default async function HomePage() {
     ...classics.slice(0, 2),
     ...homeSectionMovies,
   ]);
-  const homeSectionBackdrops = await getPublicBackdropMap(backgroundPriority.map((movie) => movie.id), { enrichMissing: true, maxEnrich: 12 });
+  const homeSectionBackdrops = await getPublicBackdropMap(
+    backgroundPriority.map((movie) => movie.id),
+  );
   const sectionBackdrop = (movies: Array<Pick<Movie, "id" | "backdropUrl" | "posterUrl">>) => {
     for (const movie of movies) {
       const artwork = homeSectionBackdrops.get(movie.id) ?? movieBackdropFallback(movie);
