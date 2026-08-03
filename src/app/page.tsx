@@ -336,35 +336,6 @@ export default async function HomePage() {
 
   const legacySafe = legacyCandidates.filter(isLegacyHomeSafe).sort((a, b) => legacyScore(b) - legacyScore(a));
   const strongLegacy = legacySafe.filter(isStrongKnownTitle);
-<<<<<<< HEAD
-=======
-  const backdropCandidates = uniqueById([...heroMovies, ...heroFallback, ...legacySafe, ...manualSelection.movies]);
-  const featuredBackdrops = await getPublicBackdropMap(
-    backdropCandidates.map((movie) => movie.id),
-  );
-  const featuredBackdrop = (movie: Pick<Movie, "id" | "backdropUrl" | "posterUrl">) =>
-    featuredBackdrops.get(movie.id) ?? movieBackdropFallback(movie);
-  const hasValidatedBackdrop = (movie: Pick<Movie, "id" | "backdropUrl" | "posterUrl">) => Boolean(featuredBackdrop(movie));
-
-  const legacyHero = legacySafe.filter(hasValidatedBackdrop);
-  const autoFeatured = fillMovies(
-    heroMovies.filter(hasValidatedBackdrop),
-    [
-      ...heroFallback.filter((movie) => isRussianTitle(movie) && isValidCinematicImage(movie.posterUrl) && hasValidatedBackdrop(movie) && hasPlayableSource(movie)),
-      ...legacyHero,
-    ],
-    manualSelection.settings.limit,
-  );
-
-  const manualFeatured = manualSelection.movies.filter((movie) => hasValidatedBackdrop(movie));
-  const featured = manualSelection.settings.isEnabled && manualSelection.settings.mode === "MANUAL"
-    ? (manualFeatured.length ? manualFeatured.slice(0, manualSelection.settings.limit) : autoFeatured)
-    : manualSelection.settings.isEnabled && manualSelection.settings.mode === "MIXED"
-      ? fillMovies(manualFeatured, autoFeatured, manualSelection.settings.limit)
-      : autoFeatured;
-
-  const featuredIds = new Set(featured.map((movie) => movie.id));
->>>>>>> 93c1da7bdfc6fc4f1cd6e2d5e63f3be0cb2d226e
 
   const trendingPreferred = trendingCandidates
     .sort((a, b) => trendRankScore(b, currentYear) - trendRankScore(a, currentYear));
