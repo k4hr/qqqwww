@@ -4,14 +4,12 @@ import { ClientLibrary } from "@/components/client-library";
 import { TodayPicker } from "@/components/discovery/today-picker";
 import { HomeMatchPromo } from "@/components/home-match-promo";
 import { HomeBand } from "@/components/home-band";
-import { MovieHeroSlider } from "@/components/movie-hero-slider";
 import { SectionGrid } from "@/components/section-grid";
 import { VibixBanner } from "@/components/vibix-banner";
 import { hasPlayableSource, isValidCinematicImage } from "@/lib/home-quality-score";
 import { isAdultLikeTitle } from "@/lib/catalog-safety";
 import { prisma } from "@/lib/prisma";
 import { getDiscoveryRecommendations } from "@/lib/discovery/recommendations";
-import { getHomeSelectionForHero } from "@/lib/home-selection";
 import { getPublicBackdropMap } from "@/lib/movie-artwork";
 
 
@@ -182,7 +180,6 @@ async function getHomeMovies(currentYear: number) {
   };
 
   const [
-    heroMovies,
     bestMovieCandidates,
     eligibleSeries,
     eligibleCartoons,
@@ -191,14 +188,8 @@ async function getHomeMovies(currentYear: number) {
     recentHotFallback,
     eligibleNewest,
     eligibleClassics,
-    heroFallback,
     legacyCandidates,
   ] = await Promise.all([
-    prisma.movie.findMany({
-      where: { ...publicWhere, isHeroEligible: true },
-      orderBy: [{ homeScore: "desc" }, { trendScore: "desc" }, { kpVotes: "desc" }, { imdbVotes: "desc" }],
-      take: 8,
-    }),
     prisma.movie.findMany({
       where: {
         ...publicWhere,
@@ -297,19 +288,6 @@ async function getHomeMovies(currentYear: number) {
       take: 36,
     }),
     prisma.movie.findMany({
-      where: {
-        ...publicWhere,
-        posterUrl: { not: null },
-        backdropUrl: { not: null },
-        AND: [
-          playableWhere,
-          { OR: [{ kpVotes: { gte: 1 } }, { imdbVotes: { gte: 1 } }, { kpRating: { gte: 6 } }, { imdbRating: { gte: 6 } }] },
-        ],
-      },
-      orderBy: [{ homeScore: "desc" }, { qualityScore: "desc" }, { kpVotes: "desc" }, { imdbVotes: "desc" }, { kpRating: "desc" }],
-      take: 80,
-    }),
-    prisma.movie.findMany({
       where: posterPlayableWhere,
       orderBy: [
         { homeScore: "desc" },
@@ -326,7 +304,6 @@ async function getHomeMovies(currentYear: number) {
   ]);
 
   return {
-    heroMovies,
     bestMovieCandidates,
     eligibleSeries,
     eligibleCartoons,
@@ -335,20 +312,17 @@ async function getHomeMovies(currentYear: number) {
     recentHotFallback,
     eligibleNewest,
     eligibleClassics,
-    heroFallback,
     legacyCandidates,
   };
 }
 
 export default async function HomePage() {
   const currentYear = new Date().getFullYear();
-  const [homeMovies, manualSelection, todayMovies] = await Promise.all([
+  const [homeMovies, todayMovies] = await Promise.all([
     getHomeMovies(currentYear),
-    getHomeSelectionForHero(),
     getDiscoveryRecommendations({ filters: { mood: "evening" }, limit: 10 }),
   ]);
   const {
-    heroMovies,
     bestMovieCandidates,
     eligibleSeries,
     eligibleCartoons,
@@ -357,46 +331,19 @@ export default async function HomePage() {
     recentHotFallback,
     eligibleNewest,
     eligibleClassics,
-    heroFallback,
     legacyCandidates,
   } = homeMovies;
 
   const legacySafe = legacyCandidates.filter(isLegacyHomeSafe).sort((a, b) => legacyScore(b) - legacyScore(a));
   const strongLegacy = legacySafe.filter(isStrongKnownTitle);
-  const backdropCandidates = uniqueById([...heroMovies, ...heroFallback, ...legacySafe, ...manualSelection.movies]);
-  const featuredBackdrops = await getPublicBackdropMap(backdropCandidates.map((movie) => movie.id), { enrichMissing: true, maxEnrich: 5 });
-  const featuredBackdrop = (movie: Pick<Movie, "id" | "backdropUrl" | "posterUrl">) =>
-    featuredBackdrops.get(movie.id) ?? movieBackdropFallback(movie);
-  const hasValidatedBackdrop = (movie: Pick<Movie, "id" | "backdropUrl" | "posterUrl">) => Boolean(featuredBackdrop(movie));
-
-  const legacyHero = legacySafe.filter(hasValidatedBackdrop);
-  const autoFeatured = fillMovies(
-    heroMovies.filter(hasValidatedBackdrop),
-    [
-      ...heroFallback.filter((movie) => isRussianTitle(movie) && isValidCinematicImage(movie.posterUrl) && hasValidatedBackdrop(movie) && hasPlayableSource(movie)),
-      ...legacyHero,
-    ],
-    manualSelection.settings.limit,
-  );
-
-  const manualFeatured = manualSelection.movies.filter((movie) => hasValidatedBackdrop(movie));
-  const featured = manualSelection.settings.isEnabled && manualSelection.settings.mode === "MANUAL"
-    ? (manualFeatured.length ? manualFeatured.slice(0, manualSelection.settings.limit) : autoFeatured)
-    : manualSelection.settings.isEnabled && manualSelection.settings.mode === "MIXED"
-      ? fillMovies(manualFeatured, autoFeatured, manualSelection.settings.limit)
-      : autoFeatured;
-
-  const featuredIds = new Set(featured.map((movie) => movie.id));
 
   const trendingPreferred = trendingCandidates
-    .filter((movie) => !featuredIds.has(movie.id))
     .sort((a, b) => trendRankScore(b, currentYear) - trendRankScore(a, currentYear));
   const trendingFallback = recentHotFallback
-    .filter((movie) => !featuredIds.has(movie.id))
     .sort((a, b) => trendRankScore(b, currentYear) - trendRankScore(a, currentYear));
   const trending = fillMovies(trendingPreferred, trendingFallback);
 
-  const trendingIds = new Set([...featuredIds, ...trending.map((movie) => movie.id)]);
+  const trendingIds = new Set(trending.map((movie) => movie.id));
 
   const bestMoviesPreferred = bestMovieCandidates
     .filter((movie) => !trendingIds.has(movie.id))
@@ -450,7 +397,9 @@ export default async function HomePage() {
     ...classics.slice(0, 2),
     ...homeSectionMovies,
   ]);
-  const homeSectionBackdrops = await getPublicBackdropMap(backgroundPriority.map((movie) => movie.id), { enrichMissing: true, maxEnrich: 12 });
+  const homeSectionBackdrops = await getPublicBackdropMap(
+    backgroundPriority.map((movie) => movie.id),
+  );
   const sectionBackdrop = (movies: Array<Pick<Movie, "id" | "backdropUrl" | "posterUrl">>) => {
     for (const movie of movies) {
       const artwork = homeSectionBackdrops.get(movie.id) ?? movieBackdropFallback(movie);
@@ -460,24 +409,7 @@ export default async function HomePage() {
   };
   const todayBackdrop = sectionBackdrop(todayMovies);
 
-  const featuredForClient = featured.slice(0, 5).map((movie) => ({
-    id: movie.id,
-    slug: movie.slug,
-    titleRu: movie.titleRu,
-    description: movie.description,
-    year: movie.year,
-    quality: movie.quality,
-    posterUrl: movie.posterUrl,
-    backdropUrl: featuredBackdrop(movie),
-    kpRating: movie.kpRating,
-    imdbRating: movie.imdbRating,
-  }));
-
   return <div className="pb-8">
-    <div className="container pt-4 sm:pt-6">
-      <MovieHeroSlider movies={featuredForClient} />
-    </div>
-
     <HomeBand artworkUrl={sectionBackdrop(trending)} artworkAlt="" tone="red">
       <SectionGrid title="Сейчас популярно" href="/trending" movies={trending} showSorts={false} mobileCarousel />
     </HomeBand>

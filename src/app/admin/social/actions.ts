@@ -17,22 +17,94 @@ function go(path: string, params: Record<string, string>): never { const q = new
 export async function saveVkIntegrationAction(formData: FormData) {
   const groupId = text(formData, "groupId").replace(/^-/, "");
   const token = text(formData, "token");
-  if (!groupId || !token) go("/admin/social/integrations", { error: "Нужны ID сообщества и токен" });
+
+  if (!groupId || !token) {
+    go("/admin/social/integrations", {
+      error: "Нужны ID сообщества и токен",
+    });
+  }
+
   try {
     const validation = await validateVkConnection(token, groupId);
-    const existing = await prisma.socialIntegration.findUnique({ where: { provider: "VK" } });
+    const existing = await prisma.socialIntegration.findUnique({
+      where: { provider: "VK" },
+    });
+
     const saved = await prisma.socialIntegration.upsert({
       where: { provider: "VK" },
-      create: { provider: "VK", status: "CONNECTED", displayName: validation.group.name, externalGroupId: groupId, encryptedAccessToken: encryptSecret(token), tokenLastFour: token.slice(-4), capabilities: validation.capabilities, lastCheckedAt: new Date(), lastSuccessAt: new Date() },
-      update: { status: "CONNECTED", displayName: validation.group.name, externalGroupId: groupId, encryptedAccessToken: encryptSecret(token), tokenLastFour: token.slice(-4), capabilities: validation.capabilities, lastCheckedAt: new Date(), lastSuccessAt: new Date(), lastError: null },
+      create: {
+        provider: "VK",
+        status: "CONNECTED",
+        displayName: validation.group.name,
+        externalGroupId: groupId,
+        encryptedAccessToken: encryptSecret(token),
+        tokenLastFour: token.slice(-4),
+        capabilities: validation.capabilities,
+        lastCheckedAt: new Date(),
+        lastSuccessAt: new Date(),
+        lastError: null,
+      },
+      update: {
+        status: "CONNECTED",
+        displayName: validation.group.name,
+        externalGroupId: groupId,
+        encryptedAccessToken: encryptSecret(token),
+        tokenLastFour: token.slice(-4),
+        capabilities: validation.capabilities,
+        lastCheckedAt: new Date(),
+        lastSuccessAt: new Date(),
+        lastError: null,
+      },
     });
-    await socialAudit({ action: "VK_INTEGRATION_SAVED", entityType: "SocialIntegration", entityId: saved.id, before: existing ? { status: existing.status, groupId: existing.externalGroupId } : null, after: { status: saved.status, groupId, capabilities: validation.capabilities } });
-    revalidatePath("/admin/social/integrations");
-    go("/admin/social/integrations", { saved: "1" });
+
+    await socialAudit({
+      action: "VK_INTEGRATION_SAVED",
+      entityType: "SocialIntegration",
+      entityId: saved.id,
+      before: existing
+        ? {
+            status: existing.status,
+            groupId: existing.externalGroupId,
+          }
+        : null,
+      after: {
+        status: saved.status,
+        groupId,
+        capabilities: validation.capabilities,
+      },
+    });
   } catch (error) {
-    await prisma.socialIntegration.upsert({ where: { provider: "VK" }, create: { provider: "VK", status: "ERROR", externalGroupId: groupId, encryptedAccessToken: encryptSecret(token), tokenLastFour: token.slice(-4), lastCheckedAt: new Date(), lastError: error instanceof Error ? error.message : String(error) }, update: { status: "ERROR", externalGroupId: groupId, encryptedAccessToken: encryptSecret(token), tokenLastFour: token.slice(-4), lastCheckedAt: new Date(), lastError: error instanceof Error ? error.message : String(error) } });
-    go("/admin/social/integrations", { error: error instanceof Error ? error.message : String(error) });
+    const message =
+      error instanceof Error ? error.message : String(error);
+
+    await prisma.socialIntegration.upsert({
+      where: { provider: "VK" },
+      create: {
+        provider: "VK",
+        status: "ERROR",
+        externalGroupId: groupId,
+        encryptedAccessToken: encryptSecret(token),
+        tokenLastFour: token.slice(-4),
+        lastCheckedAt: new Date(),
+        lastError: message,
+      },
+      update: {
+        status: "ERROR",
+        externalGroupId: groupId,
+        encryptedAccessToken: encryptSecret(token),
+        tokenLastFour: token.slice(-4),
+        lastCheckedAt: new Date(),
+        lastError: message,
+      },
+    });
+
+    go("/admin/social/integrations", {
+      error: message,
+    });
   }
+
+  revalidatePath("/admin/social/integrations");
+  go("/admin/social/integrations", { saved: "1" });
 }
 
 export async function createPostAction(formData: FormData) {
