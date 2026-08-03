@@ -1573,6 +1573,23 @@ header::after {
 .rf-home-band .rf-section-title {
   text-shadow: 0 4px 22px rgba(0,0,0,.56);
 }
+
+/* Homepage density: keep cinematic bands visually separated without large empty gaps. */
+.rf-home-page .rf-home-band {
+  margin-top: 8px;
+}
+.rf-home-page > .rf-home-band:first-child {
+  margin-top: 0;
+}
+.rf-home-page .rf-home-band > .container {
+  padding-block: clamp(20px, 2vw, 28px);
+}
+.rf-home-page .rf-home-band-compact > .container {
+  padding-block: clamp(16px, 1.6vw, 22px);
+}
+.rf-home-page > .container .rf-section {
+  margin-top: 12px;
+}
 .rf-home-band-red { --rf-band-accent: rgba(240,43,66,.24); }
 .rf-home-band-violet { --rf-band-accent: rgba(124,86,255,.22); }
 .rf-home-band-blue { --rf-band-accent: rgba(53,145,200,.2); }
@@ -1628,6 +1645,21 @@ footer::before {
   }
   .rf-home-band > .container {
     padding-block: 26px 30px;
+  }
+  .rf-home-page .rf-home-band {
+    margin-top: 6px;
+  }
+  .rf-home-page > .rf-home-band:first-child {
+    margin-top: 0;
+  }
+  .rf-home-page .rf-home-band > .container {
+    padding-block: 17px 19px;
+  }
+  .rf-home-page .rf-home-band-compact > .container {
+    padding-block: 14px 16px;
+  }
+  .rf-home-page > .container .rf-section {
+    margin-top: 10px;
   }
   .rf-home-band::before {
     background:

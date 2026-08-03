@@ -409,7 +409,7 @@ export default async function HomePage() {
   };
   const todayBackdrop = sectionBackdrop(todayMovies);
 
-  return <div className="pb-8">
+  return <div className="rf-home-page pb-8">
     <HomeBand artworkUrl={sectionBackdrop(trending)} artworkAlt="" tone="red">
       <SectionGrid title="Сейчас популярно" href="/trending" movies={trending} showSorts={false} mobileCarousel />
     </HomeBand>
