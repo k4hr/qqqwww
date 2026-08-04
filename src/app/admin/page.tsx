@@ -84,6 +84,7 @@ export default async function AdminPage({ searchParams }: Props) {
           <Link href="/admin/home-selection" className="rounded-sm bg-[#e50914] px-5 py-3 font-bold text-white">Подборка главной</Link>
           <Link href="/admin/collaboration" className="rounded-sm bg-[#e50914] px-5 py-3 font-bold text-white">Сотрудничество</Link>
           <Link href="/admin/ai-pick" className="rounded-sm bg-[#e50914] px-5 py-3 font-bold text-white">ИИ-подбор</Link>
+          <Link href="/admin/link-generator" className="rounded-sm bg-[#e50914] px-5 py-3 font-bold text-white">Генератор ссылок</Link>
         <Link href="/admin/analytics" className="rounded-sm bg-[#333] px-5 py-3 font-bold text-white">Аналитика</Link>
         </div>
       </div>
