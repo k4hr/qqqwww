@@ -7,6 +7,7 @@ import {
   LINK_GENERATOR_BUCKETS,
   LINK_GENERATOR_CONTENT_TYPES,
   type LinkGeneratorBucket,
+  type LinkGeneratorBucketCounts,
   type LinkGeneratorContentType,
   type LinkGeneratorItem,
   type LinkGeneratorStats,
@@ -67,6 +68,32 @@ export function sanitizeCount(input: unknown, fallback: number) {
   return Math.min(MAX_GENERATE_COUNT, Math.max(1, Math.trunc(parsed)));
 }
 
+export function sanitizeMixedBucketCounts(input: unknown): LinkGeneratorBucketCounts {
+  const source = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const counts = {} as LinkGeneratorBucketCounts;
+
+  for (const bucket of LINK_GENERATOR_BUCKETS) {
+    const raw = source[bucket];
+    const parsed = typeof raw === "number" ? raw : Number.parseInt(String(raw ?? "10"), 10);
+    counts[bucket] = Number.isFinite(parsed)
+      ? Math.min(40, Math.max(0, Math.trunc(parsed)))
+      : 10;
+  }
+
+  return counts;
+}
+
+export class LinkGeneratorAvailabilityError extends Error {
+  constructor(
+    public readonly bucket: LinkGeneratorBucket,
+    public readonly requested: number,
+    public readonly available: number,
+  ) {
+    super(`В диапазоне ${LINK_GENERATOR_BUCKET_META[bucket].title} найдено только ${available} из ${requested} запрошенных ссылок.`);
+    this.name = "LinkGeneratorAvailabilityError";
+  }
+}
+
 function toItem(movie: RawMovie): LinkGeneratorItem {
   return {
     id: movie.id,
@@ -93,28 +120,6 @@ async function randomFromBucket(params: {
     FROM "Movie"
     WHERE ${eligibleSql(params.types)}
       AND ${bucketSql(params.bucket)}
-      ${excludeSql}
-    ORDER BY random()
-    LIMIT ${params.limit}
-  `);
-
-  return rows.map(toItem);
-}
-
-async function randomFromAll(params: {
-  types: LinkGeneratorContentType[];
-  limit: number;
-  excludeIds?: string[];
-}) {
-  const excludeIds = params.excludeIds ?? [];
-  const excludeSql = excludeIds.length
-    ? Prisma.sql`AND "id" NOT IN (${Prisma.join(excludeIds)})`
-    : Prisma.empty;
-
-  const rows = await prisma.$queryRaw<RawMovie[]>(Prisma.sql`
-    SELECT "id", "slug", "titleRu", "type"::text AS "type", "duration"
-    FROM "Movie"
-    WHERE ${eligibleSql(params.types)}
       ${excludeSql}
     ORDER BY random()
     LIMIT ${params.limit}
@@ -183,35 +188,29 @@ export async function generateBucketLinks(params: {
   });
 }
 
-export async function generateBalancedLinks(params: {
+export async function generateMixedLinks(params: {
   types: LinkGeneratorContentType[];
-  total?: number;
+  bucketCounts: LinkGeneratorBucketCounts;
 }) {
-  const total = Math.min(200, Math.max(4, params.total ?? 40));
-  const basePerBucket = Math.floor(total / LINK_GENERATOR_BUCKETS.length);
-  let remainder = total % LINK_GENERATOR_BUCKETS.length;
   const selected: LinkGeneratorItem[] = [];
 
   for (const bucket of LINK_GENERATOR_BUCKETS) {
-    const target = basePerBucket + (remainder > 0 ? 1 : 0);
-    remainder = Math.max(0, remainder - 1);
+    const requested = params.bucketCounts[bucket];
+    if (requested <= 0) continue;
+
     const items = await randomFromBucket({
       bucket,
       types: params.types,
-      limit: target,
+      limit: requested,
       excludeIds: selected.map((item) => item.id),
     });
+
+    if (items.length < requested) {
+      throw new LinkGeneratorAvailabilityError(bucket, requested, items.length);
+    }
+
     selected.push(...items);
   }
 
-  if (selected.length < total) {
-    const topUp = await randomFromAll({
-      types: params.types,
-      limit: total - selected.length,
-      excludeIds: selected.map((item) => item.id),
-    });
-    selected.push(...topUp);
-  }
-
-  return shuffle(selected).slice(0, total);
+  return shuffle(selected);
 }

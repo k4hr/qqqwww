@@ -13,6 +13,7 @@ export type LinkGeneratorItem = {
 };
 
 export type LinkGeneratorStats = Record<LinkGeneratorBucket | "UNKNOWN", number>;
+export type LinkGeneratorBucketCounts = Record<LinkGeneratorBucket, number>;
 
 export const LINK_GENERATOR_BUCKET_META: Record<
   LinkGeneratorBucket,

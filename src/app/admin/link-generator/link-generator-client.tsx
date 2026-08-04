@@ -6,6 +6,7 @@ import {
   LINK_GENERATOR_BUCKETS,
   LINK_GENERATOR_CONTENT_TYPES,
   type LinkGeneratorBucket,
+  type LinkGeneratorBucketCounts,
   type LinkGeneratorContentType,
   type LinkGeneratorItem,
   type LinkGeneratorStats,
@@ -28,6 +29,8 @@ const ITEM_TYPE_LABELS: Record<LinkGeneratorContentType, string> = {
 type ResultState = Record<LinkGeneratorBucket | "MIXED", LinkGeneratorItem[]>;
 type PendingState = LinkGeneratorBucket | "MIXED" | "STATS" | null;
 
+const MIXED_TOTAL = 40;
+
 function emptyResults(): ResultState {
   return { MIN_1_10: [], MIN_11_30: [], MIN_31_60: [], MIN_61_PLUS: [], MIXED: [] };
 }
@@ -47,6 +50,12 @@ export function LinkGeneratorClient({
     MIN_31_60: 10,
     MIN_61_PLUS: 10,
   });
+  const [mixedCounts, setMixedCounts] = useState<LinkGeneratorBucketCounts>({
+    MIN_1_10: 10,
+    MIN_11_30: 10,
+    MIN_31_60: 10,
+    MIN_61_PLUS: 10,
+  });
   const [results, setResults] = useState<ResultState>(emptyResults);
   const [pending, setPending] = useState<PendingState>(null);
   const [message, setMessage] = useState("");
@@ -57,6 +66,14 @@ export function LinkGeneratorClient({
     () => LINK_GENERATOR_BUCKETS.reduce((sum, bucket) => sum + stats[bucket], 0),
     [stats],
   );
+  const mixedTotal = useMemo(
+    () => LINK_GENERATOR_BUCKETS.reduce((sum, bucket) => sum + mixedCounts[bucket], 0),
+    [mixedCounts],
+  );
+  const mixedCountsFitAvailability = LINK_GENERATOR_BUCKETS.every(
+    (bucket) => mixedCounts[bucket] <= stats[bucket],
+  );
+  const mixedCanGenerate = mixedTotal === MIXED_TOTAL && mixedCountsFitAvailability;
 
   async function refreshStats(nextTypes: LinkGeneratorContentType[]) {
     setPending("STATS");
@@ -91,13 +108,22 @@ export function LinkGeneratorClient({
     void refreshStats(next);
   }
 
+  function changeMixedCount(bucket: LinkGeneratorBucket, value: string) {
+    const parsed = Number.parseInt(value || "0", 10);
+    const nextValue = Number.isFinite(parsed) ? Math.min(MIXED_TOTAL, Math.max(0, parsed)) : 0;
+    setMixedCounts((current) => ({ ...current, [bucket]: nextValue }));
+    setResults((current) => ({ ...current, MIXED: [] }));
+    setCopied(null);
+    setMessage("");
+  }
+
   async function generate(target: LinkGeneratorBucket | "MIXED") {
     setPending(target);
     setMessage("");
     setCopied(null);
     try {
       const body = target === "MIXED"
-        ? { mode: "mixed", count: 40, types }
+        ? { mode: "mixed", bucketCounts: mixedCounts, types }
         : { mode: "bucket", bucket: target, count: counts[target], types };
       const response = await fetch("/api/admin/link-generator/generate", {
         method: "POST",
@@ -107,7 +133,7 @@ export function LinkGeneratorClient({
       const payload = (await response.json()) as { items?: LinkGeneratorItem[]; error?: string };
       if (!response.ok || !payload.items) throw new Error(payload.error || "Не удалось сгенерировать ссылки");
       setResults((current) => ({ ...current, [target]: payload.items ?? [] }));
-      if (payload.items.length < (target === "MIXED" ? 40 : counts[target])) {
+      if (payload.items.length < (target === "MIXED" ? mixedTotal : counts[target])) {
         setMessage(`Найдено только ${payload.items.length} уникальных ссылок по выбранным условиям.`);
       }
     } catch (error) {
@@ -179,16 +205,56 @@ export function LinkGeneratorClient({
       </section>
 
       <section className="rounded-2xl border-2 border-[#e50914] bg-[#fff7f7] p-5 shadow-sm">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <div className="text-xs font-black uppercase tracking-[0.18em] text-[#e50914]">Главный блок</div>
-            <h2 className="mt-1 text-2xl font-black text-[#222]">Замешать 40 ссылок</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600">
-              Генератор берёт по 10 случайных ссылок из каждого диапазона, добирает недостающие из остальных диапазонов и затем полностью перемешивает итоговый список.
-            </p>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-[#e50914]">Главный блок</div>
+              <h2 className="mt-1 text-2xl font-black text-[#222]">Замешать 40 ссылок</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600">
+                Укажи, сколько ссылок взять из каждого диапазона. Сумма должна быть ровно 40, после чего итоговый список полностью перемешивается.
+              </p>
+            </div>
+            <div className={`rounded-xl border px-4 py-3 text-center ${mixedTotal === MIXED_TOTAL ? "border-[#9ed1aa] bg-[#eefaf1]" : "border-[#e7b0b3] bg-white"}`}>
+              <div className="text-xs font-black uppercase tracking-wide text-neutral-500">Итого</div>
+              <div className={`mt-1 text-2xl font-black ${mixedTotal === MIXED_TOTAL ? "text-[#176b2c]" : "text-[#b40710]"}`}>{mixedTotal} / {MIXED_TOTAL}</div>
+            </div>
           </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {LINK_GENERATOR_BUCKETS.map((bucket) => {
+              const meta = LINK_GENERATOR_BUCKET_META[bucket];
+              const unavailable = mixedCounts[bucket] > stats[bucket];
+              return (
+                <label key={`mixed-${bucket}`} className={`rounded-xl border bg-white p-3 text-sm font-bold ${unavailable ? "border-[#e50914]" : "border-[#e1c7c9]"}`}>
+                  <span className="text-[#333]">{meta.title}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={MIXED_TOTAL}
+                    value={mixedCounts[bucket]}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => changeMixedCount(bucket, event.target.value)}
+                    className="mt-2 w-full rounded-lg border border-[#d8d8d8] bg-white px-3 py-2 text-lg font-black text-[#222] outline-none focus:border-[#e50914]"
+                  />
+                  <span className={`mt-1 block text-xs ${unavailable ? "text-[#b40710]" : "text-neutral-500"}`}>
+                    Доступно: {stats[bucket].toLocaleString("ru-RU")}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          {mixedTotal !== MIXED_TOTAL ? (
+            <div className="rounded-xl border border-[#e7b0b3] bg-white px-4 py-3 text-sm font-bold text-[#9f1018]">
+              Нужно распределить ровно 40 ссылок. Сейчас указано: {mixedTotal}.
+            </div>
+          ) : !mixedCountsFitAvailability ? (
+            <div className="rounded-xl border border-[#e7b0b3] bg-white px-4 py-3 text-sm font-bold text-[#9f1018]">
+              В одном из диапазонов запрошено больше ссылок, чем доступно. Уменьши значение.
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={Boolean(pending)} onClick={() => generate("MIXED")} className="rounded-xl bg-[#e50914] px-5 py-3 font-black text-white disabled:opacity-50">
+            <button type="button" disabled={Boolean(pending) || !mixedCanGenerate} onClick={() => generate("MIXED")} className="rounded-xl bg-[#e50914] px-5 py-3 font-black text-white disabled:opacity-50">
               {pending === "MIXED" ? "Генерируем…" : results.MIXED.length ? "Новый набор из 40" : "Сгенерировать 40 ссылок"}
             </button>
             <button type="button" disabled={!results.MIXED.length || Boolean(pending)} onClick={reshuffleMixed} className="rounded-xl border border-[#d7a2a5] bg-white px-5 py-3 font-bold text-[#8f0a12] disabled:opacity-40">
@@ -199,7 +265,7 @@ export function LinkGeneratorClient({
             </button>
           </div>
         </div>
-        <ResultList items={results.MIXED} emptyText="Нажми «Сгенерировать 40 ссылок»." />
+        <ResultList items={results.MIXED} emptyText="Настрой количество для каждого диапазона и нажми «Сгенерировать 40 ссылок»." />
       </section>
 
       <div className="grid gap-5 xl:grid-cols-2">

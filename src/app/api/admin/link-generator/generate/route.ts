@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server";
 import {
-  generateBalancedLinks,
   generateBucketLinks,
+  generateMixedLinks,
+  LinkGeneratorAvailabilityError,
   sanitizeBucket,
   sanitizeContentTypes,
   sanitizeCount,
+  sanitizeMixedBucketCounts,
 } from "@/lib/admin-link-generator";
+import { LINK_GENERATOR_BUCKETS } from "@/lib/link-generator-types";
 
 export const dynamic = "force-dynamic";
 
 type GenerateBody = {
   mode?: unknown;
   bucket?: unknown;
+  bucketCounts?: unknown;
   count?: unknown;
   types?: unknown;
 };
@@ -28,9 +32,18 @@ export async function POST(request: Request) {
     const types = sanitizeContentTypes(body.types);
 
     if (body.mode === "mixed") {
-      const count = sanitizeCount(body.count, 40);
-      const items = await generateBalancedLinks({ types, total: count });
-      return NextResponse.json({ mode: "mixed", count: items.length, items });
+      const bucketCounts = sanitizeMixedBucketCounts(body.bucketCounts);
+      const total = LINK_GENERATOR_BUCKETS.reduce((sum, bucket) => sum + bucketCounts[bucket], 0);
+
+      if (total !== 40) {
+        return NextResponse.json(
+          { error: `Для смешанного набора сумма четырёх диапазонов должна быть равна 40. Сейчас: ${total}.` },
+          { status: 400 },
+        );
+      }
+
+      const items = await generateMixedLinks({ types, bucketCounts });
+      return NextResponse.json({ mode: "mixed", count: items.length, bucketCounts, items });
     }
 
     const bucket = sanitizeBucket(body.bucket);
@@ -40,6 +53,9 @@ export async function POST(request: Request) {
     const items = await generateBucketLinks({ bucket, types, count });
     return NextResponse.json({ mode: "bucket", bucket, count: items.length, items });
   } catch (error) {
+    if (error instanceof LinkGeneratorAvailabilityError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     console.error("[LinkGenerator] Failed to generate links", error);
     return NextResponse.json({ error: "Не удалось сгенерировать ссылки" }, { status: 500 });
   }
