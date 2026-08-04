@@ -4,6 +4,14 @@ export type LinkGeneratorContentType = (typeof LINK_GENERATOR_CONTENT_TYPES)[num
 export const LINK_GENERATOR_BUCKETS = ["MIN_1_10", "MIN_11_30", "MIN_31_60", "MIN_61_PLUS"] as const;
 export type LinkGeneratorBucket = (typeof LINK_GENERATOR_BUCKETS)[number];
 
+export function linkGeneratorBucketForDuration(duration: number): LinkGeneratorBucket | null {
+  if (!Number.isFinite(duration) || duration <= 0) return null;
+  if (duration <= 10) return "MIN_1_10";
+  if (duration <= 30) return "MIN_11_30";
+  if (duration <= 60) return "MIN_31_60";
+  return "MIN_61_PLUS";
+}
+
 export type LinkGeneratorItem = {
   id: string;
   title: string;

@@ -27,7 +27,8 @@ const ITEM_TYPE_LABELS: Record<LinkGeneratorContentType, string> = {
 };
 
 type ResultState = Record<LinkGeneratorBucket | "MIXED", LinkGeneratorItem[]>;
-type PendingState = LinkGeneratorBucket | "MIXED" | "STATS" | null;
+type PendingState = LinkGeneratorBucket | "MIXED" | "STATS" | "START_CONTINUOUS" | null;
+type ViewerLaunchTarget = "VIEWER_01" | "VIEWER_02" | "BOTH";
 
 const MIXED_TOTAL = 40;
 
@@ -60,6 +61,7 @@ export function LinkGeneratorClient({
   const [pending, setPending] = useState<PendingState>(null);
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
+  const [launchDialogOpen, setLaunchDialogOpen] = useState(false);
 
   const allTypesSelected = types.length === LINK_GENERATOR_CONTENT_TYPES.length;
   const totalEligible = useMemo(
@@ -150,6 +152,45 @@ export function LinkGeneratorClient({
       [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
     }
     setResults((current) => ({ ...current, MIXED: shuffled }));
+  }
+
+  async function startContinuousTest(target: ViewerLaunchTarget) {
+    if (results.MIXED.length !== MIXED_TOTAL || mixedTotal !== MIXED_TOTAL) {
+      setMessage("Сначала сгенерируй полный набор из 40 ссылок.");
+      return;
+    }
+
+    setPending("START_CONTINUOUS");
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/link-generator/start-continuous", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target,
+          bucketCounts: mixedCounts,
+          types,
+          items: results.MIXED,
+        }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        viewerCount?: number;
+        targets?: Array<{ label?: string }>;
+      };
+      if (!response.ok) throw new Error(payload.error || "Не удалось запустить постоянный тест");
+
+      const labels = payload.targets?.map((item) => item.label).filter(Boolean).join(" и ");
+      const viewerCount = payload.viewerCount ?? (target === "BOTH" ? 80 : 40);
+      setMessage(
+        `Постоянный тест отправлен в ${labels || (target === "BOTH" ? "обе ноды" : target === "VIEWER_02" ? "Viewer 02" : "Viewer 01")}: ${viewerCount} зрителей будут автоматически получать новые ссылки своего диапазона.`,
+      );
+      setLaunchDialogOpen(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось запустить постоянный тест");
+    } finally {
+      setPending(null);
+    }
   }
 
   async function copyLinks(key: LinkGeneratorBucket | "MIXED") {
@@ -263,6 +304,14 @@ export function LinkGeneratorClient({
             <button type="button" disabled={!results.MIXED.length} onClick={() => copyLinks("MIXED")} className="rounded-xl bg-[#222] px-5 py-3 font-bold text-white disabled:opacity-40">
               {copied === "MIXED" ? "Скопировано" : `Скопировать ${results.MIXED.length || 40}`}
             </button>
+            <button
+              type="button"
+              disabled={results.MIXED.length !== MIXED_TOTAL || Boolean(pending)}
+              onClick={() => setLaunchDialogOpen(true)}
+              className="rounded-xl bg-[#176b2c] px-5 py-3 font-black text-white disabled:opacity-40"
+            >
+              {pending === "START_CONTINUOUS" ? "Отправляем…" : "Запустить постоянный тест"}
+            </button>
           </div>
         </div>
         <ResultList items={results.MIXED} emptyText="Настрой количество для каждого диапазона и нажми «Сгенерировать 40 ссылок»." />
@@ -310,7 +359,99 @@ export function LinkGeneratorClient({
 
       {message ? <div className="rounded-xl border border-[#e6b600] bg-[#fff9d8] p-4 text-sm font-bold text-[#5d4a00]">{message}</div> : null}
       {pending === "STATS" ? <div className="text-sm font-bold text-neutral-500">Обновляем статистику…</div> : null}
+
+      {launchDialogOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="viewer-launch-title"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target && pending !== "START_CONTINUOUS") {
+              setLaunchDialogOpen(false);
+            }
+          }}
+        >
+          <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-[#e50914]">Выбор ноды</div>
+                <h2 id="viewer-launch-title" className="mt-1 text-2xl font-black text-[#222]">Куда отправить зрителей?</h2>
+                <p className="mt-2 text-sm leading-6 text-neutral-600">
+                  Для обеих нод REDFILM автоматически соберёт второй отдельный набор из 40 ссылок без пересечений с первым.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={pending === "START_CONTINUOUS"}
+                onClick={() => setLaunchDialogOpen(false)}
+                className="rounded-lg border border-[#ddd] px-3 py-2 text-sm font-black text-[#555] disabled:opacity-40"
+              >
+                Закрыть
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              <ViewerLaunchButton
+                title="Viewer 01"
+                subtitle="169.58.110.224 · 40 зрителей"
+                disabled={pending === "START_CONTINUOUS"}
+                onClick={() => void startContinuousTest("VIEWER_01")}
+              />
+              <ViewerLaunchButton
+                title="Viewer 02"
+                subtitle="169.58.120.30 · 40 зрителей · Proxy 02"
+                disabled={pending === "START_CONTINUOUS"}
+                onClick={() => void startContinuousTest("VIEWER_02")}
+              />
+              <ViewerLaunchButton
+                title="Обе ноды"
+                subtitle="80 зрителей · разные стартовые ссылки на каждой ноде"
+                disabled={pending === "START_CONTINUOUS"}
+                onClick={() => void startContinuousTest("BOTH")}
+                emphasized
+              />
+            </div>
+
+            {pending === "START_CONTINUOUS" ? (
+              <div className="mt-4 rounded-xl bg-[#f4f4f4] px-4 py-3 text-sm font-bold text-[#444]">
+                Отправляем конфигурацию и стартовые ссылки…
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function ViewerLaunchButton({
+  title,
+  subtitle,
+  disabled,
+  onClick,
+  emphasized = false,
+}: {
+  title: string;
+  subtitle: string;
+  disabled: boolean;
+  onClick: () => void;
+  emphasized?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`rounded-xl border p-4 text-left transition disabled:opacity-40 ${
+        emphasized
+          ? "border-[#176b2c] bg-[#eef9f1] hover:bg-[#e4f5e8]"
+          : "border-[#ddd] bg-white hover:border-[#e50914] hover:bg-[#fff7f7]"
+      }`}
+    >
+      <div className="text-lg font-black text-[#222]">{title}</div>
+      <div className="mt-1 text-sm font-medium text-neutral-500">{subtitle}</div>
+    </button>
   );
 }
 

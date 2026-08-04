@@ -191,8 +191,10 @@ export async function generateBucketLinks(params: {
 export async function generateMixedLinks(params: {
   types: LinkGeneratorContentType[];
   bucketCounts: LinkGeneratorBucketCounts;
+  excludeIds?: string[];
 }) {
   const selected: LinkGeneratorItem[] = [];
+  const baseExcludeIds = params.excludeIds ?? [];
 
   for (const bucket of LINK_GENERATOR_BUCKETS) {
     const requested = params.bucketCounts[bucket];
@@ -202,7 +204,7 @@ export async function generateMixedLinks(params: {
       bucket,
       types: params.types,
       limit: requested,
-      excludeIds: selected.map((item) => item.id),
+      excludeIds: [...baseExcludeIds, ...selected.map((item) => item.id)],
     });
 
     if (items.length < requested) {
