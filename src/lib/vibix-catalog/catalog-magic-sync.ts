@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { maybeRunMovieDurationBackfillMaintenance } from "@/lib/movie-duration-backfill";
 import { sleep } from "@/lib/vibix";
 import { continueArtworkSyncState, getArtworkSyncState, startArtworkSyncState } from "@/lib/movie-artwork";
 import { recalculateAllCatalogScores } from "@/lib/catalog-score";
@@ -767,6 +768,15 @@ export async function runVibixCatalogMagicWorkerLoop() {
       if (artwork?.message) console.log(`[ArtworkWorker] ${artwork.message}`);
     } catch (error) {
       console.error("[ArtworkWorker] Background batch failed", errorText(error));
+    }
+
+    try {
+      const duration = await maybeRunMovieDurationBackfillMaintenance();
+      if (duration && ["QUEUED", "RUNNING", "PAUSED"].includes(duration.status)) {
+        console.log(`[DurationBackfill] ${duration.status}: processed=${duration.processed}, updated=${duration.updated}, remaining=${duration.remaining}`);
+      }
+    } catch (error) {
+      console.error("[DurationBackfill] Background batch failed", errorText(error));
     }
 
     const latest = await getLatestVibixCatalogMagicJob();

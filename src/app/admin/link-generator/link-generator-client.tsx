@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import {
   LINK_GENERATOR_BUCKET_META,
   LINK_GENERATOR_BUCKETS,
@@ -10,6 +10,7 @@ import {
   type LinkGeneratorContentType,
   type LinkGeneratorItem,
   type LinkGeneratorStats,
+  type MovieDurationBackfillPublicState,
 } from "@/lib/link-generator-types";
 
 const TYPE_LABELS: Record<LinkGeneratorContentType, string> = {
@@ -39,12 +40,16 @@ function emptyResults(): ResultState {
 export function LinkGeneratorClient({
   initialStats,
   initialTypes,
+  initialDurationBackfill,
 }: {
   initialStats: LinkGeneratorStats;
   initialTypes: LinkGeneratorContentType[];
+  initialDurationBackfill: MovieDurationBackfillPublicState;
 }) {
   const [types, setTypes] = useState<LinkGeneratorContentType[]>(initialTypes);
   const [stats, setStats] = useState(initialStats);
+  const [durationBackfill, setDurationBackfill] = useState(initialDurationBackfill);
+  const [durationActionPending, setDurationActionPending] = useState(false);
   const [counts, setCounts] = useState<Record<LinkGeneratorBucket, number>>({
     MIN_1_10: 10,
     MIN_11_30: 10,
@@ -77,16 +82,63 @@ export function LinkGeneratorClient({
   );
   const mixedCanGenerate = mixedTotal === MIXED_TOTAL && mixedCountsFitAvailability;
 
+  async function loadStats(nextTypes: LinkGeneratorContentType[], clearResults = false) {
+    const query = new URLSearchParams({ types: nextTypes.join(",") });
+    const response = await fetch(`/api/admin/link-generator/stats?${query.toString()}`, { cache: "no-store" });
+    const payload = (await response.json()) as { stats?: LinkGeneratorStats; error?: string };
+    if (!response.ok || !payload.stats) throw new Error(payload.error || "Не удалось обновить статистику");
+    setStats(payload.stats);
+    if (clearResults) setResults(emptyResults());
+  }
+
+  async function refreshDurationBackfill(refreshGeneratorStats = true) {
+    const response = await fetch("/api/admin/link-generator/duration-backfill", { cache: "no-store" });
+    const payload = (await response.json()) as { state?: MovieDurationBackfillPublicState; error?: string };
+    if (!response.ok || !payload.state) throw new Error(payload.error || "Не удалось обновить состояние длительности");
+    setDurationBackfill(payload.state);
+    if (refreshGeneratorStats) await loadStats(types, false);
+  }
+
+  async function durationBackfillAction(action: "START" | "PAUSE" | "RESET" | "RUN_ONCE") {
+    setDurationActionPending(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/link-generator/duration-backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, batchSize: durationBackfill.batchSize }),
+      });
+      const payload = (await response.json()) as { state?: MovieDurationBackfillPublicState; error?: string };
+      if (!response.ok || !payload.state) throw new Error(payload.error || "Не удалось выполнить действие");
+      setDurationBackfill(payload.state);
+      await loadStats(types, false);
+      setMessage(
+        action === "PAUSE"
+          ? "Заполнение длительности поставлено на паузу."
+          : action === "RESET"
+            ? "Прогресс заполнения длительности сброшен."
+            : "Заполнение длительности запущено. Worker продолжит обработку автоматически.",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Ошибка заполнения длительности");
+    } finally {
+      setDurationActionPending(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!["QUEUED", "RUNNING", "PAUSED"].includes(durationBackfill.status)) return;
+    const timer = window.setInterval(() => {
+      void refreshDurationBackfill(true).catch(() => {});
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [durationBackfill.status, types.join(",")]);
+
   async function refreshStats(nextTypes: LinkGeneratorContentType[]) {
     setPending("STATS");
     setMessage("");
     try {
-      const query = new URLSearchParams({ types: nextTypes.join(",") });
-      const response = await fetch(`/api/admin/link-generator/stats?${query.toString()}`, { cache: "no-store" });
-      const payload = (await response.json()) as { stats?: LinkGeneratorStats; error?: string };
-      if (!response.ok || !payload.stats) throw new Error(payload.error || "Не удалось обновить статистику");
-      setStats(payload.stats);
-      setResults(emptyResults());
+      await loadStats(nextTypes, true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось обновить статистику");
     } finally {
@@ -242,6 +294,88 @@ export function LinkGeneratorClient({
           <Stat label="Подходящих ссылок" value={totalEligible} />
           <Stat label="Без длительности" value={stats.UNKNOWN} />
           <Stat label="Выбрано типов" value={types.length} />
+        </div>
+      </section>
+
+      <section className="admin-panel p-5">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-[#176b2c]">Данные каталога</div>
+              <h2 className="mt-1 text-xl font-black text-[#222]">Заполнение длительности</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600">
+                Worker берёт записи без длительности, сначала проверяет Vibix, затем использует TMDB по IMDb. Для сериалов, аниме и мультсериалов сохраняется длительность эпизода.
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#ddd] bg-[#f7f7f7] px-4 py-3 text-sm">
+              <div className="font-black text-[#222]">Статус: {durationBackfillStatusLabel(durationBackfill.status)}</div>
+              <div className="mt-1 text-neutral-500">Осталось: {durationBackfill.remaining.toLocaleString("ru-RU")}</div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <Stat label="Обработано" value={durationBackfill.processed} />
+            <Stat label="Заполнено" value={durationBackfill.updated} />
+            <Stat label="Из Vibix" value={durationBackfill.vibixUpdated} />
+            <Stat label="Из TMDB" value={durationBackfill.tmdbUpdated} />
+            <Stat label="Не найдено" value={durationBackfill.skipped} />
+            <Stat label="Ошибки" value={durationBackfill.failed} />
+          </div>
+
+          {durationBackfill.rateLimitUntil ? (
+            <div className="rounded-xl border border-[#e6b600] bg-[#fff9d8] px-4 py-3 text-sm font-bold text-[#5d4a00]">
+              API временно ограничил запросы. Автопродолжение после {new Date(durationBackfill.rateLimitUntil).toLocaleString("ru-RU")}.
+            </div>
+          ) : null}
+
+          {durationBackfill.lastError ? (
+            <div className="rounded-xl border border-[#e7b0b3] bg-[#fff7f7] px-4 py-3 text-sm text-[#8f0a12]">
+              Последнее сообщение: {durationBackfill.lastError}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={durationActionPending || ["QUEUED", "RUNNING"].includes(durationBackfill.status)}
+              onClick={() => void durationBackfillAction("START")}
+              className="rounded-xl bg-[#176b2c] px-5 py-3 font-black text-white disabled:opacity-40"
+            >
+              {durationBackfill.status === "PAUSED" ? "Продолжить" : durationBackfill.status === "COMPLETED" ? "Повторить по оставшимся" : "Запустить заполнение"}
+            </button>
+            <button
+              type="button"
+              disabled={durationActionPending || !["QUEUED", "RUNNING"].includes(durationBackfill.status)}
+              onClick={() => void durationBackfillAction("PAUSE")}
+              className="rounded-xl border border-[#d7a2a5] bg-white px-5 py-3 font-bold text-[#8f0a12] disabled:opacity-40"
+            >
+              Пауза
+            </button>
+            <button
+              type="button"
+              disabled={durationActionPending || ["QUEUED", "RUNNING"].includes(durationBackfill.status)}
+              onClick={() => void durationBackfillAction("RUN_ONCE")}
+              className="rounded-xl bg-[#222] px-5 py-3 font-bold text-white disabled:opacity-40"
+            >
+              Обработать один пакет
+            </button>
+            <button
+              type="button"
+              disabled={durationActionPending || ["QUEUED", "RUNNING"].includes(durationBackfill.status)}
+              onClick={() => void durationBackfillAction("RESET")}
+              className="rounded-xl border border-[#ccc] bg-white px-5 py-3 font-bold text-[#555] disabled:opacity-40"
+            >
+              Сбросить прогресс
+            </button>
+            <button
+              type="button"
+              disabled={durationActionPending}
+              onClick={() => void refreshDurationBackfill(true).catch((error) => setMessage(error instanceof Error ? error.message : "Ошибка обновления"))}
+              className="rounded-xl border border-[#ccc] bg-white px-5 py-3 font-bold text-[#333] disabled:opacity-40"
+            >
+              Обновить
+            </button>
+          </div>
         </div>
       </section>
 
@@ -453,6 +587,16 @@ function ViewerLaunchButton({
       <div className="mt-1 text-sm font-medium text-neutral-500">{subtitle}</div>
     </button>
   );
+}
+
+function durationBackfillStatusLabel(status: string) {
+  if (status === "IDLE") return "не запускалось";
+  if (status === "QUEUED") return "в очереди";
+  if (status === "RUNNING") return "работает";
+  if (status === "PAUSED") return "пауза";
+  if (status === "COMPLETED") return "завершено";
+  if (status === "FAILED") return "ошибка";
+  return status;
 }
 
 function Stat({ label, value }: { label: string; value: number }) {

@@ -49,6 +49,8 @@ model Movie {
   ageRating                String?
   quality                  String                     @default("WEB-DL")
   duration                 Int?
+  durationSource           String?
+  durationLastSyncAt       DateTime?
   kinopoiskId              String?
   imdbId                   String?
   tmdbId                   String?
@@ -141,6 +143,7 @@ model Movie {
   @@index([isTopEligible, topScore])
   @@index([isFreshEligible, freshScore])
   @@index([similarityDirty, similarityCalculatedAt])
+  @@index([duration, durationSource])
 }
 
 model Genre {
@@ -473,6 +476,29 @@ model VibixCatalogAutoJob {
 
   @@index([status, createdAt])
   @@index([currentStage, currentType])
+  @@index([rateLimitUntil])
+}
+
+model MovieDurationBackfillState {
+  singletonKey         String    @id @default("default")
+  status               String    @default("IDLE")
+  cursor               String?
+  processed            Int       @default(0)
+  updated              Int       @default(0)
+  vibixUpdated         Int       @default(0)
+  tmdbUpdated          Int       @default(0)
+  skipped              Int       @default(0)
+  failed               Int       @default(0)
+  batchSize            Int       @default(10)
+  remainingAtCompletion Int      @default(0)
+  rateLimitUntil       DateTime?
+  lastError            String?   @db.Text
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([status, updatedAt])
   @@index([rateLimitUntil])
 }
 

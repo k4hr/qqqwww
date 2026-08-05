@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getLinkGeneratorStats } from "@/lib/admin-link-generator";
+import { getMovieDurationBackfillState } from "@/lib/movie-duration-backfill";
 import { LINK_GENERATOR_CONTENT_TYPES } from "@/lib/link-generator-types";
 import { LinkGeneratorClient } from "./link-generator-client";
 
@@ -7,7 +8,10 @@ export const dynamic = "force-dynamic";
 
 export default async function LinkGeneratorPage() {
   const initialTypes = [...LINK_GENERATOR_CONTENT_TYPES];
-  const initialStats = await getLinkGeneratorStats(initialTypes);
+  const [initialStats, initialDurationBackfill] = await Promise.all([
+    getLinkGeneratorStats(initialTypes),
+    getMovieDurationBackfillState(),
+  ]);
 
   return (
     <div className="container admin-shell py-6">
@@ -23,7 +27,7 @@ export default async function LinkGeneratorPage() {
         </div>
       </div>
 
-      <LinkGeneratorClient initialStats={initialStats} initialTypes={initialTypes} />
+      <LinkGeneratorClient initialStats={initialStats} initialTypes={initialTypes} initialDurationBackfill={initialDurationBackfill} />
     </div>
   );
 }

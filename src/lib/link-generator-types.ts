@@ -52,3 +52,24 @@ export const LINK_GENERATOR_BUCKET_META: Record<
     max: null,
   },
 };
+
+export type MovieDurationBackfillPublicState = {
+  singletonKey: string;
+  status: string;
+  cursor: string | null;
+  processed: number;
+  updated: number;
+  vibixUpdated: number;
+  tmdbUpdated: number;
+  skipped: number;
+  failed: number;
+  batchSize: number;
+  remainingAtCompletion: number;
+  remaining: number;
+  rateLimitUntil: string | null;
+  lastError: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+  active: boolean;
+};
