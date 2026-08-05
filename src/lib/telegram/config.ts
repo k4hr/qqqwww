@@ -13,7 +13,10 @@ export function getTelegramWebhookSecret() {
 }
 
 export function getTelegramMiniAppUrl(path = "") {
-  const base = (process.env.NEXT_PUBLIC_TELEGRAM_MINI_APP_URL || siteUrl("/")).replace(/\/$/, "");
+  const configuredBase = (process.env.NEXT_PUBLIC_TELEGRAM_MINI_APP_URL || siteUrl("/")).replace(/\/$/, "");
+  const base = configuredBase
+    .replace(/^https:\/\/(?:www\.)?redfilm\.online(?=\/|$)/i, "https://www.redfilm.win")
+    .replace(/^https:\/\/redfilm\.win(?=\/|$)/i, "https://www.redfilm.win");
   return `${base}${path ? `/${path.replace(/^\//, "")}` : ""}`;
 }
 

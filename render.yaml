@@ -19,15 +19,15 @@ services:
       - key: NEXT_PUBLIC_SITE_NAME
         value: REDFILM
       - key: NEXT_PUBLIC_SITE_HOST
-        value: redfilm.win
+        value: www.redfilm.win
       - key: NEXT_PUBLIC_SITE_URL
-        value: https://redfilm.win
+        value: https://www.redfilm.win
       - key: SITE_URL
-        value: https://redfilm.win
+        value: https://www.redfilm.win
       - key: NEXT_PUBLIC_APP_URL
-        value: https://redfilm.win
+        value: https://www.redfilm.win
       - key: REDFILM_BASE_URL
-        value: https://redfilm.win
+        value: https://www.redfilm.win
       - key: PUBLIC_INDEXING_ENABLED
         value: "true"
       - key: PUBLIC_PLAYBACK_ENABLED
@@ -147,8 +147,8 @@ services:
       - key: NODE_VERSION
         value: 22
       - key: REDFILM_BASE_URL
-        value: https://redfilm.win
+        value: https://www.redfilm.win
       - key: NEXT_PUBLIC_SITE_URL
-        value: https://redfilm.win
+        value: https://www.redfilm.win
       - key: CRON_SECRET
         sync: false

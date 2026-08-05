@@ -2,8 +2,8 @@ import type { Genre, Movie } from "@prisma/client";
 import { buildCollectionSlug, buildFilmSeoSlug, buildSimilarSlug, buildWatchSlug, normalizeSlug } from "@/lib/seo-slugs";
 import { extractCountries } from "@/lib/catalog-filters";
 
-export const CANONICAL_SITE_ORIGIN = "https://redfilm.win";
-export const CANONICAL_SITE_HOST = "redfilm.win";
+export const CANONICAL_SITE_ORIGIN = "https://www.redfilm.win";
+export const CANONICAL_SITE_HOST = "www.redfilm.win";
 
 export function canonicalSiteOrigin() {
   const raw = (
@@ -16,7 +16,7 @@ export function canonicalSiteOrigin() {
   try {
     const url = new URL(raw);
     const host = url.host.toLowerCase();
-    if (host === "redfilm.online" || host === "www.redfilm.online" || host === "www.redfilm.win" || host === "redfilm.win") {
+    if (host === "redfilm.online" || host === "www.redfilm.online" || host === "redfilm.win" || host === "www.redfilm.win") {
       return CANONICAL_SITE_ORIGIN;
     }
   } catch {

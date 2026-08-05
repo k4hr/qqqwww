@@ -44,7 +44,7 @@ export default async function AdminTelegramPage({ searchParams }: Props) {
           <Info label="TELEGRAM_MINI_APP_URL" value={getTelegramMiniAppUrl()} />
           <Info label="TELEGRAM_WEBHOOK_SECRET" value={getTelegramWebhookSecret() ? "yes" : "no"} />
           <Info label="Webhook URL" value={getTelegramWebhookUrl()} />
-          <Info label="Test player" value="https://redfilm.win/tg-test-player" />
+          <Info label="Test player" value="https://www.redfilm.win/tg-test-player" />
         </div>
 
         <p className="mt-4 rounded-xl border border-[#e50914]/20 bg-[#fff5f5] p-3 text-sm font-semibold text-[#5f1b1f]">

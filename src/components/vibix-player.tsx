@@ -50,7 +50,7 @@ const VIBIX_PUBLISHER_ID = "678353780";
 const VIBIX_SDK_URL = "https://graphicslab.io/sdk/v2/rendex-sdk.min.js";
 const VIBIX_DATA_TYPES = new Set<VibixDataType>(["movie", "series", "serial", "kp", "imdb"]);
 
-const REDFILM_PLAYER_POSTER_URL = "https://redfilm.win/player-poster.webp";
+const REDFILM_PLAYER_POSTER_URL = "https://www.redfilm.win/player-poster.webp";
 
 const REDFILM_PLAYER_DEFAULT_ATTRS = {
   "data-design": "5",

@@ -30,8 +30,14 @@ export function middleware(request: NextRequest) {
   const normalizedHost = host.toLowerCase().split(":")[0];
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-  const canonicalHost = process.env.NEXT_PUBLIC_SITE_HOST || "redfilm.win";
-  const canonicalRedirectHosts = new Set(["redfilm.online", "www.redfilm.online", `www.${canonicalHost}`]);
+  const configuredCanonicalHost = (process.env.NEXT_PUBLIC_SITE_HOST || "www.redfilm.win")
+    .trim()
+    .toLowerCase()
+    .split(":")[0];
+  const canonicalHost = new Set(["redfilm.win", "www.redfilm.win", "redfilm.online", "www.redfilm.online"]).has(configuredCanonicalHost)
+    ? "www.redfilm.win"
+    : configuredCanonicalHost;
+  const canonicalRedirectHosts = new Set(["redfilm.win", "redfilm.online", "www.redfilm.online"]);
   const pathname = request.nextUrl.pathname;
 
   if (!isLocalhost && canonicalRedirectHosts.has(normalizedHost)) {

@@ -1,4 +1,7 @@
-const baseUrl = (process.env.REDFILM_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "").replace(/\/$/, "");
+const configuredBaseUrl = (process.env.REDFILM_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "").replace(/\/$/, "");
+const baseUrl = configuredBaseUrl
+  .replace(/^https:\/\/(?:www\.)?redfilm\.online(?=\/|$)/i, "https://www.redfilm.win")
+  .replace(/^https:\/\/redfilm\.win(?=\/|$)/i, "https://www.redfilm.win");
 const secret = process.env.CRON_SECRET;
 
 if (!baseUrl) {

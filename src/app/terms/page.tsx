@@ -23,7 +23,7 @@ export default function TermsPage() {
             <div className="mt-3 space-y-3">
               <p>
                 Настоящее Соглашение регулирует использование сайта
-                <Link className="mx-1 text-[#ff6072] hover:text-white" href="/">redfilm.win</Link>
+                <Link className="mx-1 text-[#ff6072] hover:text-white" href="/">www.redfilm.win</Link>
                 и доступных на нём функций (далее — «Сервис»). Сервис администрируется командой REDFILM.
               </p>
               <p>
@@ -92,7 +92,7 @@ export default function TermsPage() {
             <div className="mt-3 space-y-3">
               <p>
                 Правообладатель или его уполномоченный представитель может направить мотивированное обращение администрации REDFILM через
-                <a className="ml-1 text-[#ff6072] hover:text-white" href="https://t.me/seimngr" target="_blank" rel="noopener noreferrer">Telegram</a>.
+                <a className="ml-1 text-[#ff6072] hover:text-white" href="https://t.me/redfilm_cinemabot" target="_blank" rel="noopener noreferrer">Telegram</a>.
               </p>
               <p>В обращении следует указать:</p>
               <ul className="list-disc space-y-2 pl-6 marker:text-[#f02b42]">

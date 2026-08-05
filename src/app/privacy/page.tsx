@@ -26,12 +26,12 @@ export default function PrivacyPage() {
             <div className="mt-3 space-y-3">
               <p>
                 Настоящая Политика описывает, какие сведения могут обрабатываться при использовании сайта
-                <Link className="mx-1 text-[#ff6072] hover:text-white" href="/">redfilm.win</Link>
+                <Link className="mx-1 text-[#ff6072] hover:text-white" href="/">www.redfilm.win</Link>
                 и связанных с ним функций (далее — «Сервис»), для каких целей они используются и какие права есть у пользователя.
               </p>
               <p>
                 Оператором Сервиса выступает администрация REDFILM. Контакт для обращений по вопросам конфиденциальности и обработки данных:
-                <a className="ml-1 text-[#ff6072] hover:text-white" href="https://t.me/seimngr" target="_blank" rel="noopener noreferrer">Telegram</a>.
+                <a className="ml-1 text-[#ff6072] hover:text-white" href="https://t.me/redfilm_cinemabot" target="_blank" rel="noopener noreferrer">Telegram</a>.
               </p>
               <p>
                 Используя Сервис, пользователь подтверждает ознакомление с настоящей Политикой. Если пользователь не согласен с её условиями, ему следует прекратить использование Сервиса.

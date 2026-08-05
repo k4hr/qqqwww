@@ -23,7 +23,7 @@ export function MovieReferralLinkBuilder({ partnerSlug }: { partnerSlug: string 
   const [message, setMessage] = useState("");
 
   const example = useMemo(
-    () => `https://redfilm.win/watch/chuzhestranka-2014/${partnerSlug}`,
+    () => `https://www.redfilm.win/watch/chuzhestranka-2014/${partnerSlug}`,
     [partnerSlug],
   );
 
@@ -31,7 +31,7 @@ export function MovieReferralLinkBuilder({ partnerSlug }: { partnerSlug: string 
     const movieSlug = extractWatchSlug(sourceUrl);
     if (!movieSlug) {
       setResultUrl("");
-      setMessage("Вставьте ссылку REDFILM вида https://redfilm.win/watch/nazvanie-2024");
+      setMessage("Вставьте ссылку REDFILM вида https://www.redfilm.win/watch/nazvanie-2024");
       return;
     }
 
@@ -73,7 +73,7 @@ export function MovieReferralLinkBuilder({ partnerSlug }: { partnerSlug: string 
               void generateAndCopy();
             }
           }}
-          placeholder="https://redfilm.win/watch/chuzhestranka-2014"
+          placeholder="https://www.redfilm.win/watch/chuzhestranka-2014"
           className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#e50914]"
         />
         <button

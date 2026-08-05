@@ -10,7 +10,7 @@ const GENERIC_ARTWORK = new Set([
 export function isGenericRedfilmArtwork(url?: string | null) {
   if (!url?.trim()) return true;
   try {
-    return GENERIC_ARTWORK.has(new URL(url, "https://redfilm.win").pathname);
+    return GENERIC_ARTWORK.has(new URL(url, "https://www.redfilm.win").pathname);
   } catch {
     return false;
   }

@@ -36,19 +36,13 @@ export function Footer() {
           <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/history">
             Недавно смотрели
           </Link>
-          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/privacy">
-            Конфиденциальность
-          </Link>
-          <Link className="inline-flex min-h-11 items-center px-2 hover:text-white" href="/terms">
-            Условия использования
-          </Link>
         </nav>
 
         <div className="text-sm text-[#74757d] md:text-right">
           <p>© {new Date().getFullYear()} REDFILM</p>
 
           <a
-            href="https://t.me/seimngr"
+            href="https://t.me/redfilm_cinemabot"
             target="_blank"
             rel="noopener noreferrer"
             className="mt-2 inline-flex min-h-11 items-center leading-relaxed text-[#74757d] transition-colors hover:text-white"

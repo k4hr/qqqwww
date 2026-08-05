@@ -34,7 +34,7 @@ async function ffprobe(mediaId: string, objectKey: string) {
 function postMessage(post: NonNullable<Awaited<ReturnType<typeof leaseNextSocialJob>>>["post"]) {
   if (!post) return "";
   const hashtags = post.hashtags.map((tag) => `#${tag.replace(/^#/, "")}`).join(" ");
-  const link = post.utmCode && post.movieId ? `\n\nhttps://redfilm.win/go/social/${post.utmCode}` : "";
+  const link = post.utmCode && post.movieId ? `\n\nhttps://www.redfilm.win/go/social/${post.utmCode}` : "";
   return [post.hook, post.body, hashtags].filter(Boolean).join("\n\n") + link;
 }
 
