@@ -1,8 +1,6 @@
-import "server-only";
-
 import { ContentType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { findTmdbByImdbId, getTmdbDetails, resolveTmdbSummary } from "@/lib/tmdb";
+import { findTmdbByImdbId, getTmdbDetails, resolveTmdbSummary, type TmdbSummary } from "@/lib/tmdb";
 import { getVibixVideoByVibixIdResult, sleep } from "@/lib/vibix";
 
 const SINGLETON_KEY = "default";
@@ -232,7 +230,7 @@ async function resolveFromTmdb(movie: BackfillMovie): Promise<DurationResolution
   if (!process.env.TMDB_API_KEY?.trim()) return null;
 
   const preferredType = preferredTmdbType(movie);
-  let summary = movie.imdbId
+  let summary: TmdbSummary | null = movie.imdbId
     ? await findTmdbByImdbId(movie.imdbId, preferredType)
     : null;
 
