@@ -26,29 +26,11 @@ function gone(message: string) {
 }
 
 export function middleware(request: NextRequest) {
-  const host = request.headers.get("host") || "";
-  const normalizedHost = host.toLowerCase().split(":")[0];
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-  const configuredCanonicalHost = (process.env.NEXT_PUBLIC_SITE_HOST || "www.redfilm.win")
-    .trim()
-    .toLowerCase()
-    .split(":")[0];
-  const canonicalHost = new Set(["redfilm.win", "www.redfilm.win", "redfilm.online", "www.redfilm.online"]).has(configuredCanonicalHost)
-    ? "www.redfilm.win"
-    : configuredCanonicalHost;
-  const canonicalRedirectHosts = new Set(["redfilm.win", "redfilm.online", "www.redfilm.online"]);
   const pathname = request.nextUrl.pathname;
 
-  if (!isLocalhost && canonicalRedirectHosts.has(normalizedHost)) {
-    return NextResponse.redirect(`https://${canonicalHost}${pathname}${request.nextUrl.search}`, 301);
-  }
-
-  if (!isLocalhost && forwardedProto === "http") {
-    if (normalizedHost === canonicalHost) {
-      return NextResponse.redirect(`https://${canonicalHost}${pathname}${request.nextUrl.search}`, 301);
-    }
-  }
+  // Canonical host and HTTPS redirects are intentionally handled by the public
+  // reverse proxy. The origin may receive a rewritten Host header, so doing
+  // hostname redirects here can redirect www.redfilm.win back to itself.
 
   const emergencyDeindexMode = envFlag("EMERGENCY_DEINDEX_MODE", false);
   const publicPlaybackEnabled = envFlag("PUBLIC_PLAYBACK_ENABLED", true);
